@@ -1,0 +1,32 @@
+{
+  "visit_id": "23658",
+  "source_audio": "/home/ai/Workspace/Doha/Medical_voice_assistant/src/uploads/audio/23658.mp3",
+  "language": "en",
+  "patient_name": "no name",
+  "patient_id": "no id",
+  "is_medical": true,
+  "classification": "MEDICAL",
+  "confidence": 95,
+  "raw_text": "The patient is complaining from bilateral knee pain since five years. Two years ago, the pain increased. Plane X-ray was done showing advanced osteoarthritis grade 4. Non-steroidal anti-inflammatory was given for around one month with muscle relaxants showing mild improvement. She is now doing physiotherapy exercises to see again after two weeks.",
+  "refined_text": "The patient has been experiencing bilateral knee pain for five years. The pain worsened two years ago. A plain X-ray revealed advanced osteoarthritis grade 4. Non-steroidal anti-inflammatory drugs were administered for approximately one month, along with muscle relaxants, resulting in mild improvement. She is currently undergoing physiotherapy exercises and will be reassessed after two weeks.",
+  "translated_text": "The patient has been experiencing bilateral knee pain for five years. The pain worsened two years ago. A plain X-ray revealed advanced osteoarthritis grade 4. Non-steroidal anti-inflammatory drugs were administered for approximately one month, along with muscle relaxants, resulting in mild improvement. She is currently undergoing physiotherapy exercises and will be reassessed after two weeks.",
+  "json_data": {
+    "chief_complaint": "bilateral knee pain",
+    "icd10_codes": [
+      "M17.0 - Bilateral primary osteoarthritis"
+    ],
+    "history_of_illness": "The patient has been experiencing bilateral knee pain for five years. The pain worsened two years ago.",
+    "current_medication": "Non-steroidal anti-inflammatory drugs, muscle relaxants",
+    "imaging_results": "plain X-ray revealed advanced osteoarthritis grade 4",
+    "plan": "physiotherapy exercises, reassessment after two weeks",
+    "assessment": "advanced osteoarthritis grade 4",
+    "follow_up": "reassessment after two weeks"
+  },
+  "reasoning": "The patient presents with bilateral knee pain, a chief complaint that has been ongoing for five years and worsened over the past two years. The diagnosis of advanced osteoarthritis grade 4 is supported by the plain X-ray findings, corresponding to ICD-10 code M17.0 for bilateral primary osteoarthritis. The patient was initially treated with non-steroidal anti-inflammatory drugs and muscle relaxants, which resulted in mild improvement. The current plan involves physiotherapy exercises, with a follow-up reassessment scheduled for two weeks later to evaluate the effectiveness of the treatment and potentially adjust the management plan.",
+  "meta": {
+    "model": "whisper-v3",
+    "language": "en",
+    "endpoint": "https://api.fireworks.ai/inference/v1/audio/transcriptions",
+    "status_code": 200
+  }
+}

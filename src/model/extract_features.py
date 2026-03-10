@@ -1,55 +1,58 @@
+import time
 import logging
-from core.config import Config
 from model.llm_service import LLMService
+from core.config import Config
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class ExtractFeature:
-    """Extract medical features from transcribed content."""
+    """Module for extracting structured features from text using LLMService."""
 
     @staticmethod
-    async def extract_stream(translated_text: str, schema_text: str, is_conversation: bool = False):
+    def extract(
+        end_text: str,
+        is_conversation: bool = False,
+    ) -> tuple[dict, str]:
         """
-        Stream feature extraction from translated text.
-        
+        Extract features from final translated text using LLM.
+        Features are defined in the prompt template, not passed by the caller.
+
         Args:
-            translated_text: The translated medical text
-            schema_text: JSON schema defining features to extract
-            is_conversation: Whether this is a doctor-patient conversation
-            
-        Yields:
-            Text chunks as they're generated
-        """
-        try:
-            import json
-            
-            # Parse features schema
-            features_list = json.loads(schema_text) if isinstance(schema_text, str) else schema_text
-            
-            api_key = Config.FIREWORKS_API_KEY
-            
-            # Stream the extraction
-            async for chunk in LLMService.extract_features_stream(
-                translated_text=translated_text,
-                features=features_list,
-                api_key=api_key,
-                is_conversation=is_conversation
-            ):
-                yield chunk
-            
-        except Exception as e:
-            logger.error(f"Error extracting features: {e}")
-            yield f'{{"error": "Feature extraction failed: {str(e)}"}}'
+            end_text (str): The translated text to process.
+            is_conversation (bool): If True, extracts from doctor-patient conversation format.
 
-    @staticmethod
-    def extract(translated_text: str, schema_text: str, is_conversation: bool = False):
-        """
-        Synchronous extraction (for backward compatibility).
-        
         Returns:
-            Tuple of (json_data, reasoning)
+            tuple: (json_data: dict, reasoning: str)
         """
-        # This is a fallback for non-streaming contexts
-        # In practice, you should use extract_stream in the pipeline
-        logger.warning("Using synchronous extract - consider migrating to extract_stream")
-        return {}, "Synchronous extraction not implemented - use streaming version"
+        if not end_text or not isinstance(end_text, str):
+            raise ValueError("Input end_text must be a non-empty string")
+
+        extraction_start = time.time()
+        try:
+            mode_label = "conversation" if is_conversation else "single-speaker"
+            logger.info(f"[ExtractFeature] Starting {mode_label} feature extraction")
+
+            features_output = LLMService.extract_features(
+                translated_text=end_text,
+                api_key=Config.EXTRACTION_API_KEY,
+                is_conversation=is_conversation,
+            )
+
+            json_data = features_output.get("json_data", {})
+            reasoning = features_output.get("reasoning", "")
+
+            extraction_time = time.time() - extraction_start
+            logger.info(f"[ExtractFeature] {mode_label.capitalize()} extraction completed in {extraction_time:.2f}s")
+            logger.debug(f"[ExtractFeature] Extracted features: {json_data}")
+            logger.debug(f"[ExtractFeature] Reasoning: {reasoning[:200]}...")
+
+            if is_conversation and "conversation_summary" in json_data:
+                logger.info(f"[ExtractFeature] Conversation summary extracted: {len(json_data['conversation_summary'])} chars")
+
+            return json_data, reasoning
+
+        except Exception as e:
+            logger.error(f"[ExtractFeature] Extraction failed: {str(e)}")
+            raise

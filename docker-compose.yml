@@ -1,0 +1,13 @@
+services:
+  medvoice:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medvoice
+    ports:
+      - "9999:9999"
+    env_file:
+      - src/.env
+    volumes:
+      - ./src/uploads:/app/uploads
+    restart: unless-stopped

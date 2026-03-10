@@ -33,3 +33,70 @@ def setup_logger():
     return logger
 
 
+# model/utils.py
+import json
+import re
+
+def safe_parse_json(raw: str) -> dict | list:
+    """
+    Attempt to parse LLM JSON output, repairing common truncation issues.
+    Raises ValueError if unrecoverable.
+    """
+    text = raw.strip()
+
+    # Strip markdown code fences if present
+    text = re.sub(r"^```json\s*", "", text)
+    text = re.sub(r"^```\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    text = text.strip()
+
+    # Try direct parse first
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Try closing unterminated structures (truncation recovery)
+    repaired = _repair_truncated_json(text)
+    try:
+        return json.loads(repaired)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Unrecoverable JSON from LLM: {e}\nRaw: {raw[:200]}")
+
+
+def _repair_truncated_json(text: str) -> str:
+    """Close any unclosed brackets/braces/strings caused by truncation."""
+    # Remove trailing incomplete key-value or dangling comma
+    text = re.sub(r',\s*$', '', text.rstrip())
+    text = re.sub(r',\s*[}\]]', lambda m: m.group(0)[-1], text)  # trailing comma before close
+
+    # Count open structures
+    stack = []
+    in_string = False
+    escape_next = False
+
+    for char in text:
+        if escape_next:
+            escape_next = False
+            continue
+        if char == '\\' and in_string:
+            escape_next = True
+            continue
+        if char == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char in '{[':
+            stack.append('}' if char == '{' else ']')
+        elif char in '}]' and stack:
+            stack.pop()
+
+    # If we're mid-string, close it
+    if in_string:
+        text += '"'
+
+    # Close open structures in reverse order
+    text += ''.join(reversed(stack))
+
+    return text

@@ -1,0 +1,43 @@
+{
+  "visit_id": "1422",
+  "source_audio": "/home/ai/Workspace/Doha/Medical_voice_assistant/src/uploads/audio/1422.opus",
+  "language": "ar",
+  "patient_name": "no name",
+  "patient_id": "no id",
+  "mode": "conversation",
+  "is_conversation": true,
+  "is_medical": true,
+  "classification": "MEDICAL",
+  "confidence": 90,
+  "raw_text": "كيف تشعر اليوم؟ القلم أكثر هنا في المصح حاولين يزداد أمور ويزيد بعد لك حاولين أمور الزبون وبعد لما تأكل تشعر أن القلم زاد شوية هل هناك أعراض أخرى مثل السخن أو الديارية أو عصب أبتداء لا تستطيع أن تأكل شعيبك محفولة نعم نحن نحن نحصل على عصب أبتداء شوية لكن لا يوجد حرارة أو أي شيء آخر سؤال يا أستاذ مصعب هل أخذت أي ميديكيشن او اكلت شيء قد تكون مخلص قبل ان تبدأ الاعراض هذه انا اكلت شابه من محل جديد واضعه صعبين من حصة الدكاء اه تمام احتمال هذا يكون بالفعل سبب المشكلة طيب هل اخذت اي نوع من انواع المساكنات لان احيانا المساكنات هذه ممكن تكون تسبب فرحة معدل جدا فهل اخذت مثلا شيء مثل الفولتورين مثل الكتافلام مثل البروفين كل هذا اخذت منه شيء لا اخذت اي اهلين او انت اكل حاجة على طول اشتركوا في القناة",
+  "refined_text": "الدكتور: كيف تشعر اليوم؟  \n    المريض: أشعر بألم أكثر هنا في المعدة، ويزداد الألم عندما آكل.  \n    الدكتور: هل هناك أعراض أخرى مثل الحمى أو الإسهال أو ألم عصبي؟ هل تواجه صعوبة في الأكل؟  \n    المريض: نعم، أشعر بألم عصبي خفيف، لكن لا يوجد حرارة أو أي شيء آخر.  \n    الدكتور: هل تناولت أي أدوية أو أكلت شيئاً غير معتاد قبل أن تبدأ هذه الأعراض؟  \n    المريض: نعم، أكلت شاورما من محل جديد، وكانت حارة جداً.  \n    الدكتور: هذا قد يكون سبب المشكلة. هل تناولت أي مسكنات للألم؟ لأن بعض المسكنات قد تسبب تهيجاً في المعدة. هل تناولت مثلاً فولتارين أو كتافلام أو بروفين؟  \n    المريض: لا، لم أتناول أي مسكنات.",
+  "translated_text": "Doctor: How are you feeling today?  \nPatient: I feel more pain here in my stomach, and the pain increases when I eat.  \nDoctor: Are there any other symptoms like fever, diarrhea, or nerve pain? Are you having difficulty eating?  \nPatient: Yes, I feel mild nerve pain, but no fever or anything else.  \nDoctor: Have you taken any medications or eaten anything unusual before these symptoms started?  \nPatient: Yes, I ate shawarma from a new place, and it was very spicy.  \nDoctor: That might be the cause of the problem. Have you taken any painkillers? Because some painkillers can cause stomach irritation. Have you taken, for example, Voltaren, Cataflam, or Brufen?  \nPatient: No, I haven't taken any painkillers.",
+  "json_data": {
+    "chief_complaint": "Stomach pain that increases when eating",
+    "icd10_codes": [
+      "K30 - Functional dyspepsia"
+    ],
+    "history_of_illness": "Patient recently ate spicy shawarma from a new place",
+    "current_medication": "None",
+    "imaging_results": "",
+    "plan": "Avoid irritating foods",
+    "assessment": "Possible gastritis or functional dyspepsia due to spicy food consumption",
+    "follow_up": "",
+    "conversation_summary": "Patient reported stomach pain worsened by eating, mild nerve pain, and recent consumption of spicy shawarma. Doctor suspected food irritation as the cause and advised avoiding irritating foods."
+  },
+  "reasoning": "Chief complaint derived from patient's initial description of symptoms. History of illness gathered from patient's account of eating spicy shawarma. Current medication status obtained from patient's denial of taking painkillers. Doctor's suspicion of food irritation informed the assessment and plan. ICD-10 code selected based on symptoms suggesting functional dyspepsia.",
+  "meta": {
+    "model": "whisper-v3",
+    "language": "ar",
+    "endpoint": "https://api.fireworks.ai/inference/v1/audio/transcriptions",
+    "status_code": 200,
+    "timings": {
+      "speech_to_text": 24.40960409701802,
+      "validation": 3.576306022994686,
+      "refine_text": 4.793467273004353,
+      "translation": 2.921168698987458,
+      "feature_extraction": 3.597491524007637,
+      "total": 39.298946623981465
+    }
+  }
+}

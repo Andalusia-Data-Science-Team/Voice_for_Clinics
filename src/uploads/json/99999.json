@@ -1,0 +1,152 @@
+{
+  "visit_id": "99999",
+  "source_audio": "/home/ai/Workspace/Doha/Medical_voice_assistant/src/uploads/audio/99999.ogg",
+  "language": "ar",
+  "patient_name": "no name",
+  "patient_id": "no id",
+  "mode": "doctor",
+  "is_conversation": false,
+  "is_medical": false,
+  "classification": null,
+  "confidence": 0,
+  "raw_text": "ذكر المريض أنه يعين منذ يومين من ألم في الخشب مع إحداث بحرارة المثاني خلال الاستجواب أوضح أن الألم مستمر أكثر في منطقة الخشب مع سداد كزينة وذكر وجود تقرح صغير داخل الخب من الجهة الداخلية بدون سيالان أن في وضعه بالفحص السريري تبين وجود إضطهاد في الغشاء المخاطي في الحنك والخشب ويرجع عن نسبة فيروسي أو نسيجة حسية موسمية تفن التوصيل بمضاد ضحيوي ومكسسيليل والبدء بغسول فم مضاد للبكتيريا واستخدام جسور أنف المنح يوميا مع متابعة الأعراض خلال أيام قادمة في حال استمرار الألم أو زيادة التقرحات ينصح بزيارة العيادة لإنساء مزرعة والتأكد من عدم وجود عدوى بكتيري",
+  "refined_text": "ذكر المريض معاناته من ألم في الحلق منذ يومين مصحوباً بحرارة مرتفعة. خلال المقابلة السريرية، أوضح أن الألم مستمر بشكل أكبر في منطقة الحلق مع صعوبة في البلع. كما ذكر وجود تقرح صغير داخل الفم من الجهة الداخلية للخد دون أي إفرازات. أثناء الفحص السريري، لوحظ وجود التهاب في الغشاء المخاطي للحنك والحلق، مما يشير إلى احتمال الإصابة بعدوى فيروسية أو التهاب تحسسي موسمي. تم وصف مضاد حيوي مناسب ومسكن للألم، مع البدء بغسول فم مضاد للبكتيريا واستخدام بخاخ أنفي يومياً. نُصح المريض بمتابعة الأعراض خلال الأيام القادمة، وفي حال استمرار الألم أو زيادة التقرحات، يُنصح بمراجعة العيادة لإجراء مزرعة بكتيرية والتأكد من عدم وجود عدوى بكتيرية.",
+  "translated_text": "The patient reported suffering from a sore throat for two days accompanied by a high fever. During the clinical interview, he explained that the pain is more persistent in the throat area with difficulty swallowing. He also mentioned the presence of a small ulcer inside the mouth on the inner side of the cheek without any discharge. During the clinical examination, inflammation of the mucous membrane of the palate and throat was observed, indicating a possible viral infection or seasonal allergic inflammation. An appropriate antibiotic and painkiller were prescribed, along with starting an antibacterial mouthwash and daily use of a nasal spray. The patient was advised to monitor the symptoms in the coming days, and if the pain persists or the ulcers increase, he is advised to visit the clinic for a bacterial culture to ensure there is no bacterial infection.",
+  "questions": [
+    {
+      "question": "What is the patient's chief complaint?",
+      "answer": "Sore throat for two days accompanied by high fever",
+      "needs_asking": false,
+      "category": "chief_complaint"
+    },
+    {
+      "question": "How long has the patient had symptoms?",
+      "answer": "Two days",
+      "needs_asking": false,
+      "category": "chief_complaint"
+    },
+    {
+      "question": "Does the patient have difficulty swallowing?",
+      "answer": "Yes, difficulty swallowing",
+      "needs_asking": false,
+      "category": "chief_complaint"
+    },
+    {
+      "question": "Are there any mouth ulcers or lesions?",
+      "answer": "Small ulcer inside the mouth on the inner side of the cheek without discharge",
+      "needs_asking": false,
+      "category": "chief_complaint"
+    },
+    {
+      "question": "What is the patient's medical history?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "history"
+    },
+    {
+      "question": "Does the patient have any chronic conditions?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "history"
+    },
+    {
+      "question": "Has the patient had any recent surgeries?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "history"
+    },
+    {
+      "question": "What medications is the patient currently taking?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "medications"
+    },
+    {
+      "question": "Does the patient have any drug allergies?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "allergies"
+    },
+    {
+      "question": "Does the patient have any food allergies?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "allergies"
+    },
+    {
+      "question": "What is the patient's temperature?",
+      "answer": "High fever (specific value not provided)",
+      "needs_asking": true,
+      "category": "vital_signs"
+    },
+    {
+      "question": "What is the patient's blood pressure?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "vital_signs"
+    },
+    {
+      "question": "What is the patient's heart rate?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "vital_signs"
+    },
+    {
+      "question": "What is the patient's respiratory rate?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "vital_signs"
+    },
+    {
+      "question": "What were the findings on throat examination?",
+      "answer": "Inflammation of the mucous membrane of the palate and throat",
+      "needs_asking": false,
+      "category": "physical_exam"
+    },
+    {
+      "question": "Are there any tonsillar exudates?",
+      "answer": "Not mentioned (ulcer noted but no discharge)",
+      "needs_asking": true,
+      "category": "physical_exam"
+    },
+    {
+      "question": "Are there swollen lymph nodes?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "physical_exam"
+    },
+    {
+      "question": "What is the clinical assessment?",
+      "answer": "Possible viral infection or seasonal allergic inflammation",
+      "needs_asking": false,
+      "category": "assessment"
+    },
+    {
+      "question": "What treatment was prescribed?",
+      "answer": "Antibiotic, painkiller, antibacterial mouthwash, and nasal spray",
+      "needs_asking": false,
+      "category": "plan"
+    },
+    {
+      "question": "What follow-up was recommended?",
+      "answer": "Monitor symptoms and return for bacterial culture if pain persists or ulcers increase",
+      "needs_asking": false,
+      "category": "plan"
+    }
+  ],
+  "reasoning": "The dictation provided good detail about the chief complaint, some physical exam findings, assessment, and plan. However, it lacked information about medical history, current medications, allergies, vital signs (specific values), and some physical exam details. Questions were generated to cover all essential medical categories, with needs_asking flag set appropriately based on whether information was present in the text.",
+  "meta": {
+    "model": "whisper-v3",
+    "language": "ar",
+    "endpoint": "https://api.fireworks.ai/inference/v1/audio/transcriptions",
+    "status_code": 200,
+    "timings": {
+      "speech_to_text": 19.395151109900326,
+      "validation": 0.2587657531257719,
+      "refine_text": 2.1420031539164484,
+      "translation": 1.851852455176413,
+      "question_generation": 7.832252538995817,
+      "total": 31.481065595988184
+    }
+  }
+}

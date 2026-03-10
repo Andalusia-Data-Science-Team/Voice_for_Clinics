@@ -1,6 +1,5 @@
 aiofiles==25.1.0
 pandas==2.2.3
-fastapi==0.119.1
 fastapi-health==0.4.0
 Flask==3.1.2
 flask-cors==6.0.1
@@ -21,9 +20,7 @@ uvicorn==0.34.3
 python-multipart==0.0.20
 passlib==1.7.4
 bcrypt==3.2.0
-celery==5.5.3
-redis==7.0.0
-kombu==5.5.4
-billiard==4.2.2
-vine==5.1.0
-flower==2.0.1
+mistralai==1.12.4
+fastapi==0.115.12
+sse-starlette==2.2.1
+starlette==0.45.3

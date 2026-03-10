@@ -1,7 +1,6 @@
 import os
 import logging
-import asyncio
-from typing import Optional, Tuple, Dict, Any, AsyncGenerator
+from typing import Tuple, Dict, Any
 import requests
 
 # Configure logger
@@ -87,7 +86,7 @@ class SpeechService:
                 resp = requests.post(
                     SpeechService.TRANSCRIBE_ENDPOINT,
                     headers=headers,
-                    files=files,                                                         
+                    files=files,
                     data=data,
                     timeout=timeout,
                 )
@@ -141,61 +140,3 @@ class SpeechService:
                     logger.debug("Removed temporary preprocessed file: %s", processed_file_path)
             except Exception as cleanup_err:
                 logger.warning("Failed to remove temporary file %s: %s", processed_file_path, cleanup_err)
-
-    @staticmethod
-    async def transcribe_audio_stream(
-        audio_file_path: str,
-        api_key: str,
-        language: str = "en",
-        preprocess: bool = True,
-        model: str = "whisper-v3",
-        timeout: int = 300,
-        chunk_size: int = 5,  # Words per chunk
-        delay: float = 0.1,  # Delay between chunks in seconds
-    ) -> AsyncGenerator[Tuple[str, Optional[Dict[str, Any]]], None]:
-        """
-        Transcribe audio and stream the result word-by-word for visual effect.
-        
-        Note: Whisper API returns complete transcription, so this simulates streaming
-        by chunking the response for better UX.
-        
-        Args:
-            audio_file_path: Path to the audio file.
-            api_key: Fireworks API key.
-            language: ISO language code.
-            preprocess: Whether to apply audio preprocessing.
-            model: Whisper model name.
-            timeout: HTTP request timeout.
-            chunk_size: Number of words per chunk.
-            delay: Delay between chunks (seconds).
-            
-        Yields:
-            Tuple of (text_chunk, metadata or None)
-        """
-        # First, get the complete transcription
-        text, meta = SpeechService.transcribe_audio(
-            audio_file_path=audio_file_path,
-            api_key=api_key,
-            language=language,
-            preprocess=preprocess,
-            model=model,
-            timeout=timeout,
-            return_meta=True,
-        )
-        
-        # Split into words
-        words = text.split()
-        
-        # Yield metadata first
-        yield ("", meta)
-        
-        # Stream words in chunks
-        for i in range(0, len(words), chunk_size):
-            chunk = words[i:i + chunk_size]
-            chunk_text = ' '.join(chunk) + ' '
-            
-            yield (chunk_text, None)
-            
-            # Add delay for streaming effect
-            if i + chunk_size < len(words):
-                await asyncio.sleep(delay)

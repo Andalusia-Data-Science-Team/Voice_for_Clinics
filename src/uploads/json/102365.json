@@ -1,0 +1,40 @@
+{
+  "visit_id": "102365",
+  "source_audio": "/home/ai/Workspace/Doha/Medical_voice_assistant/src/uploads/audio/102365.mp3",
+  "language": "en",
+  "patient_name": "no name",
+  "patient_id": "no id",
+  "is_medical": false,
+  "classification": null,
+  "confidence": 0,
+  "raw_text": "The patient is complaining from bilateral knee pain since five years. Two years ago, the pain increased. Plane X-ray was done showing advanced osteoarthritis grade 4. Non-steroidal anti-inflammatory was given for around one month with muscle relaxants showing mild improvement. She is now doing physiotherapy exercises to see again after two weeks.",
+  "refined_text": "The patient has been experiencing bilateral knee pain for five years. The pain worsened two years ago. A plain X-ray revealed advanced osteoarthritis (grade 4). Non-steroidal anti-inflammatory drugs (NSAIDs) and muscle relaxants were prescribed for approximately one month, resulting in mild improvement. She is currently undergoing physiotherapy exercises and will be reassessed in two weeks.",
+  "translated_text": "The patient has been experiencing bilateral knee pain for five years. The pain worsened two years ago. A plain X-ray revealed advanced osteoarthritis (grade 4). Non-steroidal anti-inflammatory drugs (NSAIDs) and muscle relaxants were prescribed for approximately one month, resulting in mild improvement. She is currently undergoing physiotherapy exercises and will be reassessed in two weeks.",
+  "json_data": {
+    "chief_complaint": "bilateral knee pain",
+    "icd10_codes": [
+      "M17.0 - Bilateral primary osteoarthritis"
+    ],
+    "history_of_illness": "The patient has been experiencing bilateral knee pain for five years. The pain worsened two years ago.",
+    "current_medication": "Non-steroidal anti-inflammatory drugs (NSAIDs) and muscle relaxants",
+    "imaging_results": "A plain X-ray revealed advanced osteoarthritis (grade 4)",
+    "plan": "physiotherapy exercises",
+    "assessment": "advanced osteoarthritis (grade 4)",
+    "follow_up": "reassessed in two weeks"
+  },
+  "reasoning": "The patient presents with bilateral knee pain, a chief complaint that has been ongoing for five years and worsened two years ago. The ICD-10 code M17.0 is assigned for bilateral primary osteoarthritis based on the X-ray findings. The history of illness is detailed, showing a chronic condition. Current medication includes NSAIDs and muscle relaxants, which provided mild improvement. Imaging results from a plain X-ray confirm advanced osteoarthritis. The plan involves physiotherapy exercises, and the patient is scheduled for follow-up in two weeks to reassess the condition.",
+  "meta": {
+    "model": "whisper-v3",
+    "language": "en",
+    "endpoint": "https://api.fireworks.ai/inference/v1/audio/transcriptions",
+    "status_code": 200,
+    "timings": {
+      "speech_to_text": 16.62655414827168,
+      "validation": 6.014795963652432,
+      "refine_text": 2.207665382884443,
+      "translation": 4.0549784898757935e-06,
+      "feature_extraction": 15.531706813722849,
+      "total": 40.381396238692105
+    }
+  }
+}

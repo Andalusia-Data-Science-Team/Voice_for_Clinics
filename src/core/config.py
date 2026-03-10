@@ -13,6 +13,7 @@ class Config:
     UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "uploads")
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
     FIREWORKS_API_KEY = os.getenv("FIREWORKS_API_KEY")
+    MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 
     SPEECH_API_KEY = os.getenv("speech")
     REFINE_API_KEY = os.getenv("refine")

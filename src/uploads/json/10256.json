@@ -1,0 +1,146 @@
+{
+  "visit_id": "10256",
+  "source_audio": "/home/ai/Workspace/Doha/Medical_voice_assistant/src/uploads/audio/10256.ogg",
+  "language": "ar",
+  "patient_name": "no name",
+  "patient_id": "no id",
+  "mode": "doctor",
+  "is_conversation": false,
+  "is_medical": false,
+  "classification": null,
+  "confidence": 0,
+  "raw_text": "ذكر المريض أنه يعين منذ يومين من ألم في الخشب مع إحداث بحرارة المثاني خلال الاستجواب أوضح أن الألم مستمر أكثر في منطقة الخشب مع سداد كزينة وذكر وجود تقرح صغير داخل الخب من الجهة الداخلية بدون سيالان أن في وضعه بالفحص السريري تبين وجود إضطهاد في الغشاء المخاطي في الحنك والخشب ويرجع عن نسبة فيروسي أو نسيجة حسية موسمية تفن التوصيل بمضاد ضحيوي ومكسسيليل والبدء بغسول فم مضاد للبكتيريا واستخدام جسور أنف المنح يوميا مع متابعة الأعراض خلال أيام قادمة في حال استمرار الألم أو زيادة التقرحات ينصح بزيارة العيادة لإنساء مزرعة والتأكد من عدم وجود عدوى بكتيري",
+  "refined_text": "ذكر المريض أنه يعين منذ يومين من ألم في الخشب مع إحداث بحرارة المثاني خلال الاستجواب أوضح أن الألم مستمر أكثر في منطقة الخشب مع سداد كزينة وذكر وجود تقرح صغير داخل الخب من الجهة الداخلية بدون سيالان أن في وضعه بالفحص السريري تبين وجود إضطهاد في الغشاء المخاطي في الحنك والخشب ويرجع عن نسبة فيروسي أو نسيجة حسية موسمية تفن التوصيل بمضاد ضحيوي ومكسسيليل والبدء بغسول فم مضاد للبكتيريا واستخدام جسور أنف المنح يوميا مع متابعة الأعراض خلال أيام قادمة في حال استمرار الألم أو زيادة التقرحات ينصح بزيارة العيادة لإنساء مزرعة والتأكد من عدم وجود عدوى بكتيري",
+  "translated_text": "The patient reported experiencing pain in the palate for two days with associated urinary bladder heat during urination. Upon questioning, he clarified that the pain is more persistent in the palate area with obstruction-like symptoms and mentioned the presence of a small ulcer inside the palate on the inner side without discharge. During the clinical examination, irritation of the mucous membrane in the palate and uvula was observed, likely due to a viral or seasonal allergic cause. Treatment involved prescribing an antibiotic and mucolytic agent, initiating an antibacterial mouthwash, and recommending daily nasal saline irrigation. Follow-up of symptoms over the coming days was advised. If pain persists or ulcers increase, a clinic visit is recommended to perform a culture and confirm the absence of bacterial infection.",
+  "questions": [
+    {
+      "question": "What is the patient's chief complaint?",
+      "answer": "Pain in the palate for two days with associated urinary bladder heat during urination",
+      "needs_asking": false,
+      "category": "chief_complaint"
+    },
+    {
+      "question": "How long has the patient had these symptoms?",
+      "answer": "Two days",
+      "needs_asking": false,
+      "category": "chief_complaint"
+    },
+    {
+      "question": "Does the patient have any known drug allergies?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "allergies"
+    },
+    {
+      "question": "What medications is the patient currently taking?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "medications"
+    },
+    {
+      "question": "Does the patient have any chronic medical conditions?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "history"
+    },
+    {
+      "question": "Has the patient had any recent surgeries?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "history"
+    },
+    {
+      "question": "What are the patient's vital signs?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "vital_signs"
+    },
+    {
+      "question": "Can you describe the character of the palate pain?",
+      "answer": "Persistent with obstruction-like symptoms",
+      "needs_asking": false,
+      "category": "chief_complaint"
+    },
+    {
+      "question": "Is there any discharge from the oral lesions?",
+      "answer": "No discharge mentioned",
+      "needs_asking": false,
+      "category": "physical_exam"
+    },
+    {
+      "question": "What was found on physical examination of the oral cavity?",
+      "answer": "Irritation of the mucous membrane in the palate and uvula, presence of a small ulcer inside the palate on the inner side",
+      "needs_asking": false,
+      "category": "physical_exam"
+    },
+    {
+      "question": "What is the clinical assessment/diagnosis?",
+      "answer": "Likely viral or seasonal allergic cause",
+      "needs_asking": false,
+      "category": "assessment"
+    },
+    {
+      "question": "What treatment was prescribed?",
+      "answer": "Antibiotic, mucolytic agent, antibacterial mouthwash, daily nasal saline irrigation",
+      "needs_asking": false,
+      "category": "plan"
+    },
+    {
+      "question": "What follow-up was recommended?",
+      "answer": "Follow-up of symptoms over coming days, clinic visit if pain persists or ulcers increase for culture to confirm absence of bacterial infection",
+      "needs_asking": false,
+      "category": "plan"
+    },
+    {
+      "question": "Does the patient have any fever?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "vital_signs"
+    },
+    {
+      "question": "Has the patient experienced similar symptoms in the past?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "history"
+    },
+    {
+      "question": "Is the patient experiencing any difficulty swallowing?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "chief_complaint"
+    },
+    {
+      "question": "Has the patient been exposed to anyone with similar symptoms?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "history"
+    },
+    {
+      "question": "Does the patient smoke or use tobacco products?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "history"
+    },
+    {
+      "question": "Does the patient consume alcohol?",
+      "answer": null,
+      "needs_asking": true,
+      "category": "history"
+    }
+  ],
+  "reasoning": "The dictation provides good detail about the chief complaint, physical exam findings, assessment, and treatment plan. However, it lacks information about medical history, medications, allergies, vital signs, and more specific details about the symptoms and patient background. Essential questions in these categories need to be asked to complete the medical evaluation and ensure appropriate treatment.",
+  "meta": {
+    "model": "whisper-v3",
+    "language": "ar",
+    "endpoint": "https://api.fireworks.ai/inference/v1/audio/transcriptions",
+    "status_code": 200,
+    "timings": {
+      "speech_to_text": 48.72390042594634,
+      "validation": 0.2770417600404471,
+      "refine_text": 0.635290086036548,
+      "translation": 4.7335725801531225,
+      "question_generation": 13.946714298101142,
+      "total": 68.31712704594247
+    }
+  }
+}
