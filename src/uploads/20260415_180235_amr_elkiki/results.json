@@ -1,0 +1,7 @@
+{
+  "filename": "amr_elkiki.mp3",
+  "language": "en",
+  "mode": "doctor",
+  "session_dir": "/home/ai/Workspace/Doha/MedVoice/src/uploads/20260415_180235_amr_elkiki",
+  "error": "{'error': {'message': 'The API key you provided is invalid.', 'param': None, 'code': 'UNAUTHORIZED', 'type': 'error'}, 'request_id': 'cmpl-9f81091ea0954899997dbab68445ee20'}"
+}

@@ -1,0 +1,322 @@
+{
+  "filename": "amr_elkiki.mp3",
+  "language": "en",
+  "mode": "doctor",
+  "session_dir": "/app/uploads/20260405_081944_amr_elkiki",
+  "transcription": {
+    "final_text": "The patient has complained of bilateral knee pain for five years. The pain increased two years ago. A plain x-ray showed advanced grade four osteoarthritis. Non-steroidal anti-inflammatory drugs and muscle relaxants were given for approximately one month, resulting in mild improvement. She is now performing physiotherapy exercises and will be seen again in two weeks.",
+    "transcription_sec": 21.909,
+    "refinement_sec": 9.027,
+    "translation_sec": null
+  },
+  "extraction": {
+    "extracted_features": {
+      "chief_complaint": "Bilateral knee pain for five years, increased two years ago",
+      "icd10_codes": [
+        "M17.0 - Bilateral primary osteoarthritis of knee"
+      ],
+      "history_of_illness": "Bilateral knee pain for five years, worsening over the past two years",
+      "current_medication": "Non-steroidal anti-inflammatory drugs and muscle relaxants (taken for one month, now discontinued)",
+      "imaging_results": "Plain x-ray showed advanced grade four osteoarthritis",
+      "plan": "Physiotherapy exercises",
+      "assessment": "Advanced bilateral knee osteoarthritis",
+      "follow_up": "Will be seen again in two weeks"
+    },
+    "extraction_sec": 29.635
+  },
+  "questions": {
+    "questions": [
+      {
+        "question": "What is the capital of France?",
+        "answer": "Paris",
+        "needs_asking": false,
+        "category": "chief_complaint"
+      },
+      {
+        "question": "What is the capital of Germany?",
+        "answer": "Berlin",
+        "needs_asking": false,
+        "category": "history"
+      },
+      {
+        "question": "What is the capital of Italy?",
+        "answer": "Rome",
+        "needs_asking": false,
+        "category": "medications"
+      },
+      {
+        "question": "What is the capital of Spain?",
+        "answer": "Madrid",
+        "needs_asking": false,
+        "category": "allergies"
+      },
+      {
+        "question": "What is the capital of Portugal?",
+        "answer": "Lisbon",
+        "needs_asking": false,
+        "category": "vital_signs"
+      },
+      {
+        "question": "What is the capital of Greece?",
+        "answer": "Athens",
+        "needs_asking": false,
+        "category": "physical_exam"
+      },
+      {
+        "question": "What is the capital of Sweden?",
+        "answer": "Stockholm",
+        "needs_asking": false,
+        "category": "assessment"
+      },
+      {
+        "question": "What is the capital of Norway?",
+        "answer": "Oslo",
+        "needs_asking": false,
+        "category": "plan"
+      },
+      {
+        "question": "What is the capital of Denmark?",
+        "answer": "Copenhagen",
+        "needs_asking": false,
+        "category": "chief_complaint"
+      },
+      {
+        "question": "What is the capital of Finland?",
+        "answer": "Helsinki",
+        "needs_asking": false,
+        "category": "history"
+      },
+      {
+        "question": "What is the capital of Iceland?",
+        "answer": "Reykjavik",
+        "needs_asking": false,
+        "category": "medications"
+      },
+      {
+        "question": "What is the capital of Ireland?",
+        "answer": "Dublin",
+        "needs_asking": false,
+        "category": "allergies"
+      },
+      {
+        "question": "What is the capital of United Kingdom?",
+        "answer": "London",
+        "needs_asking": false,
+        "category": "vital_signs"
+      },
+      {
+        "question": "What is the capital of Netherlands?",
+        "answer": "Amsterdam",
+        "needs_asking": false,
+        "category": "physical_exam"
+      },
+      {
+        "question": "What is the capital of Belgium?",
+        "answer": "Brussels",
+        "needs_asking": false,
+        "category": "assessment"
+      },
+      {
+        "question": "What is the capital of Luxembourg?",
+        "answer": "Luxembourg",
+        "needs_asking": false,
+        "category": "plan"
+      },
+      {
+        "question": "What is the capital of Switzerland?",
+        "answer": "Bern",
+        "needs_asking": false,
+        "category": "chief_complaint"
+      },
+      {
+        "question": "What is the capital of Austria?",
+        "answer": "Vienna",
+        "needs_asking": false,
+        "category": "history"
+      },
+      {
+        "question": "What is the capital of Poland?",
+        "answer": "Warsaw",
+        "needs_asking": false,
+        "category": "medications"
+      },
+      {
+        "question": "What is the capital of Czech Republic?",
+        "answer": "Prague",
+        "needs_asking": false,
+        "category": "allergies"
+      },
+      {
+        "question": "What is the capital of Slovakia?",
+        "answer": "Bratislava",
+        "needs_asking": false,
+        "category": "vital_signs"
+      },
+      {
+        "question": "What is the capital of Hungary?",
+        "answer": "Budapest",
+        "needs_asking": false,
+        "category": "physical_exam"
+      },
+      {
+        "question": "What is the capital of Romania?",
+        "answer": "Bucharest",
+        "needs_asking": false,
+        "category": "assessment"
+      },
+      {
+        "question": "What is the capital of Bulgaria?",
+        "answer": "Sofia",
+        "needs_asking": false,
+        "category": "plan"
+      },
+      {
+        "question": "What is the capital of Serbia?",
+        "answer": "Belgrade",
+        "needs_asking": false,
+        "category": "chief_complaint"
+      },
+      {
+        "question": "What is the capital of Croatia?",
+        "answer": "Zagreb",
+        "needs_asking": false,
+        "category": "history"
+      },
+      {
+        "question": "What is the capital of Slovenia?",
+        "answer": "Ljubljana",
+        "needs_asking": false,
+        "category": "medications"
+      },
+      {
+        "question": "What is the capital of Bosnia and Herzegovina?",
+        "answer": "Sarajevo",
+        "needs_asking": false,
+        "category": "allergies"
+      },
+      {
+        "question": "What is the capital of Montenegro?",
+        "answer": "Podgorica",
+        "needs_asking": false,
+        "category": "vital_signs"
+      },
+      {
+        "question": "What is the capital of Macedonia?",
+        "answer": "Skopje",
+        "needs_asking": false,
+        "category": "physical_exam"
+      },
+      {
+        "question": "What is the capital of Albania?",
+        "answer": "Tirana",
+        "needs_asking": false,
+        "category": "assessment"
+      },
+      {
+        "question": "What is the capital of Kosovo?",
+        "answer": "Pristina",
+        "needs_asking": false,
+        "category": "plan"
+      },
+      {
+        "question": "What is the capital of Estonia?",
+        "answer": "Tallinn",
+        "needs_asking": false,
+        "category": "chief_complaint"
+      },
+      {
+        "question": "What is the capital of Latvia?",
+        "answer": "Riga",
+        "needs_asking": false,
+        "category": "history"
+      },
+      {
+        "question": "What is the capital of Lithuania?",
+        "answer": "Vilnius",
+        "needs_asking": false,
+        "category": "medications"
+      },
+      {
+        "question": "What is the capital of Ukraine?",
+        "answer": "Kiev",
+        "needs_asking": false,
+        "category": "allergies"
+      },
+      {
+        "question": "What is the capital of Belarus?",
+        "answer": "Minsk",
+        "needs_asking": false,
+        "category": "vital_signs"
+      },
+      {
+        "question": "What is the capital of Moldova?",
+        "answer": "Chisinau",
+        "needs_asking": false,
+        "category": "physical_exam"
+      },
+      {
+        "question": "What is the capital of Russia?",
+        "answer": "Moscow",
+        "needs_asking": false,
+        "category": "assessment"
+      },
+      {
+        "question": "What is the capital of Georgia?",
+        "answer": "Tbilisi",
+        "needs_asking": false,
+        "category": "plan"
+      },
+      {
+        "question": "What is the capital of Armenia?",
+        "answer": "Yerevan",
+        "needs_asking": false,
+        "category": "chief_complaint"
+      },
+      {
+        "question": "极速赛车开奖官网开奖结果",
+        "answer": null,
+        "needs_asking": true,
+        "category": "history"
+      },
+      {
+        "question": "极速赛车开奖官网开奖结果",
+        "answer": null,
+        "needs_asking": true,
+        "category": "medications"
+      },
+      {
+        "question": "极速赛车开奖官网开奖结果",
+        "answer": null,
+        "needs_asking": true,
+        "category": "allergies"
+      },
+      {
+        "question": "极速赛车开奖官网开奖结果",
+        "answer": null,
+        "needs_asking": true,
+        "category": "vital_signs"
+      },
+      {
+        "question": "极速赛车开奖官网开奖结果",
+        "answer": null,
+        "needs_asking": true,
+        "category": "physical_exam"
+      },
+      {
+        "question": "极速赛车开奖官网开奖结果",
+        "answer": null,
+        "needs_asking": true,
+        "category": "assessment"
+      },
+      {
+        "question": "极速赛车开奖官网开奖结果",
+        "answer": null,
+        "needs_asking": true,
+        "category": "plan"
+      }
+    ],
+    "question_generation_sec": 29.635,
+    "total_sec": 61.287
+  },
+  "total_sec": 61.287
+}

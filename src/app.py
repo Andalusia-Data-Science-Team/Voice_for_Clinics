@@ -2,13 +2,16 @@ import os
 import time
 import json
 import logging
-import tempfile
 import asyncio
+import shutil
 from enum import Enum
+from pathlib import Path
+from datetime import datetime
 
 import uvicorn
 from sse_starlette.sse import EventSourceResponse
-from fastapi import FastAPI, APIRouter, File, Form, UploadFile
+from fastapi import FastAPI, APIRouter, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import Config
 from model.speech_service import SpeechService, TranscriptionError
@@ -21,6 +24,29 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/audio", tags=["Audio Processing"])
 app = FastAPI(title="Medical Voice API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:1110"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── Uploads directory (src/uploads/) ──────────────────────────────────────────
+UPLOADS_DIR = Path(__file__).parent / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
+
+
+# --------------- Helpers --------------- #
+
+def _session_dir(filename: str) -> Path:
+    """Create a timestamped subfolder per request: uploads/20250101_123045_recording/"""
+    stem = Path(filename).stem if filename else "audio"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    session = UPLOADS_DIR / f"{timestamp}_{stem}"
+    session.mkdir(parents=True, exist_ok=True)
+    return session
 
 
 # --------------- Enums --------------- #
@@ -42,7 +68,7 @@ class Mode(str, Enum):
     summary="Transcribe audio, extract features, and generate questions (streamed)",
 )
 async def process_audio(
-    file: UploadFile = File(..., description="Audio file (wav, mp3, m4a, ogg, …)"),
+    file_path: str = Form(..., description="Absolute or relative path to the audio file on the server"),
     language: Language = Form(Language.arabic, description="Audio language"),
     mode: Mode = Form(Mode.doctor, description="Doctor Mode (single clinician) or Conversation Mode (doctor-patient)"),
 ):
@@ -50,25 +76,33 @@ async def process_audio(
     is_arabic = language == Language.arabic
     is_conversation = mode == Mode.conversation
 
-    suffix = os.path.splitext(file.filename or "audio.wav")[1] or ".wav"
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    try:
-        contents = await file.read()
-        tmp.write(contents)
-        tmp.flush()
-        tmp_path = tmp.name
-    finally:
-        tmp.close()
+    # ── Validate path upfront — fail fast before opening the stream ───────
+    src_path = Path(file_path)
+    if not src_path.is_file():
+        raise HTTPException(status_code=400, detail=f"File not found: {file_path!r}")
+
+    # ── Copy audio into a fresh timestamped session folder ────────────────
+    session_dir = _session_dir(src_path.name)
+    audio_path = session_dir / src_path.name
+    shutil.copy2(src_path, audio_path)
+    logger.info("Audio copied to session: %s", audio_path)
 
     async def event_stream():
+        results: dict = {
+            "filename": src_path.name,
+            "language": language.value,
+            "mode": mode.value,
+            "session_dir": str(session_dir),
+        }
+
         try:
             # ── 1. Transcribe ──────────────────────────────────────────────
-            logger.info("Transcribing: %s  language=%s  mode=%s", file.filename, language, mode)
+            logger.info("Transcribing: %s  language=%s  mode=%s", audio_path, language, mode)
             t0 = time.perf_counter()
             try:
                 raw_transcript = await asyncio.to_thread(
                     SpeechService.transcribe_audio,
-                    audio_file_path=tmp_path,
+                    audio_file_path=str(audio_path),
                     api_key=Config.FIREWORKS_API_KEY,
                     language=language.value,
                     preprocess=False,
@@ -99,15 +133,14 @@ async def process_audio(
             else:
                 final_text = refined_text
 
-            yield {
-                "event": "transcription",
-                "data": json.dumps({
-                    "final_text": final_text,
-                    "transcription_sec": transcription_sec,
-                    "refinement_sec": refinement_sec,
-                    "translation_sec": translation_sec,
-                }),
+            transcription_payload = {
+                "final_text": final_text,
+                "transcription_sec": transcription_sec,
+                "refinement_sec": refinement_sec,
+                "translation_sec": translation_sec,
             }
+            results["transcription"] = transcription_payload
+            yield {"event": "transcription", "data": json.dumps(transcription_payload)}
 
             # ── 4 & 5. Extract features + Generate questions (parallel) ────
             t0 = time.perf_counter()
@@ -129,29 +162,35 @@ async def process_audio(
                 return
 
             parallel_sec = round(time.perf_counter() - t0, 3)
+            total_sec = round(time.perf_counter() - pipeline_start, 3)
 
-            yield {
-                "event": "extraction",
-                "data": json.dumps({"extracted_features": extracted_features, "extraction_sec": parallel_sec}),
+            extraction_payload = {"extracted_features": extracted_features, "extraction_sec": parallel_sec}
+            questions_payload = {
+                "questions": raw_questions,
+                "question_generation_sec": parallel_sec,
+                "total_sec": total_sec,
             }
-            yield {
-                "event": "questions",
-                "data": json.dumps({
-                    "questions": raw_questions,
-                    "question_generation_sec": parallel_sec,
-                    "total_sec": round(time.perf_counter() - pipeline_start, 3),
-                }),
-            }
+
+            results["extraction"] = extraction_payload
+            results["questions"] = questions_payload
+            results["total_sec"] = total_sec
+
+            yield {"event": "extraction", "data": json.dumps(extraction_payload)}
+            yield {"event": "questions", "data": json.dumps(questions_payload)}
 
         except Exception as exc:
             logger.exception("Unexpected error in /audio/process")
+            results["error"] = str(exc)
             yield {"event": "error", "data": json.dumps({"step": "unknown", "detail": str(exc)})}
 
         finally:
+            # ── Save results JSON into the session folder ──────────────────
             try:
-                os.remove(tmp_path)
-            except Exception:
-                pass
+                results_path = session_dir / "results.json"
+                results_path.write_text(json.dumps(results, ensure_ascii=False, indent=2))
+                logger.info("Results saved: %s", results_path)
+            except Exception as save_err:
+                logger.warning("Failed to save results: %s", save_err)
 
     return EventSourceResponse(event_stream())
 
@@ -159,4 +198,6 @@ async def process_audio(
 app.include_router(router)
 
 if __name__ == "__main__":
+    print("ENV KEY:", os.environ.get("FIREWORKS_API_KEY"))
+    print("FIREWORKS_API_KEY:", Config.FIREWORKS_API_KEY)
     uvicorn.run("app:app", host="0.0.0.0", port=9999)

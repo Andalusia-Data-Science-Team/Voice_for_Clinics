@@ -9,5 +9,6 @@ services:
     env_file:
       - src/.env
     volumes:
-      - ./src/uploads:/app/uploads
+      - ./src/recordings:/app/recordings       # drop audio files here on the host
+      - ./src/uploads:/app/uploads             # results appear here on the host
     restart: unless-stopped

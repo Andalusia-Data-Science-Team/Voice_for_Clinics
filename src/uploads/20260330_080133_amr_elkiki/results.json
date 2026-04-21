@@ -1,0 +1,94 @@
+{
+  "filename": "amr_elkiki.mp3",
+  "language": "en",
+  "mode": "doctor",
+  "session_dir": "/app/uploads/20260330_080133_amr_elkiki",
+  "transcription": {
+    "final_text": "The patient has complained of bilateral knee pain for five years. The pain increased two years ago. A plain x-ray showed advanced grade four osteoarthritis. Non-steroidal anti-inflammatory drugs and muscle relaxants were given for approximately one month, resulting in mild improvement. The patient is now performing physiotherapy exercises and is scheduled for a follow-up in two weeks.",
+    "transcription_sec": 19.731,
+    "refinement_sec": 2.583,
+    "translation_sec": null
+  },
+  "extraction": {
+    "extracted_features": {
+      "chief_complaint": "Bilateral knee pain for five years",
+      "icd10_codes": [
+        "M17.0 - Bilateral primary osteoarthritis of knee"
+      ],
+      "history_of_illness": "Bilateral knee pain for five years, increased two years ago",
+      "current_medication": "Non-steroidal anti-inflammatory drugs and muscle relaxants (given for approximately one month, but not specified if currently taking)",
+      "imaging_results": "Plain x-ray showed advanced grade four osteoarthritis",
+      "plan": "Physiotherapy exercises",
+      "assessment": "Advanced grade four osteoarthritis of bilateral knees",
+      "follow_up": "Scheduled for a follow-up in two weeks"
+    },
+    "extraction_sec": 6.112
+  },
+  "questions": {
+    "questions": [
+      {
+        "question": "What is the capital of France?",
+        "answer": "Paris",
+        "needs_asking": false,
+        "category": "chief_complaint"
+      },
+      {
+        "question": "What is the patient's age?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "history"
+      },
+      {
+        "question": "What is the patient's gender?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "history"
+      },
+      {
+        "question": "What is the patient's medical history?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "history"
+      },
+      {
+        "question": "What is the patient's current medication?",
+        "answer": "Non-steroidal anti-inflammatory drugs and muscle relaxants",
+        "needs_asking": false,
+        "category": "medications"
+      },
+      {
+        "question": "What is the patient's allergy status?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "allergies"
+      },
+      {
+        "question": "What are the patient's vital signs?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "vital_signs"
+      },
+      {
+        "question": "What is the patient's physical examination findings?",
+        "answer": "Bilateral knee pain for five years, increased two years ago, plain x-ray showed advanced grade four osteoarthritis",
+        "needs_asking": false,
+        "category": "physical_exam"
+      },
+      {
+        "question": "What is the assessment/diagnosis?",
+        "answer": "Advanced grade four osteoarthritis",
+        "needs_asking": false,
+        "category": "assessment"
+      },
+      {
+        "question": "What is the plan?",
+        "answer": "Physiotherapy exercises and scheduled for a follow-up in two weeks",
+        "needs_asking": false,
+        "category": "plan"
+      }
+    ],
+    "question_generation_sec": 6.112,
+    "total_sec": 28.468
+  },
+  "total_sec": 28.468
+}

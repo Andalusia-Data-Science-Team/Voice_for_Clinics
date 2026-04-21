@@ -1,4 +1,4 @@
-# Base Image:
+# Base Image
 FROM python:3.11-slim
 
 # System dependencies
@@ -7,8 +7,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install UV from official image
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# Install UV
+RUN pip install uv
 
 # Working directory
 WORKDIR /app
@@ -19,6 +19,9 @@ RUN uv pip install --system --no-cache -r requirements.txt
 
 # Copy source code
 COPY src/ .
+
+# Create persistent directories before switching to non-root user
+RUN mkdir -p /app/recordings /app/uploads
 
 # Non-root user for security
 RUN useradd -m appuser && chown -R appuser:appuser /app
