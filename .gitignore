@@ -1,2 +1,4 @@
 .venv
-/home/ai/Workspace/Doha/MedVoice/src/.env
+.env
+src/.env
+src/core/.env
