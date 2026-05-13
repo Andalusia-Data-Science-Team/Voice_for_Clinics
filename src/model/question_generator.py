@@ -6,9 +6,9 @@ from model.llm_service import LLMService
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class QuestionGenerator:
     """Generate medical questions based on transcribed medical content."""
-
     @staticmethod
     def generate(translated_text: str, is_conversation: bool = False):
         """
@@ -22,7 +22,7 @@ class QuestionGenerator:
             Tuple of (questions_list, reasoning)
         """
         try:
-            api_key = Config.FIREWORKS_API_KEY
+            api_key = Config.OPENROUTER_API_KEY
             result = LLMService.generate_questions(
                 translated_text=translated_text,
                 api_key=api_key,

@@ -151,9 +151,9 @@ def get_translation_prompt_deepseek_conversation(refined_text):
 """
 
 
-def get_extraction_prompt_llama(translated_text):
+def get_dynamic_extraction_prompt_llama(translated_text):
     return f"""
-You are a medical expert Given the following medical text, extract relevant medical features and provide reasoning for the extraction. Return a JSON object with two fields:
+You are a medical expert Given the following medical text, extract relevant medical features and provide a summary for the patient case. Return a JSON object with two fields:
 - "json_data": A dictionary containing the following medical features:
   - "chief_complaint": The primary reason for the visit (string) you will get a diagnose of a patient so you must output a chief complain.
   - "icd10_codes": A list of ICD-10 codes with descriptions (list of strings) RECOMMEND RELATED ICD10 codes as most as you can.
@@ -163,7 +163,7 @@ You are a medical expert Given the following medical text, extract relevant medi
   - "plan": Treatment or management plan (string).
   - "assessment": Clinical assessment or diagnosis (string).
   - "follow_up": Follow-up instructions (string).
-- "reasoning": A string explaining the rationale behind the extracted features.
+- "summary": A string explaining the rationale behind the extracted features.
 
 Leave fields empty ("" for strings, [] for lists) if no relevant information is found in the text.
 
@@ -184,15 +184,14 @@ Example output:
     "assessment": "Influenza with acute respiratory symptoms",
     "follow_up": "Return in 7 days or sooner if symptoms worsen."
   }},
-  "reasoning": "The text describes a patient with cough and fever, leading to a diagnosis of influenza. ICD-10 codes J11.1 and R05 are assigned based on the symptoms. The history of asthma and allergies is noted. Current medications include Oseltamivir for influenza and Albuterol for asthma. Chest X-ray is normal, supporting a viral etiology. The plan includes antiviral treatment and symptom management, with a follow-up in 7 days."
+  "summary": "The text describes a patient with cough and fever, leading to a diagnosis of influenza. ICD-10 codes J11.1 and R05 are assigned based on the symptoms. The history of asthma and allergies is noted. Current medications include Oseltamivir for influenza and Albuterol for asthma. Chest X-ray is normal, supporting a viral etiology. The plan includes antiviral treatment and symptom management, with a follow-up in 7 days."
 }}
 """
 
-
-# --- Conversation Mode Extraction ---
-def get_extraction_prompt_llama_conversation(translated_text):
+# --- Conversation Mode Dynamic Extraction ---
+def get_dynamic_extraction_prompt_llama_conversation(translated_text):
     return f"""
-You are a medical expert. Given the following medical conversation between a doctor and patient, extract relevant medical features and provide reasoning for the extraction. Return a JSON object with two fields:
+You are a medical expert. Given the following medical conversation between a doctor and patient, extract relevant medical features and provide a summary for the patient case. Return a JSON object with two fields:
 - "json_data": A dictionary containing the following medical features:
   - "chief_complaint": The primary reason for the visit (string) - extract from patient's initial statements.
   - "icd10_codes": A list of ICD-10 codes with descriptions (list of strings) - based on doctor's diagnosis and patient's symptoms.
@@ -203,72 +202,7 @@ You are a medical expert. Given the following medical conversation between a doc
   - "assessment": Clinical assessment or diagnosis (string) - based on doctor's conclusions.
   - "follow_up": Follow-up instructions (string) - extract from doctor's final instructions.
   - "conversation_summary": A brief summary of the consultation (string) - optional overview of the interaction.
-- "reasoning": A string explaining the rationale behind the extracted features and how they were identified from the conversation.
-
-Leave fields empty ("" for strings, [] for lists) if no relevant information is found in the conversation.
-
-Conversation: {translated_text}
-
-Example output:
-{{
-  "json_data": {{
-    "chief_complaint": "Persistent cough and fever for 5 days",
-    "icd10_codes": [
-      "J11.1 - Influenza with respiratory manifestations",
-      "R05 - Cough"
-    ],
-    "history_of_illness": "Patient reports history of asthma since childhood and seasonal allergies.",
-    "current_medication": "Albuterol inhaler as needed, Doctor prescribed Oseltamivir 75mg twice daily",
-    "imaging_results": "Chest X-ray performed today shows no consolidation or pneumonia.",
-    "plan": "Continue Oseltamivir for 5 days, use Albuterol inhaler as needed for breathing difficulty, rest and fluids.",
-    "assessment": "Influenza with acute respiratory symptoms, no complications noted.",
-    "follow_up": "Return in 7 days for re-evaluation, or sooner if symptoms worsen or breathing difficulty increases.",
-    "conversation_summary": "Patient presented with 5-day history of cough and fever. Examination and chest X-ray ruled out pneumonia. Diagnosed with influenza and prescribed antiviral treatment."
-  }},
-  "reasoning": "The chief complaint was identified from the patient's opening statement about cough and fever. ICD-10 codes were assigned based on the doctor's diagnosis of influenza. Medical history was gathered from patient's responses about asthma and allergies. Current medication includes the patient's existing inhaler and newly prescribed Oseltamivir. Imaging results were shared by the doctor during the consultation. The treatment plan and follow-up instructions were extracted from the doctor's recommendations at the end of the visit."
-}}
-"""
-
-
-def get_dynamic_extraction_prompt_llama(translated_text):
-    return f"""
-You are a medical expert Given the following medical text, extract relevant medical features and provide reasoning for the extraction. Return a JSON object with two fields:
-- "json_data": A dictionary containing this medical features:
-  chief_complaint, icd10_codes, history_of_illness, current_medication,
-  imaging_results, plan, assessment, follow_up
-- "reasoning": A string explaining the rationale behind the extracted features.
-
-Leave fields empty ("" for strings, [] for lists) if no relevant information is found in the text.
-
-Text: {translated_text}
-
-Example output:
-{{
-  "json_data": {{
-    "chief_complaint": "Persistent cough and fever",
-    "icd10_codes": [
-      "J11.1 - Influenza with respiratory manifestations",
-      "R05 - Cough"
-    ],
-    "history_of_illness": "Patient has a history of asthma and seasonal allergies.",
-    "current_medication": "Albuterol inhaler, Oseltamivir 75mg twice daily",
-    "imaging_results": "Chest X-ray shows no consolidation.",
-    "plan": "Continue Oseltamivir for 5 days, use Albuterol as needed.",
-    "assessment": "Influenza with acute respiratory symptoms",
-    "follow_up": "Return in 7 days or sooner if symptoms worsen."
-  }},
-  "reasoning": "The text describes a patient with cough and fever, leading to a diagnosis of influenza. ICD-10 codes J11.1 and R05 are assigned based on the symptoms. The history of asthma and allergies is noted. Current medications include Oseltamivir for influenza and Albuterol for asthma. Chest X-ray is normal, supporting a viral etiology. The plan includes antiviral treatment and symptom management, with a follow-up in 7 days."
-}}
-"""
-
-# --- Conversation Mode Dynamic Extraction ---
-def get_dynamic_extraction_prompt_llama_conversation(translated_text):
-    return f"""
-You are a medical expert. Given the following medical conversation between a doctor and patient, extract relevant medical features and provide reasoning for the extraction. Return a JSON object with two fields:
-- "json_data": A dictionary containing these medical features:
-  chief_complaint, icd10_codes, history_of_illness, current_medication,
-  imaging_results, plan, assessment, follow_up
-- "reasoning": A string explaining the rationale behind the extracted features and how they were identified from the conversation.
+- "summary": A string explaining the rationale behind the extracted features and how they were identified from the conversation.
 
 Leave fields empty ("" for strings, [] for lists) if no relevant information is found in the conversation.
 
@@ -297,7 +231,7 @@ Example output:
     "follow_up": "Return in 7 days or sooner if symptoms worsen."
     "conversation_summary": "Patient presented with 5-day history of cough and fever. Examination and chest X-ray ruled out pneumonia. Diagnosed with influenza and prescribed antiviral treatment."
   }},
-  "reasoning": "Chief complaint identified from patient's opening description. Medical history extracted from patient's responses about previous conditions. Doctor's diagnosis informed ICD-10 code selection. Treatment plan based on doctor's recommendations during consultation. Follow-up instructions from doctor's closing remarks."
+  "summary": "Chief complaint identified from patient's opening description. Medical history extracted from patient's responses about previous conditions. Doctor's diagnosis informed ICD-10 code selection. Treatment plan based on doctor's recommendations during consultation. Follow-up instructions from doctor's closing remarks."
 }}
 """
 
@@ -318,8 +252,8 @@ def get_question_generation_prompt_llama(translated_text):
       - "answer": The answer if found in text, or null if not mentioned (string or null)
       - "needs_asking": true if doctor needs to ask this, false if already answered (boolean)
       - "category": The category of the question - one of: "chief_complaint", "history", "medications", "allergies", "vital_signs", "physical_exam", "assessment", "plan" (string)
-    - "reasoning": Brief explanation of the analysis (string)
 
+      
     **MEDICAL CATEGORIES TO COVER:**
     - Chief Complaint: Why is the patient here?
     - Medical History: Past illnesses, surgeries, chronic conditions
@@ -335,7 +269,7 @@ def get_question_generation_prompt_llama(translated_text):
     Text: {translated_text}
 
     Example output:
-    {{
+    
       "questions": [
         {{
           "question": "What is the patient's chief complaint?",
@@ -361,9 +295,9 @@ def get_question_generation_prompt_llama(translated_text):
           "needs_asking": true,
           "category": "history"
         }}
-      ],
-      "reasoning": "Generated essential medical questions covering all standard categories. Some questions were answered in the dictation (chief complaint, vital signs), while others need to be asked (allergies, surgical history) to complete the medical record."
-    }}
+      ]
+      
+    Return ONLY a valid JSON object. Do NOT wrap in markdown code fences. Do NOT include ```json or ```. Do NOT include any text outside the JSON object. Do NOT use astrisks at all.
     """
 
 
@@ -384,8 +318,8 @@ def get_question_generation_prompt_llama_conversation(translated_text):
       - "answer": The answer from conversation, or null if not discussed (string or null)
       - "needs_asking": true if doctor should still ask this, false if already covered (boolean)
       - "category": The category - one of: "chief_complaint", "history", "medications", "allergies", "vital_signs", "physical_exam", "assessment", "plan" (string)
-    - "reasoning": Brief explanation of the conversation analysis (string)
 
+      
     **MEDICAL CATEGORIES TO COVER:**
     - Chief Complaint: Why is the patient here?
     - Medical History: Past illnesses, surgeries, chronic conditions
@@ -401,7 +335,7 @@ def get_question_generation_prompt_llama_conversation(translated_text):
     Conversation: {translated_text}
 
     Example output:
-    {{
+    
       "questions": [
         {{
           "question": "What brings you to the clinic today?",
@@ -433,9 +367,9 @@ def get_question_generation_prompt_llama_conversation(translated_text):
           "needs_asking": true,
           "category": "history"
         }}
-      ],
-      "reasoning": "Analyzed the doctor-patient conversation. The doctor asked about chief complaint, medical history, and current medications which the patient answered. However, important questions about allergies and recent weight changes were not discussed and should be asked to complete the medical assessment."
-    }}
+      ]
+
+    Return ONLY a valid JSON object. Do NOT wrap in markdown code fences. Do NOT include ```json or ```. Do NOT include any text outside the JSON object. Do NOT use astrisks at all.
     """
 
 # def get_extraction_prompt_deepseek(translated_text):

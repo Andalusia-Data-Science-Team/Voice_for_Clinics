@@ -3,27 +3,37 @@ import time
 import json
 import logging
 import asyncio
-import shutil
 from enum import Enum
 from pathlib import Path
 from datetime import datetime
 
 import uvicorn
 from sse_starlette.sse import EventSourceResponse
-from fastapi import FastAPI, APIRouter, Form, HTTPException
+from fastapi import FastAPI, APIRouter, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import Config
 from model.speech_service import SpeechService, TranscriptionError
 from model.llm_service import LLMService
-from model.translation import Translate
 from model.extract_features import ExtractFeature
 from model.question_generator import QuestionGenerator
+
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/audio", tags=["Audio Processing"])
 app = FastAPI(title="Medical Voice API")
+
+# Mount static files — add this after app is created
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
+
+# Serve index.html at root
+@app.get("/")
+async def serve_frontend():
+    return FileResponse(Path(__file__).parent / "static" / "index.html")
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,9 +41,9 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-)
+        )
 
-# ── Uploads directory (src/uploads/) ──────────────────────────────────────────
+# ── Uploads directory ─────────────────────────────────────────────────────────
 UPLOADS_DIR = Path(__file__).parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
 
@@ -65,10 +75,10 @@ class Mode(str, Enum):
 
 @router.post(
     "/process",
-    summary="Transcribe audio, extract features, and generate questions (streamed)",
+    summary="Transcribe recorded audio and stream all pipeline results",
 )
 async def process_audio(
-    file_path: str = Form(..., description="Absolute or relative path to the audio file on the server"),
+    file: UploadFile = File(..., description="Recorded audio file (webm, wav, mp3, ogg, m4a, …)"),
     language: Language = Form(Language.arabic, description="Audio language"),
     mode: Mode = Form(Mode.doctor, description="Doctor Mode (single clinician) or Conversation Mode (doctor-patient)"),
 ):
@@ -76,106 +86,179 @@ async def process_audio(
     is_arabic = language == Language.arabic
     is_conversation = mode == Mode.conversation
 
-    # ── Validate path upfront — fail fast before opening the stream ───────
-    src_path = Path(file_path)
-    if not src_path.is_file():
-        raise HTTPException(status_code=400, detail=f"File not found: {file_path!r}")
+    # ── Save uploaded recording into a timestamped session folder ─────────
+    original_name = file.filename or f"recording_{datetime.now().strftime('%Y%m%d_%H%M%S')}.webm"
+    session_dir = _session_dir(original_name)
+    audio_path = session_dir / original_name
 
-    # ── Copy audio into a fresh timestamped session folder ────────────────
-    session_dir = _session_dir(src_path.name)
-    audio_path = session_dir / src_path.name
-    shutil.copy2(src_path, audio_path)
-    logger.info("Audio copied to session: %s", audio_path)
+    contents = await file.read()
+    audio_path.write_bytes(contents)
+    logger.info("Audio saved: %s (%d bytes)", audio_path, len(contents))
 
     async def event_stream():
         results: dict = {
-            "filename": src_path.name,
+            "filename": original_name,
             "language": language.value,
             "mode": mode.value,
             "session_dir": str(session_dir),
         }
 
         try:
-            # ── 1. Transcribe ──────────────────────────────────────────────
+            # ── 1. Transcribe — stream deltas to client ────────────────────
             logger.info("Transcribing: %s  language=%s  mode=%s", audio_path, language, mode)
             t0 = time.perf_counter()
+            transcript_parts: list[str] = []
+
             try:
-                raw_transcript = await asyncio.to_thread(
-                    SpeechService.transcribe_audio,
+                async for delta in SpeechService.transcribe_audio_stream(
                     audio_file_path=str(audio_path),
-                    api_key=Config.FIREWORKS_API_KEY,
-                    language=language.value,
-                    preprocess=False,
-                )
+                    api_key=Config.MISTRAL_API_KEY,
+                    preprocess=True,
+                ):
+                    transcript_parts.append(delta)
+                    yield {
+                        "event": "transcription_delta",
+                        "data": json.dumps({"delta": delta}),
+                    }
+
             except (TranscriptionError, FileNotFoundError, ValueError) as exc:
                 yield {"event": "error", "data": json.dumps({"step": "transcription", "detail": str(exc)})}
                 return
+
+            raw_transcript = "".join(transcript_parts)
             transcription_sec = round(time.perf_counter() - t0, 3)
 
-            # ── 2. Refine ──────────────────────────────────────────────────
+            # Signal transcription is complete
+            yield {
+                "event": "transcription_done",
+                "data": json.dumps({
+                    "raw_transcript": raw_transcript,
+                    "transcription_sec": transcription_sec,
+                }),
+            }
+            logger.info("Transcription done in %.3fs: %d chars", transcription_sec, len(raw_transcript))
+
+            # ── 2. Refine — stream deltas to client ───────────────────────
             t0 = time.perf_counter()
-            if is_arabic:
-                refined_text = LLMService.refine_ar_transcription(
-                    raw_transcript, Config.FIREWORKS_API_KEY, is_conversation=is_conversation
-                )
-            else:
-                refined_text = LLMService.refine_en_transcription(
-                    raw_transcript, Config.FIREWORKS_API_KEY, is_conversation=is_conversation
-                )
+            refined_parts: list[str] = []
+
+            try:
+                if is_arabic:
+                    refine_stream = LLMService.refine_ar_transcription_stream(
+                        raw_transcript, Config.OPENROUTER_API_KEY, is_conversation=is_conversation
+                    )
+                else:
+                    refine_stream = LLMService.refine_en_transcription_stream(
+                        raw_transcript, Config.OPENROUTER_API_KEY, is_conversation=is_conversation
+                    )
+
+                async for delta in refine_stream:
+                    refined_parts.append(delta)
+                    yield {
+                        "event": "refinement_delta",
+                        "data": json.dumps({"delta": delta}),
+                    }
+
+            except Exception as exc:
+                yield {"event": "error", "data": json.dumps({"step": "refinement", "detail": str(exc)})}
+                return
+
+            refined_text = "".join(refined_parts)
             refinement_sec = round(time.perf_counter() - t0, 3)
 
-            # ── 3. Translate (Arabic → English) ───────────────────────────
+            yield {
+                "event": "refinement_done",
+                "data": json.dumps({
+                    "refined_text": refined_text,
+                    "refinement_sec": refinement_sec,
+                }),
+            }
+
+            # ── 3. Translate (Arabic → English) — stream deltas ───────
             translation_sec = None
             if is_arabic:
                 t0 = time.perf_counter()
-                final_text = Translate.translate(refined_text, is_conversation=is_conversation)
+                translated_parts: list[str] = []
+
+                try:
+                    async for delta in LLMService.translate_to_eng_stream(
+                        refined_text, Config.OPENROUTER_API_KEY, is_conversation=is_conversation
+                    ):
+                        translated_parts.append(delta)
+                        yield {
+                            "event": "translation_delta",
+                            "data": json.dumps({"delta": delta}),
+                        }
+                except Exception as exc:
+                    yield {"event": "error", "data": json.dumps({"step": "translation", "detail": str(exc)})}
+                    return
+
+                final_text = "".join(translated_parts)
                 translation_sec = round(time.perf_counter() - t0, 3)
+
+                yield {
+                    "event": "translation_done",
+                    "data": json.dumps({
+                        "final_text": final_text,
+                        "translation_sec": translation_sec,
+                    }),
+                }
             else:
                 final_text = refined_text
 
-            transcription_payload = {
+            # Save to results — no longer yielded as a combined event
+            results["transcription"] = {
+                "raw_transcript": raw_transcript,
+                "refined_text": refined_text,
                 "final_text": final_text,
                 "transcription_sec": transcription_sec,
                 "refinement_sec": refinement_sec,
                 "translation_sec": translation_sec,
             }
-            results["transcription"] = transcription_payload
-            yield {"event": "transcription", "data": json.dumps(transcription_payload)}
 
-            # ── 4 & 5. Extract features + Generate questions (parallel) ────
+            # ── 4. Extract features ────────────────────────────────────
             t0 = time.perf_counter()
             try:
-                (extracted_features, _), (raw_questions, _) = await asyncio.gather(
-                    asyncio.to_thread(
-                        ExtractFeature.extract,
-                        end_text=final_text,
-                        is_conversation=is_conversation,
-                    ),
-                    asyncio.to_thread(
-                        QuestionGenerator.generate,
-                        translated_text=final_text,
-                        is_conversation=is_conversation,
-                    ),
+                extracted_features, _ = await asyncio.to_thread(
+                    ExtractFeature.extract,
+                    end_text=final_text,
+                    is_conversation=is_conversation,
                 )
             except Exception as exc:
-                yield {"event": "error", "data": json.dumps({"step": "extraction/questions", "detail": str(exc)})}
+                yield {"event": "error", "data": json.dumps({"step": "extraction", "detail": str(exc)})}
                 return
 
-            parallel_sec = round(time.perf_counter() - t0, 3)
-            total_sec = round(time.perf_counter() - pipeline_start, 3)
+            extraction_sec = round(time.perf_counter() - t0, 3)
 
-            extraction_payload = {"extracted_features": extracted_features, "extraction_sec": parallel_sec}
+            extraction_payload = {
+                "extracted_features": extracted_features,
+                "extraction_sec": extraction_sec,
+            }
+            results["extraction"] = extraction_payload
+            yield {"event": "extraction", "data": json.dumps(extraction_payload)}
+
+            # ── 5. Generate questions (after extraction completes) ─────
+            t0 = time.perf_counter()
+            try:
+                raw_questions, _ = await asyncio.to_thread(
+                    QuestionGenerator.generate,
+                    translated_text=final_text,
+                    is_conversation=is_conversation,
+                )
+            except Exception as exc:
+                yield {"event": "error", "data": json.dumps({"step": "questions", "detail": str(exc)})}
+                return
+
+            question_sec = round(time.perf_counter() - t0, 3)
+            total_sec    = round(time.perf_counter() - pipeline_start, 3)
+
             questions_payload = {
                 "questions": raw_questions,
-                "question_generation_sec": parallel_sec,
+                "question_generation_sec": question_sec,
                 "total_sec": total_sec,
             }
-
-            results["extraction"] = extraction_payload
-            results["questions"] = questions_payload
-            results["total_sec"] = total_sec
-
-            yield {"event": "extraction", "data": json.dumps(extraction_payload)}
+            results["questions"]  = questions_payload
+            results["total_sec"]  = total_sec
             yield {"event": "questions", "data": json.dumps(questions_payload)}
 
         except Exception as exc:
@@ -184,7 +267,6 @@ async def process_audio(
             yield {"event": "error", "data": json.dumps({"step": "unknown", "detail": str(exc)})}
 
         finally:
-            # ── Save results JSON into the session folder ──────────────────
             try:
                 results_path = session_dir / "results.json"
                 results_path.write_text(json.dumps(results, ensure_ascii=False, indent=2))
@@ -198,6 +280,4 @@ async def process_audio(
 app.include_router(router)
 
 if __name__ == "__main__":
-    print("ENV KEY:", os.environ.get("FIREWORKS_API_KEY"))
-    print("FIREWORKS_API_KEY:", Config.FIREWORKS_API_KEY)
     uvicorn.run("app:app", host="0.0.0.0", port=9999)

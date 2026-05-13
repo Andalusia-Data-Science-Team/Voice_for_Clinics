@@ -9,7 +9,6 @@ logger = logging.getLogger(__name__)
 
 class ExtractFeature:
     """Module for extracting structured features from text using LLMService."""
-
     @staticmethod
     def extract(
         end_text: str,
@@ -36,7 +35,7 @@ class ExtractFeature:
 
             features_output = LLMService.extract_features(
                 translated_text=end_text,
-                api_key=Config.EXTRACTION_API_KEY,
+                api_key=Config.OPENROUTER_API_KEY,
                 is_conversation=is_conversation,
             )
 

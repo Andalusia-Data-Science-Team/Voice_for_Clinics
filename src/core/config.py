@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv(dotenv_path="/home/ai/Workspace/Doha/Medical_voice_assistant/src/core/.env")
+load_dotenv()
 class Config:
     """Base configuration."""
 
@@ -14,6 +14,7 @@ class Config:
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
     FIREWORKS_API_KEY = os.getenv("FIREWORKS_API_KEY")
     MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
     SPEECH_API_KEY = os.getenv("speech")
     REFINE_API_KEY = os.getenv("refine")

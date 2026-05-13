@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MedVoice</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:           #f2f5f4;
+    --surface:      #ffffff;
+    --surface-2:    #f7f9f8;
+    --surface-3:    #eef1f0;
+    --border:       #e0e6e4;
+    --border-mid:   #c8d4d0;
+    --text-1:       #0c1d18;
+    --text-2:       #3d5550;
+    --text-3:       #7a9490;
+    --accent:       #0a6b4f;
+    --accent-2:     #3d9e7e;
+    --accent-light: #e6f4ef;
+    --red:          #b83232;
+    --red-light:    #fdf0f0;
+    --green:        #1a6b3c;
+    --green-light:  #eaf5ef;
+    --amber:        #a05a10;
+    --amber-light:  #fdf4e8;
+    --blue:         #1a4f7a;
+    --blue-light:   #eaf0f8;
+    --purple:       #5a3a8a;
+    --purple-light: #f2eefa;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --r-sm: 6px;
+    --r-md: 10px;
+    --r-lg: 14px;
+    --r-xl: 18px;
+    --shadow-sm: 0 1px 3px rgba(10,40,30,0.06), 0 1px 2px rgba(10,40,30,0.04);
+    --shadow-md: 0 4px 12px rgba(10,40,30,0.08), 0 2px 4px rgba(10,40,30,0.04);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text-1); min-height: 100vh; font-size: 14px; line-height: 1.6; }
+
+  /* ── Layout ── */
+  .shell { display: grid; grid-template-columns: 272px 1fr; grid-template-rows: 58px 1fr; min-height: 100vh; }
+
+  /* ── Topbar ── */
+  .topbar { grid-column: 1/-1; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; gap: 14px; box-shadow: var(--shadow-sm); }
+  .logo { display: flex; align-items: center; gap: 9px; }
+  .logo-mark { width: 30px; height: 30px; background: linear-gradient(135deg, #0a6b4f 0%, #1a9e74 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(10,107,79,0.3); }
+  .logo-mark svg { width: 16px; height: 16px; }
+  .logo-name { font-size: 16px; font-weight: 600; letter-spacing: -0.03em; color: var(--text-1); }
+  .logo-name span { color: var(--accent); }
+  .logo-tag { font-size: 11px; color: var(--text-3); font-weight: 400; margin-left: 2px; }
+  .topbar-sep { flex: 1; }
+  .conn-status { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-3); font-family: var(--mono); }
+  .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border-mid); transition: background 0.3s; }
+  .conn-dot.live  { background: var(--accent-2); animation: blink 1.4s infinite; }
+  .conn-dot.error { background: var(--red); }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+  /* ── Sidebar ── */
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 22px 18px; display: flex; flex-direction: column; gap: 26px; overflow-y: auto; }
+  .sec-label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); margin-bottom: 10px; }
+
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field + .field { margin-top: 10px; }
+  .field label { font-size: 11px; font-weight: 500; color: var(--text-2); }
+  .field input, .field select { font-family: var(--sans); font-size: 13px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); color: var(--text-1); outline: none; transition: border-color 0.15s, box-shadow 0.15s; }
+  .field input:focus, .field select:focus { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(61,158,126,0.12); }
+
+  /* ── Waveform ── */
+  .record-area { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .waveform { display: flex; align-items: center; gap: 3px; height: 28px; justify-content: center; }
+  .waveform .bar { width: 3px; background: var(--accent-2); border-radius: 2px; height: 4px; opacity: 0.5; }
+  .waveform.active .bar { animation: wave 0.9s infinite ease-in-out; opacity: 1; }
+  .waveform.active .bar:nth-child(1){animation-delay:0s}
+  .waveform.active .bar:nth-child(2){animation-delay:.1s}
+  .waveform.active .bar:nth-child(3){animation-delay:.2s}
+  .waveform.active .bar:nth-child(4){animation-delay:.05s}
+  .waveform.active .bar:nth-child(5){animation-delay:.15s}
+  .waveform.active .bar:nth-child(6){animation-delay:.25s}
+  .waveform.active .bar:nth-child(7){animation-delay:.08s}
+  @keyframes wave { 0%,100%{height:4px} 50%{height:22px} }
+
+  .btn-record { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--border-mid); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; outline: none; box-shadow: var(--shadow-sm); }
+  .btn-record:hover { border-color: var(--accent-2); box-shadow: var(--shadow-md); transform: scale(1.04); }
+  .btn-record.recording { border-color: var(--red); box-shadow: 0 0 0 0 rgba(184,50,50,0.3); animation: rec-pulse 1.6s infinite; }
+  @keyframes rec-pulse { 0%{box-shadow:0 0 0 0 rgba(184,50,50,0.3)} 70%{box-shadow:0 0 0 12px rgba(184,50,50,0)} 100%{box-shadow:0 0 0 0 rgba(184,50,50,0)} }
+  .mic-icon { width: 26px; height: 26px; color: var(--text-3); transition: color 0.2s; }
+  .btn-record.recording .mic-icon { color: var(--red); }
+
+  .rec-timer { font-family: var(--mono); font-size: 22px; font-weight: 500; color: var(--text-1); letter-spacing: 0.06em; min-height: 30px; text-align: center; }
+  .rec-timer.on { color: var(--red); }
+  .rec-label { font-size: 12px; color: var(--text-3); text-align: center; }
+
+  .file-chip { background: var(--accent-light); border: 1px solid #b0d9c8; border-radius: var(--r-md); padding: 6px 10px; font-size: 11px; color: var(--accent); font-family: var(--mono); word-break: break-all; display: none; margin-bottom: 8px; }
+
+  .btn-primary { width: 100%; font-family: var(--sans); font-size: 13px; font-weight: 500; padding: 9px; border: none; border-radius: var(--r-md); background: linear-gradient(135deg,#0a6b4f,#1a9e74); color: #fff; cursor: pointer; transition: opacity 0.15s, box-shadow 0.15s; box-shadow: 0 2px 8px rgba(10,107,79,0.25); letter-spacing: 0.01em; }
+  .btn-primary:hover:not(:disabled) { opacity: 0.9; box-shadow: 0 4px 12px rgba(10,107,79,0.35); }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
+  .btn-ghost { width: 100%; font-family: var(--sans); font-size: 12px; padding: 7px; border: 1px solid var(--border); border-radius: var(--r-md); background: transparent; color: var(--text-2); cursor: pointer; transition: background 0.15s; margin-top: 6px; }
+  .btn-ghost:hover { background: var(--surface-3); }
+
+  /* ── Main ── */
+  .main { padding: 28px 28px 40px; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; }
+
+  /* ── Phase cards ── */
+  .phase-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-xl); overflow: hidden; box-shadow: var(--shadow-sm); transition: border-color 0.25s, box-shadow 0.25s; }
+  .phase-card.active { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(61,158,126,0.1), var(--shadow-sm); }
+  .phase-card.done   { border-color: var(--border); }
+  .phase-card.error  { border-color: var(--red); box-shadow: 0 0 0 3px rgba(184,50,50,0.08); }
+  .phase-card.hidden { display: none; }
+
+  .phase-hd { display: flex; align-items: center; padding: 13px 18px; border-bottom: 1px solid var(--border); gap: 11px; background: var(--surface-2); }
+  .step-num { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--border-mid); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--text-3); flex-shrink: 0; transition: all 0.3s; }
+  .phase-card.active .step-num { border-color: var(--accent-2); color: var(--accent); background: var(--accent-light); }
+  .phase-card.done   .step-num { border-color: var(--green); color: #fff; background: var(--green); }
+  .phase-card.error  .step-num { border-color: var(--red); color: #fff; background: var(--red); }
+
+  .phase-title { font-size: 13px; font-weight: 500; color: var(--text-1); flex: 1; }
+  .phase-subtitle { font-size: 11px; color: var(--text-3); font-weight: 400; margin-left: 6px; }
+
+  .phase-badge { font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 99px; letter-spacing: 0.05em; text-transform: uppercase; }
+  .b-idle   { background: var(--surface-3); color: var(--text-3); }
+  .b-active { background: var(--accent-light); color: var(--accent); }
+  .b-done   { background: var(--green-light); color: var(--green); }
+  .b-error  { background: var(--red-light); color: var(--red); }
+  .b-skip   { background: var(--surface-3); color: var(--text-3); font-style: italic; }
+
+  .phase-time { font-size: 11px; color: var(--text-3); font-family: var(--mono); min-width: 44px; text-align: right; }
+  .phase-body { padding: 18px; min-height: 64px; }
+
+  /* ── Transcript ── */
+  .transcript { font-size: 14px; line-height: 1.8; color: var(--text-1); }
+  .c-blink::after { content: '|'; animation: cur 0.8s infinite; color: var(--accent-2); }
+  @keyframes cur { 0%,100%{opacity:1} 50%{opacity:0} }
+  .ph { font-size: 13px; color: var(--text-3); font-style: italic; }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  .tab { font-size: 12px; font-weight: 500; padding: 7px 16px; cursor: pointer; color: var(--text-3); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s; }
+  .tab.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-pane { display: none; }
+  .tab-pane.on { display: block; }
+
+  /* ── Translation pill ── */
+  .xlat-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: var(--amber); background: var(--amber-light); border: 1px solid #e8c98a; border-radius: 99px; padding: 3px 12px; margin-bottom: 12px; }
+
+  /* ────────────────────────────────────────────────────────
+     FEATURE EXTRACTION — professional layout
+  ──────────────────────────────────────────────────────── */
+  .feat-layout { display: flex; flex-direction: column; gap: 16px; }
+
+  /* Top highlight row — chief complaint + assessment */
+  .feat-highlights { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .feat-highlight { padding: 14px 16px; border-radius: var(--r-lg); border: 1px solid; }
+  .feat-highlight.complaint { background: var(--blue-light); border-color: #b0c8e0; }
+  .feat-highlight.assessment { background: var(--purple-light); border-color: #c8b8e0; }
+  .feat-highlight-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 5px; }
+  .feat-highlight.complaint  .feat-highlight-label { color: var(--blue); }
+  .feat-highlight.assessment .feat-highlight-label { color: var(--purple); }
+  .feat-highlight-val { font-size: 14px; font-weight: 500; line-height: 1.5; color: var(--text-1); }
+
+  /* ICD codes row */
+  .icd-row { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+  .icd-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-3); margin-right: 4px; }
+  .icd-pill { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 12px; color: var(--accent); background: var(--accent-light); border: 1px solid #b0d9c8; border-radius: var(--r-md); padding: 4px 10px; font-weight: 500; }
+  .icd-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+  /* Detail grid */
+  .feat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 10px; }
+  .feat-cell { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; }
+  .feat-cell-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-3); margin-bottom: 5px; display: flex; align-items: center; gap: 5px; }
+  .feat-cell-icon { font-size: 12px; }
+  .feat-cell-val { font-size: 13px; color: var(--text-1); line-height: 1.55; white-space: pre-line; }
+
+  /* Plan + Follow-up full-width */
+  .feat-wide { grid-column: 1 / -1; }
+  .feat-plan { background: var(--green-light); border-color: #b0d9c0; }
+  .feat-plan .feat-cell-label { color: var(--green); }
+  .feat-followup { background: var(--amber-light); border-color: #e8c98a; }
+  .feat-followup .feat-cell-label { color: var(--amber); }
+
+  /* ────────────────────────────────────────────────────────
+     QUESTIONS — professional layout
+  ──────────────────────────────────────────────────────── */
+  .q-summary { display: flex; gap: 12px; margin-bottom: 18px; }
+  .q-summary-card { flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--r-lg); border: 1px solid; }
+  .q-summary-card.ask  { background: var(--red-light);   border-color: #e8b4ae; }
+  .q-summary-card.skip { background: var(--green-light); border-color: #b0d9c0; }
+  .q-summary-num { font-size: 26px; font-weight: 600; line-height: 1; }
+  .q-summary-card.ask  .q-summary-num { color: var(--red); }
+  .q-summary-card.skip .q-summary-num { color: var(--green); }
+  .q-summary-meta { display: flex; flex-direction: column; }
+  .q-summary-title { font-size: 12px; font-weight: 500; color: var(--text-1); }
+  .q-summary-sub   { font-size: 11px; color: var(--text-3); }
+
+  .q-section-hd { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-3); margin: 18px 0 8px; display: flex; align-items: center; gap: 7px; }
+  .q-section-hd:first-child { margin-top: 0; }
+  .q-section-line { flex: 1; height: 1px; background: var(--border); }
+
+  /* Category groups */
+  .q-cat-group { margin-bottom: 14px; }
+  .q-cat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); background: var(--surface-3); border: 1px solid var(--border); border-radius: 99px; padding: 2px 10px; display: inline-block; margin-bottom: 7px; }
+
+  .q-item { display: flex; gap: 11px; padding: 11px 14px; border-radius: var(--r-md); border: 1px solid; margin-bottom: 6px; transition: box-shadow 0.15s; }
+  .q-item:last-child { margin-bottom: 0; }
+  .q-item:hover { box-shadow: var(--shadow-sm); }
+  .q-item.ask  { background: #fffbfb; border-color: #f0c8c8; }
+  .q-item.skip { background: #f8fdf9; border-color: #c0dfc8; }
+
+  .q-indicator { width: 4px; border-radius: 2px; flex-shrink: 0; align-self: stretch; min-height: 20px; }
+  .q-item.ask  .q-indicator { background: var(--red); }
+  .q-item.skip .q-indicator { background: var(--green); }
+
+  .q-body { flex: 1; }
+  .q-question { font-size: 13px; font-weight: 500; color: var(--text-1); line-height: 1.5; }
+  .q-answer-box { margin-top: 6px; padding: 6px 10px; background: var(--surface); border-left: 3px solid var(--accent-2); border-radius: 0 var(--r-sm) var(--r-sm) 0; font-size: 12px; color: var(--text-2); line-height: 1.5; }
+  .q-answer-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--accent-2); margin-bottom: 2px; }
+
+  /* Raw stream while generating */
+  .raw-stream { font-family: var(--mono); font-size: 11px; color: var(--text-3); white-space: pre-wrap; word-break: break-all; max-height: 80px; overflow: hidden; line-height: 1.6; }
+
+  /* Error */
+  .err-box { background: var(--red-light); border: 1px solid #e8b4ae; border-radius: var(--r-md); padding: 11px 14px; font-size: 13px; color: var(--red); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header class="topbar">
+    <div class="logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M8 2v12M5 5v6M11 5v6M2 8h2M12 8h2" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </div>
+      <span class="logo-name">Med<span>Voice</span></span>
+      <span class="logo-tag">Clinical AI</span>
+    </div>
+    <div class="topbar-sep"></div>
+    <div class="conn-status">
+      <div class="conn-dot" id="conn-dot"></div>
+      <span id="conn-label">idle</span>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div>
+      <div class="sec-label">Configuration</div>
+      <div class="field">
+        <label>API base URL</label>
+        <input type="text" id="api-url" value="http://localhost:9999" />
+      </div>
+      <div class="field">
+        <label>Language</label>
+        <select id="sel-lang">
+          <option value="en" selected>English</option>
+          <option value="ar">Arabic (العربية)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Mode</label>
+        <select id="sel-mode">
+          <option value="doctor" selected>Doctor</option>
+          <option value="conversation">Conversation</option>
+        </select>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-label">Recording</div>
+      <div class="record-area">
+        <div class="waveform" id="waveform">
+          <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+          <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+          <div class="bar"></div>
+        </div>
+        <button class="btn-record" id="btn-record">
+          <svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="2" width="6" height="12" rx="3"/>
+            <path d="M5 10a7 7 0 0 0 14 0"/>
+            <line x1="12" y1="19" x2="12" y2="22"/>
+            <line x1="8" y1="22" x2="16" y2="22"/>
+          </svg>
+        </button>
+        <div class="rec-timer" id="rec-timer">—</div>
+        <div class="rec-label" id="rec-label">Click to record</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="file-chip" id="file-chip"></div>
+      <button class="btn-primary" id="btn-submit" disabled>Analyse recording</button>
+      <button class="btn-ghost" id="btn-reset">Clear</button>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- 1. Transcription -->
+    <div class="phase-card" id="card-trans">
+      <div class="phase-hd">
+        <div class="step-num">1</div>
+        <div class="phase-title">Transcription</div>
+        <span class="phase-badge b-idle" id="badge-trans">Waiting</span>
+        <span class="phase-time" id="time-trans"></span>
+      </div>
+      <div class="phase-body" id="body-trans"><div class="ph">Recording output will appear here</div></div>
+    </div>
+
+    <!-- 2. Refinement -->
+    <div class="phase-card" id="card-refine">
+      <div class="phase-hd">
+        <div class="step-num">2</div>
+        <div class="phase-title">Refinement</div>
+        <span class="phase-badge b-idle" id="badge-refine">Waiting</span>
+        <span class="phase-time" id="time-refine"></span>
+      </div>
+      <div class="phase-body" id="body-refine"><div class="ph">Refined transcript will appear here</div></div>
+    </div>
+
+    <!-- 3. Translation — hidden for English -->
+    <div class="phase-card hidden" id="card-translate">
+      <div class="phase-hd">
+        <div class="step-num">3</div>
+        <div class="phase-title">Translation <span class="phase-subtitle">(Arabic → English)</span></div>
+        <span class="phase-badge b-idle" id="badge-translate">Waiting</span>
+        <span class="phase-time" id="time-translate"></span>
+      </div>
+      <div class="phase-body" id="body-translate"><div class="ph">English translation will appear here</div></div>
+    </div>
+
+    <!-- 4. Feature extraction -->
+    <div class="phase-card" id="card-extract">
+      <div class="phase-hd">
+        <div class="step-num" id="num-extract">3</div>
+        <div class="phase-title">Feature extraction</div>
+        <span class="phase-badge b-idle" id="badge-extract">Waiting</span>
+        <span class="phase-time" id="time-extract"></span>
+      </div>
+      <div class="phase-body" id="body-extract"><div class="ph">Medical features will appear here</div></div>
+    </div>
+
+    <!-- 5. Follow-up questions -->
+    <div class="phase-card" id="card-questions">
+      <div class="phase-hd">
+        <div class="step-num" id="num-questions">4</div>
+        <div class="phase-title">Follow-up questions</div>
+        <span class="phase-badge b-idle" id="badge-questions">Waiting</span>
+        <span class="phase-time" id="time-questions"></span>
+      </div>
+      <div class="phase-body" id="body-questions"><div class="ph">Generated questions will appear here</div></div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+/* ─── State ── */
+let mediaRecorder=null, audioChunks=[], audioBlob=null;
+let recording=false, timerSec=0, timerInterval=null;
+
+const $=id=>document.getElementById(id);
+const btnRecord=$('btn-record'), btnSubmit=$('btn-submit'), btnReset=$('btn-reset');
+const recTimer=$('rec-timer'), recLabel=$('rec-label'), fileChip=$('file-chip');
+const waveform=$('waveform'), connDot=$('conn-dot'), connLabel=$('conn-label');
+
+/* ─── Helpers ── */
+const fmtTime=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function setConn(state,label){ connDot.className='conn-dot'+(state?' '+state:''); connLabel.textContent=label; }
+
+function setCard(id,state){
+  const card=$(  'card-'+id), badge=$('badge-'+id);
+  if(!card||!badge) return;
+  const hidden=card.classList.contains('hidden');
+  card.className='phase-card'+(state!=='idle'?' '+state:'')+(hidden?' hidden':'');
+  const lm={idle:'Waiting',active:'Processing',done:'Done',error:'Error',skip:'N/A'};
+  const cm={idle:'b-idle',active:'b-active',done:'b-done',error:'b-error',skip:'b-skip'};
+  badge.textContent=lm[state]||state;
+  badge.className='phase-badge '+(cm[state]||'b-idle');
+}
+
+function setTime(id,sec){ const el=$('time-'+id); if(el&&sec!=null) el.textContent=Number(sec).toFixed(2)+'s'; }
+function setBody(id,html){ const el=$('body-'+id); if(el) el.innerHTML=html; }
+function showCard(id){ $('card-'+id)?.classList.remove('hidden'); }
+function hideCard(id){ $('card-'+id)?.classList.add('hidden'); }
+
+/* ─── Language selector ── */
+$('sel-lang').addEventListener('change',e=>{
+  const ar=e.target.value==='ar';
+  ar?showCard('translate'):hideCard('translate');
+  $('num-extract').textContent  =ar?'4':'3';
+  $('num-questions').textContent=ar?'5':'4';
+});
+
+/* ─── Reset ── */
+function resetAll(){
+  audioBlob=null; audioChunks=[];
+  fileChip.style.display='none'; btnSubmit.disabled=true;
+  recTimer.textContent='—'; recTimer.className='rec-timer';
+  recLabel.textContent='Click to record';
+  setConn('','idle'); hideCard('translate');
+  $('num-extract').textContent='3'; $('num-questions').textContent='4';
+  ['trans','refine','translate','extract','questions'].forEach(id=>{
+    setCard(id,'idle');
+    const t=$('time-'+id); if(t) t.textContent='';
+  });
+  setBody('trans',    '<div class="ph">Recording output will appear here</div>');
+  setBody('refine',   '<div class="ph">Refined transcript will appear here</div>');
+  setBody('translate','<div class="ph">English translation will appear here</div>');
+  setBody('extract',  '<div class="ph">Medical features will appear here</div>');
+  setBody('questions','<div class="ph">Generated questions will appear here</div>');
+}
+btnReset.addEventListener('click',resetAll);
+
+/* ─── Recording ── */
+btnRecord.addEventListener('click',async()=>{
+  if(recording){ mediaRecorder.stop(); return; }
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    mediaRecorder=new MediaRecorder(stream);
+    audioChunks=[];
+    mediaRecorder.ondataavailable=e=>{ if(e.data.size>0) audioChunks.push(e.data); };
+    mediaRecorder.onstop=()=>{
+      audioBlob=new Blob(audioChunks,{type:mediaRecorder.mimeType||'audio/webm'});
+      stream.getTracks().forEach(t=>t.stop());
+      fileChip.textContent='recording.webm — '+(audioBlob.size/1024).toFixed(1)+' KB';
+      fileChip.style.display='block'; btnSubmit.disabled=false;
+      recording=false; clearInterval(timerInterval);
+      btnRecord.classList.remove('recording'); waveform.classList.remove('active');
+      recLabel.textContent='Recording ready'; recTimer.className='rec-timer';
+    };
+    mediaRecorder.start(100); recording=true; timerSec=0;
+    recTimer.textContent='0:00'; recTimer.className='rec-timer on';
+    recLabel.textContent='Recording — click to stop';
+    btnRecord.classList.add('recording'); waveform.classList.add('active');
+    timerInterval=setInterval(()=>{ timerSec++; recTimer.textContent=fmtTime(timerSec); },1000);
+  } catch(e){ recLabel.textContent='Mic error: '+e.message; }
+});
+
+/* ─── Submit ── */
+btnSubmit.addEventListener('click',async()=>{
+  if(!audioBlob) return;
+  const apiBase=$('api-url').value.replace(/\/$/,'');
+  const lang=$('sel-lang').value, mode=$('sel-mode').value, isAr=lang==='ar';
+
+  btnSubmit.disabled=true; btnRecord.disabled=true;
+  setConn('live','connecting');
+
+  if(isAr){ showCard('translate'); $('num-extract').textContent='4'; $('num-questions').textContent='5'; }
+  else    { hideCard('translate'); $('num-extract').textContent='3'; $('num-questions').textContent='4'; }
+
+  ['trans','refine','translate','extract','questions'].forEach(id=>{
+    setCard(id,'idle'); const t=$('time-'+id); if(t) t.textContent='';
+  });
+  setBody('trans',    '<div class="ph">Waiting for transcription...</div>');
+  setBody('refine',   '<div class="ph">Waiting for refinement...</div>');
+  setBody('translate','<div class="ph">Waiting for translation...</div>');
+  setBody('extract',  '<div class="ph">Waiting for extraction...</div>');
+  setBody('questions','<div class="ph">Waiting for questions...</div>');
+
+  const form=new FormData();
+  form.append('file',audioBlob,'recording'+((mediaRecorder.mimeType||'').includes('mp4')?'.mp4':'.webm'));
+  form.append('language',lang); form.append('mode',mode);
+
+  let transBuf='', refineBuf='', translateBuf='';
+
+  try{
+    const resp=await fetch(apiBase+'/audio/process',{
+      method:'POST', body:form
+      // headers:{'ngrok-skip-browser-warning':'true'},
+    });
+    if(!resp.ok){
+      const txt=await resp.text();
+      setConn('error','HTTP '+resp.status);
+      setBody('trans','<div class="err-box">HTTP '+resp.status+': '+esc(txt)+'</div>');
+      btnRecord.disabled=false; btnSubmit.disabled=false; return;
+    }
+    setConn('live','streaming');
+
+    const reader=resp.body.getReader(), decoder=new TextDecoder();
+    let sseBuf='';
+    while(true){
+      const {done,value}=await reader.read(); if(done) break;
+      sseBuf+=decoder.decode(value,{stream:true});
+      const lines=sseBuf.split('\n'); sseBuf=lines.pop();
+      let eName=null;
+      for(const line of lines){
+        if(line.startsWith('event:'))     { eName=line.slice(6).trim(); }
+        else if(line.startsWith('data:') && eName){
+          let d; try{ d=JSON.parse(line.slice(5).trim()); } catch{ continue; }
+          console.log('[SSE]',eName,d);
+          handle(eName,d); eName=null;
+        }
+      }
+    }
+    setConn('','done');
+  } catch(e){
+    setConn('error','error');
+    setBody('trans','<div class="err-box">'+esc(e.message)+'</div>');
+  } finally {
+    btnRecord.disabled=false; btnSubmit.disabled=false;
+  }
+
+  /* ── SSE handler ── */
+  function handle(ev,d){
+
+    /* Transcription */
+    if(ev==='transcription_delta'){
+      if(!transBuf){ setCard('trans','active'); setBody('trans','<div class="transcript c-blink" id="tl"></div>'); }
+      transBuf+=d.delta||'';
+      const el=document.getElementById('tl'); if(el) el.textContent=transBuf;
+    }
+    else if(ev==='transcription_done'){
+      transBuf=d.raw_transcript||transBuf;
+      setCard('trans','done'); setTime('trans',d.transcription_sec);
+      setBody('trans','<div class="transcript">'+esc(transBuf)+'</div>');
+      setCard('refine','active'); setBody('refine','<div class="transcript c-blink" id="rl"></div>');
+    }
+
+    /* Refinement */
+    else if(ev==='refinement_delta'){
+      refineBuf+=d.delta||'';
+      const el=document.getElementById('rl'); if(el) el.textContent=refineBuf;
+    }
+    else if(ev==='refinement_done'){
+      refineBuf=d.refined_text||refineBuf;
+      setCard('refine','done'); setTime('refine',d.refinement_sec);
+      setBody('trans',
+        `<div class="tabs">
+           <div class="tab on" onclick="switchTab(this,'raw')">Raw</div>
+           <div class="tab" onclick="switchTab(this,'refined')">Refined</div>
+         </div>
+         <div class="tab-pane on" id="panel-raw"><div class="transcript">${esc(transBuf)}</div></div>
+         <div class="tab-pane" id="panel-refined"><div class="transcript">${esc(refineBuf)}</div></div>`
+      );
+      setBody('refine','<div class="transcript">'+esc(refineBuf)+'</div>');
+      if(isAr){
+        setCard('translate','active');
+        setBody('translate','<div class="transcript c-blink" id="ttl"></div>');
+      } else {
+        setCard('extract','active');
+        setBody('extract','<div class="ph">Extracting medical features...</div>');
+      }
+    }
+
+    /* Translation */
+    else if(ev==='translation_delta'){
+      translateBuf+=d.delta||'';
+      const el=document.getElementById('ttl'); if(el) el.textContent=translateBuf;
+    }
+    else if(ev==='translation_done'){
+      translateBuf=d.final_text||translateBuf;
+      setCard('translate','done'); setTime('translate',d.translation_sec);
+      setBody('translate',
+        `<div class="xlat-pill">🌐 Translated from Arabic</div>
+         <div class="transcript">${esc(translateBuf)}</div>`
+      );
+      setCard('extract','active');
+      setBody('extract','<div class="ph">Extracting medical features...</div>');
+    }
+
+    /* Extraction — non-streaming single event */
+    else if(ev==='extraction'){
+      console.log('[extraction] received:', JSON.stringify(d).slice(0,400));
+      setCard('extract','done'); setTime('extract',d.extraction_sec);
+      renderFeatures(d.extracted_features);
+      /* After extraction done, start questions */
+      setCard('questions','active');
+      setBody('questions','<div class="ph">Generating follow-up questions...</div>');
+    }
+
+    /* Questions — non-streaming single event */
+    else if(ev==='questions'){
+      console.log('[questions] received:', JSON.stringify(d).slice(0,400));
+      setCard('questions','done'); setTime('questions',d.question_generation_sec);
+      renderQuestions(extractQList(d));
+    }
+
+    /* Fallback: combined transcription event */
+    else if(ev==='transcription'){
+      transBuf =d.raw_transcript||d.final_text||'';
+      refineBuf=d.refined_text||d.final_text||'';
+      setCard('trans','done');  setTime('trans',d.transcription_sec);
+      setCard('refine','done'); setTime('refine',d.refinement_sec);
+      if(d.translation_sec){
+        setCard('translate','done'); setTime('translate',d.translation_sec);
+        setBody('translate',`<div class="xlat-pill">🌐 Translated from Arabic</div><div class="transcript">${esc(d.final_text||'')}</div>`);
+      } else { setCard('translate','skip'); }
+      setBody('trans',
+        `<div class="tabs">
+           <div class="tab on" onclick="switchTab(this,'raw')">Raw</div>
+           <div class="tab" onclick="switchTab(this,'refined')">Refined</div>
+         </div>
+         <div class="tab-pane on" id="panel-raw"><div class="transcript">${esc(transBuf)}</div></div>
+         <div class="tab-pane" id="panel-refined"><div class="transcript">${esc(refineBuf)}</div></div>`
+      );
+      setBody('refine','<div class="transcript">'+esc(refineBuf)+'</div>');
+    }
+
+    /* Error */
+    else if(ev==='error'){
+      const idMap={transcription:'trans',refinement:'refine',translation:'translate',extraction:'extract',questions:'questions'};
+      const id=idMap[d.step||'']||'trans';
+      setCard(id,'error'); setBody(id,'<div class="err-box">'+esc(d.detail||'Unknown error')+'</div>');
+      setConn('error','error at '+(d.step||'unknown'));
+    }
+  }
+});
+
+/* ─── Tab switching ── */
+function switchTab(el,panel){
+  const p=el.closest('.phase-body');
+  p.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  p.querySelectorAll('.tab-pane').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  p.querySelector('#panel-'+panel)?.classList.add('on');
+}
+
+/* ─── Extract questions list from all API shapes ── */
+function extractQList(d){
+  if(!d) return [];
+  const q=d.questions;
+  if(!q) return [];
+  if(Array.isArray(q)) return q;
+  if(typeof q==='object' && Array.isArray(q.questions)) return q.questions;
+  return [];
+}
+
+/* ─── renderFeatures ── */
+function renderFeatures(raw){
+  console.log('[renderFeatures]',typeof raw, JSON.stringify(raw||'').slice(0,300));
+
+  // Parse string if needed
+  let obj=raw;
+  if(typeof obj==='string'){ try{ obj=JSON.parse(obj); } catch{ setBody('extract','<div class="ph">Could not parse features</div>'); return; } }
+  if(!obj||typeof obj!=='object'){ setBody('extract','<div class="ph">No features extracted</div>'); return; }
+
+  // Unwrap json_data
+  const src=(obj.json_data&&typeof obj.json_data==='object') ? obj.json_data : obj;
+
+  const cc  = src.chief_complaint||'';
+  const ass = src.assessment||'';
+  const icds= Array.isArray(src.icd10_codes) ? src.icd10_codes.filter(Boolean) : (src.icd10_codes ? [src.icd10_codes] : []);
+  const hist= src.history_of_illness||'';
+  const meds= src.current_medication||'';
+  const imgs= src.imaging_results||'';
+  const plan= src.plan||'';
+  const fu  = src.follow_up||'';
+
+  let html='<div class="feat-layout">';
+
+  /* Highlights */
+  if(cc||ass){
+    html+='<div class="feat-highlights">';
+    if(cc)  html+=`<div class="feat-highlight complaint"><div class="feat-highlight-label">Chief Complaint</div><div class="feat-highlight-val">${esc(cc)}</div></div>`;
+    if(ass) html+=`<div class="feat-highlight assessment"><div class="feat-highlight-label">Assessment</div><div class="feat-highlight-val">${esc(ass)}</div></div>`;
+    html+='</div>';
+  }
+
+  /* ICD codes */
+  if(icds.length){
+    html+='<div class="icd-row"><span class="icd-label">ICD-10</span>';
+    icds.forEach(c=>{ html+=`<span class="icd-pill"><span class="icd-dot"></span>${esc(c)}</span>`; });
+    html+='</div>';
+  }
+
+  /* Detail grid */
+  const cells=[
+    {key:'history_of_illness', label:'History of illness',   icon:'📋', val:hist},
+    {key:'current_medication', label:'Current medication',   icon:'💊', val:meds},
+    {key:'imaging_results',    label:'Imaging results',      icon:'🩻', val:imgs},
+  ].filter(c=>c.val);
+
+  if(cells.length){
+    html+='<div class="feat-grid">';
+    cells.forEach(c=>{
+      html+=`<div class="feat-cell">
+        <div class="feat-cell-label"><span class="feat-cell-icon">${c.icon}</span>${esc(c.label)}</div>
+        <div class="feat-cell-val">${esc(c.val)}</div>
+      </div>`;
+    });
+
+    /* Plan + follow-up full width */
+    if(plan) html+=`<div class="feat-cell feat-wide feat-plan">
+      <div class="feat-cell-label"><span class="feat-cell-icon">📝</span>Plan</div>
+      <div class="feat-cell-val">${esc(plan)}</div>
+    </div>`;
+    if(fu)   html+=`<div class="feat-cell feat-wide feat-followup">
+      <div class="feat-cell-label"><span class="feat-cell-icon">📅</span>Follow-up</div>
+      <div class="feat-cell-val">${esc(fu)}</div>
+    </div>`;
+
+    html+='</div>';
+  } else {
+    if(plan) html+=`<div class="feat-cell feat-plan" style="border-radius:var(--r-md);border:1px solid;padding:12px 14px;background:var(--green-light);border-color:#b0d9c0;margin-top:4px"><div class="feat-cell-label"><span class="feat-cell-icon">📝</span>Plan</div><div class="feat-cell-val">${esc(plan)}</div></div>`;
+    if(fu)   html+=`<div class="feat-cell feat-followup" style="border-radius:var(--r-md);border:1px solid;padding:12px 14px;background:var(--amber-light);border-color:#e8c98a;margin-top:8px"><div class="feat-cell-label"><span class="feat-cell-icon">📅</span>Follow-up</div><div class="feat-cell-val">${esc(fu)}</div></div>`;
+  }
+
+  html+='</div>';
+  setBody('extract', html || '<div class="ph">No features extracted</div>');
+}
+
+/* ─── renderQuestions ── */
+function renderQuestions(list){
+  console.log('[renderQuestions] length:',list?.length);
+  if(!Array.isArray(list)||list.length===0){ setBody('questions','<div class="ph">No questions returned</div>'); return; }
+
+  const needs =list.filter(q=>q.needs_asking===true);
+  const covered=list.filter(q=>q.needs_asking!==true);
+
+  /* Summary cards */
+  let html=`<div class="q-summary">
+    <div class="q-summary-card ask">
+      <div class="q-summary-num">${needs.length}</div>
+      <div class="q-summary-meta">
+        <div class="q-summary-title">Needs asking</div>
+        <div class="q-summary-sub">Doctor should ask</div>
+      </div>
+    </div>
+    <div class="q-summary-card skip">
+      <div class="q-summary-num">${covered.length}</div>
+      <div class="q-summary-meta">
+        <div class="q-summary-title">Already covered</div>
+        <div class="q-summary-sub">Found in transcript</div>
+      </div>
+    </div>
+  </div>`;
+
+  /* Group by category */
+  function groupBy(arr){
+    const map={};
+    arr.forEach(q=>{
+      const cat=q.category||'general';
+      if(!map[cat]) map[cat]=[];
+      map[cat].push(q);
+    });
+    return map;
+  }
+
+  function renderGroup(items, type){
+    const groups=groupBy(items);
+    let out='';
+    for(const [cat,qs] of Object.entries(groups)){
+      out+=`<div class="q-cat-group">
+        <span class="q-cat-label">${esc(cat.replace(/_/g,' '))}</span>`;
+      qs.forEach(q=>{
+        out+=`<div class="q-item ${type}">
+          <div class="q-indicator"></div>
+          <div class="q-body">
+            <div class="q-question">${esc(q.question)}</div>
+            ${q.answer?`<div class="q-answer-box"><div class="q-answer-label">Answer</div>${esc(q.answer)}</div>`:''}
+          </div>
+        </div>`;
+      });
+      out+='</div>';
+    }
+    return out;
+  }
+
+  if(needs.length){
+    html+=`<div class="q-section-hd"><span>Needs asking</span><div class="q-section-line"></div></div>`;
+    html+=renderGroup(needs,'ask');
+  }
+  if(covered.length){
+    html+=`<div class="q-section-hd"><span>Already covered</span><div class="q-section-line"></div></div>`;
+    html+=renderGroup(covered,'skip');
+  }
+
+  setBody('questions',html);
+}
+</script>
+</body>
+</html>

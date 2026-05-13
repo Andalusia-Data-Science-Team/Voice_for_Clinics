@@ -12,29 +12,28 @@ A medical audio processing API that transcribes clinical recordings, extracts st
 - [Installation & Running](#installation--running)
 - [API Reference](#api-reference)
 - [SSE Event Reference](#sse-event-reference)
-- [Storage & Saved Output](#storage--saved-output)
 
 ---
 
 ## Overview
 
-Medical Voice Assistant accepts a path to an audio file from a clinician or a doctor-patient conversation, runs it through a multi-step pipeline, and streams results back as they complete:
+MedVoice accepts an audio file from a clinician or a doctor-patient conversation, runs it through a multi-step pipeline, and streams results back as they complete:
 
-1. **Transcription** — Whisper via Fireworks AI
+1. **Transcription** — Voxtral Real Time via Mistral AI
 2. **Refinement** — LLM cleanup of raw transcript (DeepSeek)
 3. **Translation** — Arabic → English (when applicable)
-4. **Feature Extraction** — Structured medical data extraction (DeepSeek)
-5. **Question Generation** — Follow-up questions the doctor should ask (DeepSeek)
+4. **Feature Extraction** — Structured medical data extraction (GPT-4o mini)
+5. **Question Generation** — Follow-up questions the doctor should ask (GPT-4o mini)
 
 ---
 
 ## How It Works
 
 ```
-Audio File (src/recordings/)
+Audio File
     │
     ▼
-[1] Transcription (Fireworks Whisper)
+[1] Transcription (Mistral AI Voxtral)
     │
     ▼
 [2] Refinement (DeepSeek)
@@ -44,7 +43,7 @@ Audio File (src/recordings/)
     │
     ▼
     ├──────────────────────────────────┐
-[4] Feature Extraction (DeepSeek)    [5] Question Generation (DeepSeek)
+[4] Feature Extraction (GPT-4o mini)    [5] Question Generation (GPT-4o mini)
     │   (parallel)                     │   (parallel)
     └──────────────────────────────────┘
     │
@@ -61,7 +60,7 @@ Results are **streamed progressively** — the client receives each event as soo
 ## Project Structure
 
 ```
-MedVoice/
+medvoice/
 ├── src/
 │   ├── app.py                  # FastAPI entrypoint
 │   ├── core/
@@ -69,16 +68,14 @@ MedVoice/
 │   ├── model/
 │   │   ├── speech_service.py   # Whisper transcription
 │   │   ├── llm_service.py      # LLM wrapper (refine, extract, questions)
-│   │   ├── refine_text.py      # Refinement module
+│   │   ├── refine_text.py      # Refinement Module
 │   │   ├── translation.py      # Arabic → English translation
 │   │   ├── extract_features.py # Feature extraction module
 │   │   └── question_generator.py # Question generation module
 │   ├── utils/
-│   │   ├── prompt.py           # Prompt templates
-│   │   └── utils.py            # Helper functions
-│   ├── recordings/             # Place audio files here before calling the API
-│   ├── uploads/                # Per-request results storage (timestamped folders)
-│   ├── .env                    # Environment variables
+│   │   └── prompt.py           # Prompt templates
+│   ├── uploads/                # Temp audio file storage
+│   ├── .env                # Environment Variables
 │   └── requirements.txt
 ├── Dockerfile
 └── docker-compose.yml
@@ -95,7 +92,7 @@ MedVoice/
 ```bash
 # Clone the repo
 git clone <repo-url>
-cd MedVoice
+cd medvoice
 
 # Build and start
 docker compose up --build
@@ -130,23 +127,19 @@ Runs the full audio processing pipeline and streams results via SSE.
 
 **Content-Type:** `multipart/form-data`
 
-> **Workflow:** Place your audio file in `src/recordings/` on the host before calling the API.
-> When running via Docker, pass `/app/recordings/<filename>` as `file_path`.
-> Results will appear in `src/uploads/<timestamp>_<stem>/`.
-
 #### Request Parameters
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `file_path` | string | ✅ | — | Server-side path to the audio file (e.g. `/app/recordings/audio.mp3`) |
+| `file` | File | ✅ | — | Audio file (mp3, wav, m4a, ogg, …) |
 | `language` | string | ✅ | `ar` | Audio language: `ar` (Arabic) or `en` (English) |
 | `mode` | string | ✅ | `doctor` | `doctor` — single clinician recording; `conversation` — doctor-patient dialogue |
 
-#### Example Request (curl)
+#### Example Request
 
 ```bash
 curl -X POST http://localhost:9999/audio/process \
-  -F "file_path=/app/recordings/recording.mp3" \
+  -F "file=@recording.mp3" \
   -F "language=en" \
   -F "mode=doctor" \
   --no-buffer
@@ -157,18 +150,16 @@ curl -X POST http://localhost:9999/audio/process \
 ```python
 import httpx
 
-with httpx.stream(
-    "POST",
-    "http://localhost:9999/audio/process",
-    data={
-        "file_path": "/app/recordings/recording.mp3",
-        "language": "en",
-        "mode": "doctor",
-    },
-    timeout=300,
-) as response:
-    for line in response.iter_lines():
-        print(line)
+with open("recording.mp3", "rb") as f:
+    with httpx.stream(
+        "POST",
+        "http://localhost:9999/audio/process",
+        data={"language": "en", "mode": "doctor"},
+        files={"file": ("recording.mp3", f, "audio/mpeg")},
+        timeout=300,
+    ) as response:
+        for line in response.iter_lines():
+            print(line)
 ```
 
 ---
@@ -262,7 +253,7 @@ Fired if any pipeline step fails. The stream stops after this event.
 ```json
 {
   "step": "transcription",
-  "detail": "File not found: '/app/recordings/audio.mp3'"
+  "detail": "Audio file not found: /tmp/audio_xyz.mp3"
 }
 ```
 
@@ -270,58 +261,3 @@ Fired if any pipeline step fails. The stream stops after this event.
 |---|---|
 | `step` | Which pipeline step failed: `transcription`, `extraction/questions`, or `unknown` |
 | `detail` | Error message |
-
----
-
-## Storage & Saved Output
-
-Every request automatically copies the audio file into a timestamped subfolder under `src/uploads/` and saves the full pipeline output alongside it:
-
-```
-src/uploads/
-└── 20250311_143022_recording/
-    ├── recording.mp3   ← copy of the source audio (from recordings/)
-    └── results.json    ← full pipeline output
-```
-
-The subfolder name follows the pattern `YYYYMMDD_HHMMSS_<original_filename>`, making it easy to trace any result back to its source recording.
-
-### `results.json` structure
-
-```json
-{
-  "filename": "recording.mp3",
-  "language": "en",
-  "mode": "doctor",
-  "session_dir": "/app/uploads/20250311_143022_recording",
-  "transcription": {
-    "final_text": "Patient presents with chest pain...",
-    "transcription_sec": 4.821,
-    "refinement_sec": 2.103,
-    "translation_sec": null
-  },
-  "extraction": {
-    "extracted_features": {
-      "chief_complaint": "Chest pain radiating to left arm",
-      "assessment": "Possible acute coronary syndrome",
-      "plan": "ECG, troponin levels, cardiology consult"
-    },
-    "extraction_sec": 3.412
-  },
-  "questions": {
-    "questions": [
-      {
-        "question": "How long have you been experiencing chest pain?",
-        "answer": null,
-        "needs_asking": true,
-        "category": "History"
-      }
-    ],
-    "question_generation_sec": 3.412,
-    "total_sec": 14.283
-  },
-  "total_sec": 14.283
-}
-```
-
-> If the pipeline fails at any step, a partial `results.json` is still saved with an `"error"` field containing the failure detail.

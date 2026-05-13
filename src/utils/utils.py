@@ -38,15 +38,19 @@ import json
 import re
 
 def safe_parse_json(raw: str) -> dict | list:
-    """
-    Attempt to parse LLM JSON output, repairing common truncation issues.
-    Raises ValueError if unrecoverable.
-    """
     text = raw.strip()
 
-    # Strip markdown code fences if present
-    text = re.sub(r"^```json\s*", "", text)
-    text = re.sub(r"^```\s*", "", text)
+    # Handle case where the whole thing is a JSON string containing fenced JSON
+    # e.g. "{\"questions\": \"```json\\n{...}\\n```\"}"
+    if text.startswith('"') and text.endswith('"'):
+        try:
+            inner = json.loads(text)  # unwrap outer string
+            text = inner.strip()
+        except json.JSONDecodeError:
+            pass
+
+    # Strip markdown code fences (handles ```json, ```JSON, ``` variants)
+    text = re.sub(r"^```[a-zA-Z]*\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
     text = text.strip()
 

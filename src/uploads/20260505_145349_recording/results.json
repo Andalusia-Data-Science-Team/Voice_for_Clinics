@@ -1,0 +1,82 @@
+{
+  "filename": "recording.webm",
+  "language": "en",
+  "mode": "doctor",
+  "session_dir": "/home/ai/Workspace/Doha/MedVoice/src/uploads/20260505_145349_recording",
+  "transcription": {
+    "raw_transcript": "The patient has been complaining from bilateral pain since five years ago; he is now undergoing physiotherapy sessions and to be reassessed after two weeks for follow-up.",
+    "refined_text": "The patient has been complaining of bilateral pain for five years; he is currently undergoing physiotherapy sessions and will be reassessed after two weeks for follow-up.",
+    "final_text": "The patient has been complaining of bilateral pain for five years; he is currently undergoing physiotherapy sessions and will be reassessed after two weeks for follow-up.",
+    "transcription_sec": 132.698,
+    "refinement_sec": 5.426,
+    "translation_sec": null
+  },
+  "extraction": {
+    "extracted_features": {
+      "chief_complaint": "Bilateral pain",
+      "icd10_codes": [],
+      "history_of_illness": "Patient has been complaining of bilateral pain for five years.",
+      "current_medication": "Undergoing physiotherapy sessions",
+      "imaging_results": "",
+      "plan": "Reassess after two weeks for follow-up.",
+      "assessment": "",
+      "follow_up": "Reassess in two weeks."
+    },
+    "extraction_sec": 2.273
+  },
+  "questions": {
+    "questions": [
+      {
+        "question": "What is the patient's chief complaint?",
+        "answer": "Bilateral pain for five years",
+        "needs_asking": false,
+        "category": "chief_complaint"
+      },
+      {
+        "question": "Does the patient have any past illnesses or chronic conditions?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "history"
+      },
+      {
+        "question": "What medications is the patient currently taking?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "medications"
+      },
+      {
+        "question": "Does the patient have any known drug or food allergies?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "allergies"
+      },
+      {
+        "question": "What are the patient's current vital signs?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "vital_signs"
+      },
+      {
+        "question": "What were the findings from the physical examination?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "physical_exam"
+      },
+      {
+        "question": "What is the assessment or diagnosis for the patient's condition?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "assessment"
+      },
+      {
+        "question": "What is the treatment plan or follow-up for the patient?",
+        "answer": "Currently undergoing physiotherapy sessions and will be reassessed after two weeks",
+        "needs_asking": false,
+        "category": "plan"
+      }
+    ],
+    "question_generation_sec": 3.989,
+    "total_sec": 144.397
+  },
+  "total_sec": 144.397
+}

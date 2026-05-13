@@ -1,0 +1,84 @@
+{
+  "filename": "dr_amr_elkiki2.mp3",
+  "language": "en",
+  "mode": "doctor",
+  "session_dir": "/app/uploads/20260505_122700_dr_amr_elkiki2",
+  "transcription": {
+    "raw_transcript": "The patient is complaining from bilateral knee pain since five years. Two years ago, the pain increased plain x-ray with what's done. Showing advanced osteoarthritis grade 4. non-steroidal anti-inflammatory were given. For around one month with muscle relaxants. Showing mild improvement she is now doing physiotherapy exercises for to see again after two weeks",
+    "refined_text": "The patient has been complaining of bilateral knee pain for five years. Two years ago, the pain increased, and a plain x-ray was performed, showing advanced grade 4 osteoarthritis. Non-steroidal anti-inflammatory drugs were given for approximately one month along with muscle relaxants, resulting in mild improvement. She is currently undergoing physiotherapy exercises and will be reassessed after two weeks.",
+    "final_text": "The patient has been complaining of bilateral knee pain for five years. Two years ago, the pain increased, and a plain x-ray was performed, showing advanced grade 4 osteoarthritis. Non-steroidal anti-inflammatory drugs were given for approximately one month along with muscle relaxants, resulting in mild improvement. She is currently undergoing physiotherapy exercises and will be reassessed after two weeks.",
+    "transcription_sec": 8.221,
+    "refinement_sec": 4.141,
+    "translation_sec": null
+  },
+  "extraction": {
+    "extracted_features": {
+      "chief_complaint": "Bilateral knee pain",
+      "icd10_codes": [
+        "M17.0 - Bilateral primary osteoarthritis of the knee"
+      ],
+      "history_of_illness": "Patient has been complaining of bilateral knee pain for five years, with increased pain noted two years ago.",
+      "current_medication": "Non-steroidal anti-inflammatory drugs, muscle relaxants",
+      "imaging_results": "Plain x-ray shows advanced grade 4 osteoarthritis.",
+      "plan": "Continue physiotherapy exercises and reassess after two weeks.",
+      "assessment": "Advanced grade 4 osteoarthritis of the knees",
+      "follow_up": "Reassess in two weeks."
+    },
+    "extraction_sec": 2.949
+  },
+  "questions": {
+    "questions": [
+      {
+        "question": "What is the patient's chief complaint?",
+        "answer": "Bilateral knee pain for five years",
+        "needs_asking": false,
+        "category": "chief_complaint"
+      },
+      {
+        "question": "What past illnesses or chronic conditions does the patient have?",
+        "answer": "Advanced grade 4 osteoarthritis",
+        "needs_asking": false,
+        "category": "history"
+      },
+      {
+        "question": "What medications is the patient currently taking?",
+        "answer": "Non-steroidal anti-inflammatory drugs and muscle relaxants",
+        "needs_asking": false,
+        "category": "current_medications"
+      },
+      {
+        "question": "Does the patient have any known drug allergies?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "allergies"
+      },
+      {
+        "question": "What are the patient's current vital signs?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "vital_signs"
+      },
+      {
+        "question": "What were the findings from the physical examination?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "physical_exam"
+      },
+      {
+        "question": "What is the clinical impression or assessment of the patient's condition?",
+        "answer": "Advanced grade 4 osteoarthritis",
+        "needs_asking": false,
+        "category": "assessment"
+      },
+      {
+        "question": "What is the treatment plan for the patient?",
+        "answer": "Currently undergoing physiotherapy exercises and will be reassessed after two weeks",
+        "needs_asking": false,
+        "category": "plan"
+      }
+    ],
+    "question_generation_sec": 12.464,
+    "total_sec": 27.809
+  },
+  "total_sec": 27.809
+}

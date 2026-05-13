@@ -1,0 +1,87 @@
+{
+  "filename": "recording.webm",
+  "language": "en",
+  "mode": "doctor",
+  "session_dir": "/app/uploads/20260512_054907_recording",
+  "transcription": {
+    "raw_transcript": "The patient is complaining from bilateral knee pain since five years. Two years ago, the pain increased and x-ray were well done. Showing advanced osteoarthritis straightforward. Non-estrogenal anti-inflammatory were given. For around one month. With muscle relaxants. Showing mild improvement she is now doing physiotherapy exercises for to see again after two weeks",
+    "refined_text": "The patient has been complaining of bilateral knee pain for five years. Two years ago, the pain intensified, and X-rays were performed, revealing advanced osteoarthritis. Nonsteroidal anti-inflammatory drugs were prescribed for approximately one month, along with muscle relaxants. The patient showed mild improvement and is currently undergoing physiotherapy exercises. Follow-up is scheduled in two weeks.",
+    "final_text": "The patient has been complaining of bilateral knee pain for five years. Two years ago, the pain intensified, and X-rays were performed, revealing advanced osteoarthritis. Nonsteroidal anti-inflammatory drugs were prescribed for approximately one month, along with muscle relaxants. The patient showed mild improvement and is currently undergoing physiotherapy exercises. Follow-up is scheduled in two weeks.",
+    "transcription_sec": 7.03,
+    "refinement_sec": 3.061,
+    "translation_sec": null
+  },
+  "extraction": {
+    "extracted_features": {
+      "chief_complaint": "Bilateral knee pain",
+      "icd10_codes": [
+        "M17.0 - Bilateral primary osteoarthritis of the knee",
+        "M17.9 - Osteoarthritis of the knee, unspecified",
+        "M25.561 - Pain in right knee",
+        "M25.562 - Pain in left knee"
+      ],
+      "history_of_illness": "Patient has been experiencing bilateral knee pain for five years, with an intensification of pain occurring two years ago. X-rays revealed advanced osteoarthritis.",
+      "current_medication": "Nonsteroidal anti-inflammatory drugs and muscle relaxants for approximately one month.",
+      "imaging_results": "X-rays revealed advanced osteoarthritis.",
+      "plan": "Continue physiotherapy exercises and monitor pain levels.",
+      "assessment": "Advanced osteoarthritis of the knees",
+      "follow_up": "Follow-up scheduled in two weeks."
+    },
+    "extraction_sec": 4.81
+  },
+  "questions": {
+    "questions": [
+      {
+        "question": "What is the patient's chief complaint?",
+        "answer": "Bilateral knee pain for five years",
+        "needs_asking": false,
+        "category": "chief_complaint"
+      },
+      {
+        "question": "What past illnesses or chronic conditions does the patient have?",
+        "answer": "Advanced osteoarthritis",
+        "needs_asking": false,
+        "category": "history"
+      },
+      {
+        "question": "What medications is the patient currently taking?",
+        "answer": "Nonsteroidal anti-inflammatory drugs and muscle relaxants",
+        "needs_asking": false,
+        "category": "medications"
+      },
+      {
+        "question": "Does the patient have any known drug allergies?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "allergies"
+      },
+      {
+        "question": "What are the patient's current vital signs?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "vital_signs"
+      },
+      {
+        "question": "What were the findings from the physical examination?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "physical_exam"
+      },
+      {
+        "question": "What is the assessment or diagnosis for the patient's condition?",
+        "answer": "Advanced osteoarthritis",
+        "needs_asking": false,
+        "category": "assessment"
+      },
+      {
+        "question": "What is the treatment plan for the patient?",
+        "answer": "Physiotherapy exercises and follow-up in two weeks",
+        "needs_asking": false,
+        "category": "plan"
+      }
+    ],
+    "question_generation_sec": 5.996,
+    "total_sec": 20.91
+  },
+  "total_sec": 20.91
+}

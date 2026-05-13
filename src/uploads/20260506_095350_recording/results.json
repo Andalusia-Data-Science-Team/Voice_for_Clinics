@@ -1,0 +1,102 @@
+{
+  "filename": "recording.webm",
+  "language": "en",
+  "mode": "doctor",
+  "session_dir": "/app/uploads/20260506_095350_recording",
+  "transcription": {
+    "raw_transcript": "The patient is complaining from? Bilateral knee pain, since five years. Two years ago, the pain increased. Plain x-ray were well done. Showing advanced osteoarthritis grade 4. Non-strothal anti-inflammatory were given. Or around one month. With muscle relaxants. Showing mild improvement. She is now doing physiotherapy exercises. For to see again. After two weeks,",
+    "refined_text": "The patient complains of bilateral knee pain for the past five years. Two years ago, the pain worsened. Plain x-rays were performed, revealing advanced grade 4 osteoarthritis. Nonsteroidal anti-inflammatory drugs were prescribed for approximately one month, along with muscle relaxants, resulting in mild improvement. She is currently undergoing physiotherapy exercises and will be reassessed in two weeks.",
+    "final_text": "The patient complains of bilateral knee pain for the past five years. Two years ago, the pain worsened. Plain x-rays were performed, revealing advanced grade 4 osteoarthritis. Nonsteroidal anti-inflammatory drugs were prescribed for approximately one month, along with muscle relaxants, resulting in mild improvement. She is currently undergoing physiotherapy exercises and will be reassessed in two weeks.",
+    "transcription_sec": 46.897,
+    "refinement_sec": 4.48,
+    "translation_sec": null
+  },
+  "extraction": {
+    "extracted_features": {
+      "chief_complaint": "Bilateral knee pain",
+      "icd10_codes": [
+        "M17.0 - Bilateral primary osteoarthritis of the knee"
+      ],
+      "history_of_illness": "Patient has experienced bilateral knee pain for the past five years, with worsening pain over the last two years.",
+      "current_medication": "Nonsteroidal anti-inflammatory drugs, muscle relaxants",
+      "imaging_results": "Plain x-rays reveal advanced grade 4 osteoarthritis.",
+      "plan": "Continue physiotherapy exercises and reassess in two weeks.",
+      "assessment": "Advanced grade 4 osteoarthritis of the knees",
+      "follow_up": "Reassess in two weeks."
+    },
+    "extraction_sec": 5.422
+  },
+  "questions": {
+    "questions": [
+      {
+        "question": "What is the patient's chief complaint?",
+        "answer": "Bilateral knee pain for the past five years",
+        "needs_asking": false,
+        "category": "chief_complaint"
+      },
+      {
+        "question": "Has the patient's knee pain worsened over time?",
+        "answer": "Yes, it worsened two years ago",
+        "needs_asking": false,
+        "category": "history"
+      },
+      {
+        "question": "What past illnesses or chronic conditions does the patient have?",
+        "answer": "Advanced grade 4 osteoarthritis",
+        "needs_asking": false,
+        "category": "history"
+      },
+      {
+        "question": "What medications has the patient been prescribed?",
+        "answer": "Nonsteroidal anti-inflammatory drugs and muscle relaxants",
+        "needs_asking": false,
+        "category": "medications"
+      },
+      {
+        "question": "How long did the patient take the prescribed medications?",
+        "answer": "Approximately one month",
+        "needs_asking": false,
+        "category": "medications"
+      },
+      {
+        "question": "Did the medications provide any improvement?",
+        "answer": "Yes, mild improvement",
+        "needs_asking": false,
+        "category": "assessment"
+      },
+      {
+        "question": "Is the patient currently taking any other medications?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "medications"
+      },
+      {
+        "question": "Does the patient have any known drug or food allergies?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "allergies"
+      },
+      {
+        "question": "What are the patient's current vital signs?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "vital_signs"
+      },
+      {
+        "question": "What findings were noted during the physical examination?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "physical_exam"
+      },
+      {
+        "question": "What is the plan for the patient's treatment moving forward?",
+        "answer": "Currently undergoing physiotherapy exercises and will be reassessed in two weeks",
+        "needs_asking": false,
+        "category": "plan"
+      }
+    ],
+    "question_generation_sec": 7.793,
+    "total_sec": 64.599
+  },
+  "total_sec": 64.599
+}

@@ -21,7 +21,7 @@ RUN uv pip install --system --no-cache -r requirements.txt
 COPY src/ .
 
 # Create persistent directories before switching to non-root user
-RUN mkdir -p /app/recordings /app/uploads
+RUN mkdir -p /app/uploads /app/static   # ← removed /app/recordings, added /app/static
 
 # Non-root user for security
 RUN useradd -m appuser && chown -R appuser:appuser /app
