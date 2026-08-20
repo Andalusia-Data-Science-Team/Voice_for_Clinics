@@ -1,0 +1,99 @@
+{
+  "filename": "recording.webm",
+  "language": "en",
+  "mode": "doctor",
+  "session_dir": "/app/uploads/20260701_172421_recording",
+  "transcription": {
+    "raw_transcript": "The patient has been complaining from bilateral knee pain since five years ago. Two years ago, symptoms have been worsened. X-rays have been performed and the patient is now undergoing physiotherapy sessions and to be reassessed after two weeks on his follow-up appointment.",
+    "refined_text": "The patient has complained of bilateral knee pain for five years. Two years ago, the symptoms worsened. X-rays were performed, and the patient is currently undergoing physiotherapy sessions. He will be reassessed after two weeks during his follow-up appointment.",
+    "final_text": "The patient has complained of bilateral knee pain for five years. Two years ago, the symptoms worsened. X-rays were performed, and the patient is currently undergoing physiotherapy sessions. He will be reassessed after two weeks during his follow-up appointment.",
+    "transcription_sec": 20.479,
+    "refinement_sec": 5.233,
+    "translation_sec": null
+  },
+  "extraction": {
+    "extracted_features": {
+      "chief_complaint": "Bilateral knee pain",
+      "icd10_codes": [
+        "M17.0 - Bilateral primary osteoarthritis of the knee",
+        "M17.9 - Osteoarthritis of the knee, unspecified",
+        "M25.561 - Pain in right knee",
+        "M25.562 - Pain in left knee"
+      ],
+      "history_of_illness": "Patient has experienced bilateral knee pain for five years, with worsening symptoms over the last two years.",
+      "current_medication": "",
+      "imaging_results": "X-rays were performed.",
+      "plan": "Continue physiotherapy sessions and reassess in two weeks.",
+      "assessment": "Chronic bilateral knee pain, likely due to osteoarthritis.",
+      "follow_up": "Reassess after two weeks during the follow-up appointment."
+    },
+    "extraction_sec": 7.069
+  },
+  "questions": {
+    "questions": [
+      {
+        "question": "What is the patient's chief complaint?",
+        "answer": "Bilateral knee pain for five years",
+        "needs_asking": false,
+        "category": "chief_complaint"
+      },
+      {
+        "question": "Has the patient's knee pain worsened over time?",
+        "answer": "Yes, symptoms worsened two years ago",
+        "needs_asking": false,
+        "category": "history"
+      },
+      {
+        "question": "What imaging studies have been performed?",
+        "answer": "X-rays were performed",
+        "needs_asking": false,
+        "category": "history"
+      },
+      {
+        "question": "What is the patient currently doing for treatment?",
+        "answer": "Undergoing physiotherapy sessions",
+        "needs_asking": false,
+        "category": "plan"
+      },
+      {
+        "question": "When is the patient's follow-up appointment scheduled?",
+        "answer": "After two weeks",
+        "needs_asking": false,
+        "category": "plan"
+      },
+      {
+        "question": "Does the patient have any known drug allergies?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "allergies"
+      },
+      {
+        "question": "What medications is the patient currently taking?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "medications"
+      },
+      {
+        "question": "What are the patient's vital signs?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "vital_signs"
+      },
+      {
+        "question": "What were the findings from the physical examination?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "physical_exam"
+      },
+      {
+        "question": "What is the assessment or diagnosis for the patient's condition?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "assessment"
+      }
+    ],
+    "question_generation_sec": 8.115,
+    "total_sec": 40.9
+  },
+  "total_sec": 40.9
+}

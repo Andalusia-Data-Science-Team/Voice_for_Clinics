@@ -11,4 +11,5 @@ services:
     volumes:
       - ./src/uploads:/app/uploads        # results appear here on the host
       - ./src/static:/app/static          # ← added: serves index.html
+      - ./src/logs:/app/logs              # ← added: serves log files
     restart: unless-stopped

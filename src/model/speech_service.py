@@ -61,9 +61,6 @@ async def _ffmpeg_file_stream(input_path: str, chunk_size: int = _CHUNK_SIZE) ->
             if not chunk:
                 break
             yield chunk
-            
-            
-            
     finally:
         if proc.returncode is None:
             proc.kill()
@@ -78,27 +75,28 @@ async def _ffmpeg_file_stream(input_path: str, chunk_size: int = _CHUNK_SIZE) ->
 async def _ffmpeg_stdin_stream(
     raw_pcm_iter: AsyncIterator[bytes],
     chunk_size: int = _CHUNK_SIZE,
+    input_sample_rate: int = 16000,
 ) -> AsyncIterator[bytes]:
     """
-    Pipe a live stream of browser PCM (float32, 16kHz, mono) through ffmpeg,
-    converting it to pcm_s16le that Voxtral expects.
+    Pipe a live stream of browser PCM (float32, any sample rate, mono) through ffmpeg,
+    converting it to pcm_s16le at 16kHz that Voxtral expects.
 
-    Browser AudioContext captures float32 at 16kHz mono — ffmpeg converts
-    f32le → s16le on the fly.
+    The browser's AudioContext may capture at 44100 Hz or 48000 Hz — the
+    caller passes the actual rate so ffmpeg can resample correctly.
     """
     if shutil.which("ffmpeg") is None:
         raise TranscriptionError("ffmpeg not found on PATH.")
 
     cmd = [
         "ffmpeg", "-hide_banner", "-loglevel", "error",
-        "-f", "f32le",       # browser sends float32 little-endian
-        "-ar", "16000",      # sample rate matches AudioContext
-        "-ac", "1",          # mono
-        "-i", "pipe:0",      # read from stdin
-        "-f", "s16le",       # output format Voxtral needs
-        "-ar", "16000",
+        "-f", "f32le",                     # browser sends float32 little-endian
+        "-ar", str(input_sample_rate),     # actual browser sample rate (e.g. 44100)
+        "-ac", "1",                        # mono
+        "-i", "pipe:0",                    # read from stdin
+        "-f", "s16le",                     # output format Voxtral needs
+        "-ar", "16000",                    # resample to 16 kHz
         "-ac", "1",
-        "pipe:1",            # write to stdout
+        "pipe:1",                          # write to stdout
     ]
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -121,7 +119,6 @@ async def _ffmpeg_stdin_stream(
             except Exception:
                 pass
 
-    # Start feeding stdin in the background
     feed_task = asyncio.create_task(feed_stdin())
 
     try:
@@ -157,14 +154,14 @@ async def _plain_file_stream(file_path: str, chunk_size: int = _CHUNK_SIZE) -> A
 # ---------------------------------------------------------------------------
 
 async def _transcribe_collect(audio_stream: AsyncIterator[bytes], api_key: str) -> str:
-    """Collect all deltas → return full string. Used for Arabic (needs full text before translate)."""
+    """Collect all deltas → return full string."""
     client = _get_client(api_key)
     parts: list[str] = []
     async for event in client.audio.realtime.transcribe_stream(
         audio_stream=audio_stream,
         model=VOXTRAL_MODEL,
         audio_format=VOXTRAL_AUDIO_FORMAT,
-        target_streaming_delay_ms=500
+        target_streaming_delay_ms=500,
     ):
         if isinstance(event, TranscriptionStreamTextDelta):
             parts.append(event.text)
@@ -180,13 +177,13 @@ async def _transcribe_collect(audio_stream: AsyncIterator[bytes], api_key: str) 
 async def _transcribe_yield(
     audio_stream: AsyncIterator[bytes], api_key: str
 ) -> AsyncIterator[str]:
-    """Yield each delta as it arrives. Used for English live streaming."""
+    """Yield each delta as it arrives."""
     client = _get_client(api_key)
     async for event in client.audio.realtime.transcribe_stream(
         audio_stream=audio_stream,
         model=VOXTRAL_MODEL,
         audio_format=VOXTRAL_AUDIO_FORMAT,
-        target_streaming_delay_ms=500
+        target_streaming_delay_ms=500,
     ):
         if isinstance(event, TranscriptionStreamTextDelta):
             yield event.text
@@ -209,7 +206,7 @@ class SpeechService:
     Entry points:
       transcribe_audio()            – batch, from file  (Arabic path)
       transcribe_audio_stream()     – streaming deltas, from file  (English post-recording)
-      transcribe_live_stream()      – streaming deltas, from live WebSocket bytes  (English live)
+      transcribe_live_stream()      – streaming deltas, from live WebSocket bytes  (live mic)
     """
 
     # ------------------------------------------------------------------
@@ -246,7 +243,7 @@ class SpeechService:
             raise TranscriptionError(f"Transcription failed: {exc}") from exc
 
     # ------------------------------------------------------------------
-    # Streaming deltas from file — English, post-recording fallback
+    # Streaming deltas from file — post-recording fallback
     # ------------------------------------------------------------------
     @staticmethod
     async def transcribe_audio_stream(
@@ -261,18 +258,29 @@ class SpeechService:
             yield delta
 
     # ------------------------------------------------------------------
-    # Streaming deltas from live WebSocket bytes — English, real-time
+    # Streaming deltas from live WebSocket bytes — real-time mic
     # ------------------------------------------------------------------
     @staticmethod
     async def transcribe_live_stream(
         raw_pcm_iter: AsyncIterator[bytes],
         api_key: str,
+        input_sample_rate: int = 16000,
     ) -> AsyncIterator[str]:
         """
         Accept a live async iterator of float32 PCM bytes (from browser AudioContext),
-        convert via ffmpeg stdin pipe, stream to Voxtral, yield text deltas in real time.
+        convert via ffmpeg (resampling from input_sample_rate → 16kHz), stream to
+        Voxtral, yield text deltas in real time.
+
+        Args:
+            raw_pcm_iter:       Async iterator of float32 little-endian PCM bytes.
+            api_key:            Mistral API key.
+            input_sample_rate:  The actual sample rate of the incoming PCM (e.g. 44100).
+                                ffmpeg will resample to 16000 for Voxtral automatically.
         """
-        audio_stream = _ffmpeg_stdin_stream(raw_pcm_iter)
+        audio_stream = _ffmpeg_stdin_stream(
+            raw_pcm_iter,
+            input_sample_rate=input_sample_rate,
+        )
         async for delta in _transcribe_yield(audio_stream, api_key):
             yield delta
 
