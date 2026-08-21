@@ -1,10 +1,13 @@
 import os
+import json
 import asyncio
 import logging
 import shutil
 import time
+import urllib.parse
 from typing import Optional, Tuple, Dict, Any, AsyncIterator
 
+import websockets
 from mistralai import Mistral
 from mistralai.models import (
     AudioFormat,
@@ -20,6 +23,11 @@ logger = logging.getLogger(__name__)
 VOXTRAL_MODEL = "voxtral-mini-transcribe-realtime-2602"
 VOXTRAL_AUDIO_FORMAT = AudioFormat(encoding="pcm_s16le", sample_rate=16000)
 _CHUNK_SIZE = 4096
+
+MUNSIT_WS_URL = "wss://api.munsit.com/api/v1/listen"
+MUNSIT_MODEL = "munsit"          # or "munsit-en-ar" for code-switching sessions
+MUNSIT_IDLE_TIMEOUT_S = 12       # server closes at 12s with no audio/KeepAlive
+MUNSIT_KEEPALIVE_INTERVAL_S = 8  # send KeepAlive comfortably before the 12s cutoff
 
 _mistral_client: Optional[Mistral] = None
 
@@ -79,7 +87,7 @@ async def _ffmpeg_stdin_stream(
 ) -> AsyncIterator[bytes]:
     """
     Pipe a live stream of browser PCM (float32, any sample rate, mono) through ffmpeg,
-    converting it to pcm_s16le at 16kHz that Voxtral expects.
+    converting it to pcm_s16le at 16kHz — the format both Voxtral and Munsit expect.
 
     The browser's AudioContext may capture at 44100 Hz or 48000 Hz — the
     caller passes the actual rate so ffmpeg can resample correctly.
@@ -93,7 +101,7 @@ async def _ffmpeg_stdin_stream(
         "-ar", str(input_sample_rate),     # actual browser sample rate (e.g. 44100)
         "-ac", "1",                        # mono
         "-i", "pipe:0",                    # read from stdin
-        "-f", "s16le",                     # output format Voxtral needs
+        "-f", "s16le",                     # linear16 output — Voxtral and Munsit both want this
         "-ar", "16000",                    # resample to 16 kHz
         "-ac", "1",
         "pipe:1",                          # write to stdout
@@ -150,7 +158,7 @@ async def _plain_file_stream(file_path: str, chunk_size: int = _CHUNK_SIZE) -> A
 
 
 # ---------------------------------------------------------------------------
-# Voxtral wrappers
+# Voxtral wrappers (English)
 # ---------------------------------------------------------------------------
 
 async def _transcribe_collect(audio_stream: AsyncIterator[bytes], api_key: str) -> str:
@@ -196,21 +204,149 @@ async def _transcribe_yield(
 
 
 # ---------------------------------------------------------------------------
+# Munsit wrapper (Arabic — /api/v1/listen)
+# ---------------------------------------------------------------------------
+
+def _build_munsit_url(api_key: str, hotwords: Optional[str] = None, model: str = MUNSIT_MODEL) -> str:
+    params = {
+        "encoding": "linear16",
+        "sample_rate": "16000",
+        "model": model,
+        "language": "ar",
+        "interim_results": "true",
+        "smart_turn": "true",
+    }
+    if hotwords:
+        params["hotwords"] = hotwords
+    # api_key goes in the query string — the browser can't reach Munsit anyway
+    # since this call happens server-side, so it never touches client logs.
+    return f"{MUNSIT_WS_URL}?api_key={urllib.parse.quote(api_key)}&{urllib.parse.urlencode(params)}"
+
+
+async def _transcribe_munsit_yield(
+    audio_stream: AsyncIterator[bytes],
+    api_key: str,
+    hotwords: Optional[str] = None,
+    model: str = MUNSIT_MODEL,
+) -> AsyncIterator[Dict[str, Any]]:
+    """
+    Stream 16kHz linear16 PCM to Munsit and yield normalized events:
+
+      {"type": "interim",  "text": "..."}                      — provisional, may be revised
+      {"type": "final",    "text": "...", "speech_final": bool} — committed text for this turn
+      {"type": "utterance_end"}                                 — caller genuinely stopped talking
+      {"type": "done", "billed_seconds": float}
+      {"type": "error", "detail": "...", "recoverable": bool}
+
+    speech_final=False on a "final" event means a forced 60s split mid-speech —
+    the text is stable but the turn is still open (per Munsit docs).
+    """
+    url = _build_munsit_url(api_key, hotwords=hotwords, model=model)
+
+    try:
+        async with websockets.connect(url, max_size=None, open_timeout=10) as ws:
+
+            async def send_audio():
+                try:
+                    last_send = time.monotonic()
+                    async for chunk in audio_stream:
+                        await ws.send(chunk)
+                        last_send = time.monotonic()
+                        # Guard against long silent gaps hitting the 12s idle timeout —
+                        # in practice audio keeps flowing from the mic, but this is a
+                        # cheap safety net for choppy network conditions.
+                        if time.monotonic() - last_send > MUNSIT_KEEPALIVE_INTERVAL_S:
+                            await ws.send(json.dumps({"type": "KeepAlive"}))
+                    # Audio source exhausted (recording stopped) — finalize the turn.
+                    await ws.send(json.dumps({"type": "CloseStream"}))
+                except websockets.exceptions.ConnectionClosed:
+                    pass
+                except Exception as e:
+                    logger.warning("[Munsit] send_audio error: %s", e)
+
+            sender_task = asyncio.create_task(send_audio())
+
+            try:
+                async for raw in ws:
+                    try:
+                        event = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+
+                    etype = event.get("type")
+
+                    if etype == "Results":
+                        transcript = event.get("transcript", "") or ""
+                        is_final = bool(event.get("is_final"))
+                        if is_final:
+                            if transcript:
+                                yield {
+                                    "type": "final",
+                                    "text": transcript,
+                                    "speech_final": bool(event.get("speech_final")),
+                                }
+                        else:
+                            yield {"type": "interim", "text": transcript}
+
+                    elif etype == "UtteranceEnd":
+                        yield {"type": "utterance_end"}
+
+                    elif etype == "Metadata":
+                        if "audio_seconds_billed" in event:
+                            # Closing Metadata — session is finishing.
+                            yield {
+                                "type": "done",
+                                "billed_seconds": event.get("audio_seconds_billed"),
+                            }
+                            break
+                        # else: opening Metadata — nothing actionable for the client.
+
+                    elif etype == "Error":
+                        recoverable = bool(event.get("recoverable"))
+                        yield {
+                            "type": "error",
+                            "detail": event.get("message", "Munsit error"),
+                            "code": event.get("code"),
+                            "recoverable": recoverable,
+                        }
+                        if not recoverable:
+                            break
+
+                    # SpeechStarted / Gender / Sentiment: not surfaced to the
+                    # dictation UI today; add handling here if you want them.
+
+            finally:
+                sender_task.cancel()
+                try:
+                    await sender_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+
+    except websockets.exceptions.InvalidStatusCode as e:
+        raise TranscriptionError(f"Munsit connection rejected: {e}") from e
+    except Exception as e:
+        raise TranscriptionError(f"Munsit stream failed: {e}") from e
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 class SpeechService:
     """
-    Speech recognition via Mistral Voxtral real-time transcription.
+    Speech recognition — routed by language:
+      English → Mistral Voxtral real-time transcription
+      Arabic  → Munsit real-time transcription (dialect-aware, incl. Khaliji/Gulf)
 
     Entry points:
-      transcribe_audio()            – batch, from file  (Arabic path)
-      transcribe_audio_stream()     – streaming deltas, from file  (English post-recording)
-      transcribe_live_stream()      – streaming deltas, from live WebSocket bytes  (live mic)
+      transcribe_audio()            – batch, from file  (Voxtral)
+      transcribe_audio_stream()     – streaming deltas, from file  (Voxtral, post-recording)
+      transcribe_live_stream()      – streaming deltas, from live WebSocket bytes  (Voxtral, English mic)
+      transcribe_live_stream_ar()   – streaming events, from live WebSocket bytes  (Munsit, Arabic mic)
     """
 
     # ------------------------------------------------------------------
-    # Batch from file — Arabic
+    # Batch from file — Voxtral
     # ------------------------------------------------------------------
     @staticmethod
     async def transcribe_audio(
@@ -243,7 +379,7 @@ class SpeechService:
             raise TranscriptionError(f"Transcription failed: {exc}") from exc
 
     # ------------------------------------------------------------------
-    # Streaming deltas from file — post-recording fallback
+    # Streaming deltas from file — Voxtral post-recording fallback
     # ------------------------------------------------------------------
     @staticmethod
     async def transcribe_audio_stream(
@@ -258,7 +394,7 @@ class SpeechService:
             yield delta
 
     # ------------------------------------------------------------------
-    # Streaming deltas from live WebSocket bytes — real-time mic
+    # Streaming deltas from live WebSocket bytes — Voxtral, English mic
     # ------------------------------------------------------------------
     @staticmethod
     async def transcribe_live_stream(
@@ -270,12 +406,6 @@ class SpeechService:
         Accept a live async iterator of float32 PCM bytes (from browser AudioContext),
         convert via ffmpeg (resampling from input_sample_rate → 16kHz), stream to
         Voxtral, yield text deltas in real time.
-
-        Args:
-            raw_pcm_iter:       Async iterator of float32 little-endian PCM bytes.
-            api_key:            Mistral API key.
-            input_sample_rate:  The actual sample rate of the incoming PCM (e.g. 44100).
-                                ffmpeg will resample to 16000 for Voxtral automatically.
         """
         audio_stream = _ffmpeg_stdin_stream(
             raw_pcm_iter,
@@ -283,6 +413,36 @@ class SpeechService:
         )
         async for delta in _transcribe_yield(audio_stream, api_key):
             yield delta
+
+    # ------------------------------------------------------------------
+    # Streaming events from live WebSocket bytes — Munsit, Arabic mic
+    # ------------------------------------------------------------------
+    @staticmethod
+    async def transcribe_live_stream_ar(
+        raw_pcm_iter: AsyncIterator[bytes],
+        api_key: str,
+        input_sample_rate: int = 16000,
+        hotwords: Optional[str] = None,
+        code_switching: bool = False,
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """
+        Accept a live async iterator of float32 PCM bytes (from browser AudioContext),
+        convert via ffmpeg to 16kHz linear16, stream to Munsit, yield normalized
+        transcription events (see _transcribe_munsit_yield for the event shapes).
+
+        Args:
+            hotwords:       Optional comma-separated custom vocabulary
+                             (e.g. medical terms, drug names) — up to 200 entries.
+            code_switching: Use the munsit-en-ar model for mixed Arabic/English
+                             speech instead of the pure-Arabic model.
+        """
+        audio_stream = _ffmpeg_stdin_stream(
+            raw_pcm_iter,
+            input_sample_rate=input_sample_rate,
+        )
+        model = "munsit-en-ar" if code_switching else MUNSIT_MODEL
+        async for event in _transcribe_munsit_yield(audio_stream, api_key, hotwords=hotwords, model=model):
+            yield event
 
     @staticmethod
     def transcribe_audio_sync(audio_file_path: str, api_key: str, **kwargs):

@@ -14,6 +14,7 @@ class Config:
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
     FIREWORKS_API_KEY = os.getenv("FIREWORKS_API_KEY")
     MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
+    MUNSIT_API_KEY = os.getenv("MUNSIT_API_KEY")
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
     SPEECH_API_KEY = os.getenv("speech")

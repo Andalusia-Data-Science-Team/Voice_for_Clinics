@@ -181,6 +181,8 @@
   .c-blink::after { content: '|'; animation: cur 0.8s infinite; color: var(--accent-2); }
   @keyframes cur { 0%,100%{opacity:1} 50%{opacity:0} }
   .ph { font-size: 13px; color: var(--text-3); font-style: italic; }
+  /* Provisional (interim) text — Munsit only, may still be revised */
+  .interim { color: var(--text-3); opacity: 0.75; }
 
   /* ── Tabs ── */
   .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
@@ -404,7 +406,8 @@ let audioContext     = null;
 let sourceNode       = null;
 let scriptProcessor  = null;
 let mediaStream      = null;
-let liveTranscript   = '';     // accumulated text from Voxtral
+let liveTranscript   = '';     // accumulated COMMITTED text (both engines)
+let interimText      = '';     // provisional text not yet committed (Munsit only)
 let transcriptReady  = false;  // true after WS "done" received
 let transcriptStartMs = 0;     // for elapsed timer on transcription card
 
@@ -452,6 +455,7 @@ function resetAll() {
   if (recording) stopRecording();
   if (ws) { try { ws.close(); } catch(_) {} ws = null; }
   liveTranscript  = '';
+  interimText     = '';
   transcriptReady = false;
   recording       = false;
   timerSec        = 0;
@@ -480,11 +484,29 @@ btnReset.addEventListener('click', resetAll);
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Live transcription via WebSocket
+   English → Voxtral (additive "delta" chunks only)
+   Arabic  → Munsit  ("interim" provisional preview + "delta" committed segments)
 ───────────────────────────────────────────────────────────────────────────── */
+
+// Render committed text + a dimmed provisional tail (Munsit interim, if any).
+function renderLiveTranscript() {
+  let el = document.getElementById('tl');
+  if (!el) {
+    setBody('trans', '<div class="transcript" id="tl"></div>');
+    el = document.getElementById('tl');
+  }
+  if (!el) return;
+  const committedHtml = esc(liveTranscript);
+  const interimHtml   = interimText ? '<span class="interim c-blink">' + esc(interimText) + '</span>' : '<span class="c-blink"></span>';
+  el.innerHTML = committedHtml + interimHtml;
+}
 
 async function startRecording() {
   liveTranscript  = '';
+  interimText     = '';
   transcriptReady = false;
+
+  const lang = $('sel-lang').value; // 'en' | 'ar' — decides which STT engine the server uses
 
   // Show transcription card as "live"
   const card = $('card-trans');
@@ -511,7 +533,8 @@ async function startRecording() {
   const wsOpen = new Promise((res, rej) => { resolveWsOpen = res; rejectWsOpen = rej; });
 
   ws.onopen = () => {
-    ws.send(JSON.stringify({ sampleRate }));   // init: tell server our sample rate
+    // language tells the server which STT engine to route to (Voxtral vs Munsit)
+    ws.send(JSON.stringify({ sampleRate, language: lang }));
     resolveWsOpen();
   };
 
@@ -520,13 +543,15 @@ async function startRecording() {
     try { msg = JSON.parse(e.data); } catch(_) { return; }
 
     if (msg.type === 'delta') {
+      // Committed text — append and clear any provisional preview it supersedes.
       liveTranscript += msg.text;
-      let el = document.getElementById('tl');
-      if (!el) {
-        setBody('trans', '<div class="transcript c-blink" id="tl"></div>');
-        el = document.getElementById('tl');
-      }
-      if (el) el.textContent = liveTranscript;
+      interimText = '';
+      renderLiveTranscript();
+
+    } else if (msg.type === 'interim') {
+      // Provisional text (Munsit only) — replaces the tail, may still be revised.
+      interimText = msg.text;
+      renderLiveTranscript();
 
     } else if (msg.type === 'done') {
       const elapsedSec = ((Date.now() - transcriptStartMs) / 1000).toFixed(2);
@@ -535,6 +560,7 @@ async function startRecording() {
       const badge = $('badge-trans');
       badge.textContent = 'Done'; badge.className = 'phase-badge b-done';
       setTime('trans', elapsedSec);
+      interimText = ''; // drop any stray unfinished preview
       setBody('trans', '<div class="transcript">' + esc(liveTranscript) + '</div>');
       transcriptReady = true;
       btnSubmit.disabled = false;
@@ -614,7 +640,7 @@ function stopRecording() {
   recording = false;
   clearInterval(timerInterval);
 
-  // Disconnect audio (closes ffmpeg stdin → Voxtral flushes remaining audio)
+  // Disconnect audio (closes ffmpeg stdin → server-side STT flushes remaining audio)
   cleanupAudio();
 
   // Tell the server we're done sending audio
@@ -622,7 +648,7 @@ function stopRecording() {
     ws.send(JSON.stringify({ cmd: 'done' }));
   }
 
-  // UI — waiting for Voxtral to finish
+  // UI — waiting for the STT engine to finish
   btnRecord.classList.remove('recording');
   btnRecord.classList.add('processing');
   btnRecord.disabled   = true;

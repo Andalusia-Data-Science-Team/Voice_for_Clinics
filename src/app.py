@@ -89,15 +89,19 @@ class Mode(str, Enum):
 @app.websocket("/ws/transcribe")
 async def ws_transcribe(websocket: WebSocket):
     """
-    Real-time transcription via Voxtral.
+    Real-time transcription — routed by language:
+      language == "en" → Voxtral   (unchanged from before)
+      language == "ar" → Munsit    (dialect-aware Arabic, incl. Khaliji/Gulf)
 
     Protocol (client → server):
-      1. First text message: JSON  {"sampleRate": <int>}
+      1. First text message: JSON  {"sampleRate": <int>, "language": "en"|"ar", "hotwords": "..."}
+         "language" defaults to "en" if omitted, for backward compatibility.
       2. Binary messages: float32 little-endian PCM mono chunks.
       3. Final text message: JSON  {"cmd": "done"}
 
     Protocol (server → client):
-      {"type": "delta",  "text": "..."}
+      {"type": "delta",   "text": "..."}   — committed text, append to transcript
+      {"type": "interim", "text": "..."}   — provisional text, replace preview (Munsit only)
       {"type": "done"}
       {"type": "error",  "detail": "..."}
     """
@@ -105,15 +109,19 @@ async def ws_transcribe(websocket: WebSocket):
     logger.info("[WS] Client connected — %s", websocket.client.host)
 
     input_sample_rate = 16000
+    language = "en"
+    hotwords = None
     try:
         init_text = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
         init_data = json.loads(init_text)
         input_sample_rate = int(init_data.get("sampleRate", 16000))
-        logger.info("[WS] Browser sample rate: %d Hz", input_sample_rate)
+        language = str(init_data.get("language", "en")).lower()
+        hotwords = init_data.get("hotwords") or None
+        logger.info("[WS] Browser sample rate: %d Hz, language: %s", input_sample_rate, language)
     except asyncio.TimeoutError:
-        logger.warning("[WS] No init message within 5 s, assuming 16000 Hz")
+        logger.warning("[WS] No init message within 5 s, assuming en/16000 Hz")
     except Exception as e:
-        logger.warning("[WS] Bad init message: %s — assuming 16000 Hz", e)
+        logger.warning("[WS] Bad init message: %s — assuming en/16000 Hz", e)
 
     pcm_queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=200)
 
@@ -151,16 +159,47 @@ async def ws_transcribe(websocket: WebSocket):
     receive_task = asyncio.create_task(receive_loop())
 
     try:
-        async for delta in SpeechService.transcribe_live_stream(
-            raw_pcm_iter=pcm_iter(),
-            api_key=Config.MISTRAL_API_KEY,
-            input_sample_rate=input_sample_rate,
-        ):
-            try:
-                await websocket.send_json({"type": "delta", "text": delta})
-            except (WebSocketDisconnect, Exception):
-                logger.info("[WS] Client gone mid-stream")
-                break
+        if language == "ar":
+            # ── Arabic → Munsit ──
+            async for event in SpeechService.transcribe_live_stream_ar(
+                raw_pcm_iter=pcm_iter(),
+                api_key=Config.MUNSIT_API_KEY,
+                input_sample_rate=input_sample_rate,
+                code_switching=True,
+                hotwords=hotwords,
+            ):
+                etype = event.get("type")
+                try:
+                    if etype == "interim":
+                        await websocket.send_json({"type": "interim", "text": event.get("text", "")})
+                    elif etype == "final":
+                        # Munsit sends one committed segment per turn — join with a
+                        # leading space so consecutive turns don't run together.
+                        text = event.get("text", "")
+                        if text:
+                            await websocket.send_json({"type": "delta", "text": text + " "})
+                    elif etype == "error":
+                        await websocket.send_json({"type": "error", "detail": event.get("detail", "Munsit error")})
+                        if not event.get("recoverable", False):
+                            break
+                    elif etype == "done":
+                        break
+                    # "utterance_end" — no client action needed today.
+                except (WebSocketDisconnect, Exception):
+                    logger.info("[WS] Client gone mid-stream (ar)")
+                    break
+        else:
+            # ── English → Voxtral (unchanged) ──
+            async for delta in SpeechService.transcribe_live_stream(
+                raw_pcm_iter=pcm_iter(),
+                api_key=Config.MISTRAL_API_KEY,
+                input_sample_rate=input_sample_rate,
+            ):
+                try:
+                    await websocket.send_json({"type": "delta", "text": delta})
+                except (WebSocketDisconnect, Exception):
+                    logger.info("[WS] Client gone mid-stream (en)")
+                    break
 
         try:
             await websocket.send_json({"type": "done"})
@@ -319,4 +358,4 @@ async def analyze_transcript(
 app.include_router(router)
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=9999)
+    uvicorn.run("app:app", host="0.0.0.0", port=7777)
