@@ -247,22 +247,42 @@ async def _transcribe_munsit_yield(
         async with websockets.connect(url, max_size=None, open_timeout=10) as ws:
 
             async def send_audio():
+                # Runs on a fixed cadence regardless of whether audio chunks are
+                # arriving, so it still fires during real gaps (backgrounded tab,
+                # suspended AudioContext, network stalls) — not just when a new
+                # chunk happens to show up. Munsit closes the socket with 1011
+                # after 12s of neither audio nor KeepAlive.
+                stop_keepalive = asyncio.Event()
+
+                async def keepalive_loop():
+                    try:
+                        while not stop_keepalive.is_set():
+                            await asyncio.sleep(MUNSIT_KEEPALIVE_INTERVAL_S)
+                            if stop_keepalive.is_set():
+                                break
+                            await ws.send(json.dumps({"type": "KeepAlive"}))
+                    except websockets.exceptions.ConnectionClosed:
+                        pass
+                    except Exception as e:
+                        logger.warning("[Munsit] keepalive_loop error: %s", e)
+
+                keepalive_task = asyncio.create_task(keepalive_loop())
                 try:
-                    last_send = time.monotonic()
                     async for chunk in audio_stream:
                         await ws.send(chunk)
-                        last_send = time.monotonic()
-                        # Guard against long silent gaps hitting the 12s idle timeout —
-                        # in practice audio keeps flowing from the mic, but this is a
-                        # cheap safety net for choppy network conditions.
-                        if time.monotonic() - last_send > MUNSIT_KEEPALIVE_INTERVAL_S:
-                            await ws.send(json.dumps({"type": "KeepAlive"}))
                     # Audio source exhausted (recording stopped) — finalize the turn.
                     await ws.send(json.dumps({"type": "CloseStream"}))
                 except websockets.exceptions.ConnectionClosed:
                     pass
                 except Exception as e:
                     logger.warning("[Munsit] send_audio error: %s", e)
+                finally:
+                    stop_keepalive.set()
+                    keepalive_task.cancel()
+                    try:
+                        await keepalive_task
+                    except (asyncio.CancelledError, Exception):
+                        pass
 
             sender_task = asyncio.create_task(send_audio())
 
@@ -300,6 +320,10 @@ async def _transcribe_munsit_yield(
                             }
                             break
                         # else: opening Metadata — nothing actionable for the client.
+                        elif event.get("dropped_hotwords"):
+                            logger.warning(
+                                "[Munsit] Hotwords dropped: %s", event["dropped_hotwords"]
+                            )
 
                     elif etype == "Error":
                         recoverable = bool(event.get("recoverable"))
