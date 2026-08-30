@@ -140,6 +140,7 @@
   .phase-card.active { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(139,90,43,0.1), var(--shadow-sm); }
   .phase-card.done   { border-color: var(--border); }
   .phase-card.error  { border-color: var(--red); box-shadow: 0 0 0 3px rgba(177,98,75,0.08); }
+  .phase-card.skip   { border-color: var(--border); opacity: 0.85; }
   .phase-card.hidden { display: none; }
 
   .phase-hd { display: flex; align-items: center; padding: 13px 18px; border-bottom: 1px solid var(--border); gap: 11px; background: var(--surface-2); }
@@ -147,6 +148,7 @@
   .phase-card.active .step-num { border-color: var(--accent-2); color: var(--accent); background: var(--accent-light); }
   .phase-card.done   .step-num { border-color: var(--green); color: #fff; background: var(--green); }
   .phase-card.error  .step-num { border-color: var(--red); color: #fff; background: var(--red); }
+  .phase-card.skip   .step-num { border-color: var(--border-mid); color: var(--text-3); background: var(--surface-3); }
 
   .phase-title { font-size: 13px; font-weight: 500; color: var(--text-1); flex: 1; }
   .phase-subtitle { font-size: 11px; color: var(--text-3); font-weight: 400; margin-left: 6px; }
@@ -184,6 +186,12 @@
   /* Provisional (interim) text — Munsit only, may still be revised */
   .interim { color: var(--text-3); opacity: 0.75; }
 
+  /* Editable transcript / feature fields */
+  [contenteditable="true"] { outline: none; }
+  #tl-final { border-radius: var(--r-sm); padding: 2px 4px; margin: -2px -4px; transition: background 0.15s, box-shadow 0.15s; cursor: text; }
+  #tl-final:focus { background: var(--surface-2); box-shadow: 0 0 0 2px rgba(184,124,74,0.15); }
+  .edit-hint { font-size: 11px; color: var(--text-3); margin-top: 8px; }
+
   /* ── Tabs ── */
   .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
   .tab { font-size: 12px; font-weight: 500; padding: 7px 16px; cursor: pointer; color: var(--text-3); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s; }
@@ -203,18 +211,31 @@
   .feat-highlight-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 5px; }
   .feat-highlight.complaint  .feat-highlight-label { color: var(--blue); }
   .feat-highlight.assessment .feat-highlight-label { color: var(--purple); }
-  .feat-highlight-val { font-size: 14px; font-weight: 500; line-height: 1.5; color: var(--text-1); }
+  .feat-highlight-val { font-size: 14px; font-weight: 500; line-height: 1.5; color: var(--text-1); border-radius: var(--r-sm); padding: 2px 4px; margin: -2px -4px; transition: background 0.15s, box-shadow 0.15s; }
+  .feat-highlight-val[contenteditable="true"]:hover { background: rgba(255,255,255,0.4); }
+  .feat-highlight-val[contenteditable="true"]:focus { background: rgba(255,255,255,0.7); box-shadow: 0 0 0 2px rgba(184,124,74,0.15); }
 
   .icd-row { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
   .icd-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-3); margin-right: 4px; }
   .icd-pill { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 12px; color: var(--accent); background: var(--accent-light); border: 1px solid #e1cfbc; border-radius: var(--r-md); padding: 4px 10px; font-weight: 500; }
-  .icd-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .icd-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .icd-pill-text { outline: none; min-width: 8px; }
+  .icd-pill-text:focus { background: rgba(255,255,255,0.6); border-radius: 4px; }
+  .icd-pill-remove { cursor: pointer; color: var(--text-3); font-weight: 700; line-height: 1; padding: 0 2px; border-radius: 3px; }
+  .icd-pill-remove:hover { color: var(--red); background: rgba(177,98,75,0.1); }
+  .icd-add { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; }
+  .icd-add input { font-family: var(--sans); font-size: 12px; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); width: 100px; outline: none; }
+  .icd-add input:focus { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(184,124,74,0.12); }
+  .icd-add button { font-family: var(--sans); font-size: 11px; font-weight: 500; padding: 5px 10px; border: 1px solid var(--border-mid); border-radius: var(--r-md); background: var(--surface); color: var(--accent); cursor: pointer; transition: background 0.15s; }
+  .icd-add button:hover { background: var(--accent-light); }
 
   .feat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 10px; }
   .feat-cell { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; }
   .feat-cell-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-3); margin-bottom: 5px; display: flex; align-items: center; gap: 5px; }
   .feat-cell-icon { font-size: 12px; }
-  .feat-cell-val { font-size: 13px; color: var(--text-1); line-height: 1.55; white-space: pre-line; }
+  .feat-cell-val { font-size: 13px; color: var(--text-1); line-height: 1.55; white-space: pre-line; border-radius: var(--r-sm); padding: 2px 4px; margin: -2px -4px; transition: background 0.15s, box-shadow 0.15s; }
+  .feat-cell-val[contenteditable="true"]:hover { background: rgba(255,255,255,0.5); }
+  .feat-cell-val[contenteditable="true"]:focus { background: var(--surface); box-shadow: 0 0 0 2px rgba(184,124,74,0.15); }
   .feat-wide { grid-column: 1 / -1; }
   .feat-plan { background: var(--green-light); border-color: #d4dfcd; }
   .feat-plan .feat-cell-label { color: var(--green); }
@@ -346,10 +367,10 @@
       <div class="phase-body" id="body-trans"><div class="ph">Transcription will appear here as you speak</div></div>
     </div>
 
-    <!-- 2. Refinement -->
-    <div class="phase-card" id="card-refine">
+    <!-- 2. Refinement (hidden entirely in Doctor mode — see updateStepNumbers()) -->
+    <div class="phase-card hidden" id="card-refine">
       <div class="phase-hd">
-        <div class="step-num">2</div>
+        <div class="step-num" id="num-refine">2</div>
         <div class="phase-title">Refinement</div>
         <span class="phase-badge b-idle" id="badge-refine">Waiting</span>
         <span class="phase-time" id="time-refine"></span>
@@ -360,7 +381,7 @@
     <!-- 3. Translation (hidden for English) -->
     <div class="phase-card hidden" id="card-translate">
       <div class="phase-hd">
-        <div class="step-num">3</div>
+        <div class="step-num" id="num-translate">3</div>
         <div class="phase-title">Translation <span class="phase-subtitle">(Arabic → English)</span></div>
         <span class="phase-badge b-idle" id="badge-translate">Waiting</span>
         <span class="phase-time" id="time-translate"></span>
@@ -411,6 +432,9 @@ let interimText      = '';     // provisional text not yet committed (Munsit onl
 let transcriptReady  = false;  // true after WS "done" received
 let transcriptStartMs = 0;     // for elapsed timer on transcription card
 
+// Editable ICD-10 code list (kept in sync with the DOM pills)
+let currentIcdCodes  = [];
+
 const $        = id => document.getElementById(id);
 const btnRecord  = $('btn-record');
 const btnSubmit  = $('btn-submit');
@@ -441,13 +465,27 @@ function setBody(id, html) { const el = $('body-' + id); if (el) el.innerHTML = 
 function showCard(id) { $('card-' + id)?.classList.remove('hidden'); }
 function hideCard(id) { $('card-' + id)?.classList.add('hidden'); }
 
-/* ── Language selector ── */
-$('sel-lang').addEventListener('change', e => {
-  const ar = e.target.value === 'ar';
-  ar ? showCard('translate') : hideCard('translate');
-  $('num-extract').textContent   = ar ? '4' : '3';
-  $('num-questions').textContent = ar ? '5' : '4';
-});
+/* ── Language / Mode selectors ──
+   Refinement is skipped entirely in Doctor mode (see app.py), so its card is
+   hidden from the frontend altogether when Doctor mode is selected — it never
+   appears, not even as a "skipped" placeholder. Step numbers on the remaining
+   cards are recalculated to stay contiguous (1, 2, 3, ...) regardless of which
+   cards are visible. */
+function updateStepNumbers() {
+  const isDoctor = $('sel-mode').value === 'doctor';
+  const isAr     = $('sel-lang').value === 'ar';
+
+  isDoctor ? hideCard('refine') : showCard('refine');
+  isAr     ? showCard('translate') : hideCard('translate');
+
+  let n = 2; // step 1 is always Transcription
+  if (!isDoctor) { $('num-refine').textContent = n; n++; }
+  if (isAr)      { $('num-translate').textContent = n; n++; }
+  $('num-extract').textContent   = n; n++;
+  $('num-questions').textContent = n;
+}
+$('sel-lang').addEventListener('change', updateStepNumbers);
+$('sel-mode').addEventListener('change', updateStepNumbers);
 
 /* ── Reset ── */
 function resetAll() {
@@ -460,6 +498,7 @@ function resetAll() {
   recording       = false;
   timerSec        = 0;
   clearInterval(timerInterval);
+  currentIcdCodes = [];
 
   btnSubmit.disabled  = true;
   btnRecord.disabled  = false;
@@ -475,10 +514,11 @@ function resetAll() {
     const t = $('time-' + id); if (t) t.textContent = '';
   });
   setBody('trans',    '<div class="ph">Transcription will appear here as you speak</div>');
-  setBody('refine',   '<div class="ph">Refined transcript will appear here</div>');
+  if ($('sel-mode').value !== 'doctor') setBody('refine', '<div class="ph">Refined transcript will appear here</div>');
   setBody('translate','<div class="ph">English translation will appear here</div>');
   setBody('extract',  '<div class="ph">Medical features will appear here</div>');
   setBody('questions','<div class="ph">Generated questions will appear here</div>');
+  updateStepNumbers();
 }
 btnReset.addEventListener('click', resetAll);
 
@@ -489,6 +529,8 @@ btnReset.addEventListener('click', resetAll);
 ───────────────────────────────────────────────────────────────────────────── */
 
 // Render committed text + a dimmed provisional tail (Munsit interim, if any).
+// Used only WHILE recording — once stopped, the transcript switches to an
+// editable contenteditable block (see ws.onmessage 'done' handler below).
 function renderLiveTranscript() {
   let el = document.getElementById('tl');
   if (!el) {
@@ -561,7 +603,12 @@ async function startRecording() {
       badge.textContent = 'Done'; badge.className = 'phase-badge b-done';
       setTime('trans', elapsedSec);
       interimText = ''; // drop any stray unfinished preview
-      setBody('trans', '<div class="transcript">' + esc(liveTranscript) + '</div>');
+
+      // Transcript becomes editable — the user can correct STT mistakes before
+      // the transcript is sent to the analysis pipeline.
+      setBody('trans',
+        `<div class="transcript" id="tl-final" contenteditable="true" spellcheck="false">${esc(liveTranscript)}</div>
+         <div class="edit-hint">Click the text above to correct it before analysing</div>`);
       transcriptReady = true;
       btnSubmit.disabled = false;
       recLabel.textContent = 'Transcript ready — click Analyse';
@@ -684,7 +731,7 @@ btnRecord.addEventListener('click', async () => {
       setCard(id, 'idle');
       const t = $('time-' + id); if (t) t.textContent = '';
     });
-    setBody('refine',    '<div class="ph">Refined transcript will appear here</div>');
+    if ($('sel-mode').value !== 'doctor') setBody('refine', '<div class="ph">Refined transcript will appear here</div>');
     setBody('translate', '<div class="ph">English translation will appear here</div>');
     setBody('extract',   '<div class="ph">Medical features will appear here</div>');
     setBody('questions', '<div class="ph">Generated questions will appear here</div>');
@@ -700,23 +747,28 @@ btnRecord.addEventListener('click', async () => {
 btnSubmit.addEventListener('click', async () => {
   if (!transcriptReady || !liveTranscript) return;
 
+  // Pick up any manual corrections the user made to the transcript before submitting.
+  const finalEl = document.getElementById('tl-final');
+  if (finalEl) liveTranscript = finalEl.innerText.trim();
+  if (!liveTranscript) return;
+
   const lang     = $('sel-lang').value;
   const mode     = $('sel-mode').value;
   const isAr  = lang === 'ar';
+  const isDoctorMode = mode === 'doctor';
 
   btnSubmit.disabled = true;
   btnRecord.disabled = false;
   btnRecord.classList.remove('processing');
 
-  // Setup card states
-  if (isAr) { showCard('translate'); $('num-extract').textContent = '4'; $('num-questions').textContent = '5'; }
-  else       { hideCard('translate'); $('num-extract').textContent = '3'; $('num-questions').textContent = '4'; }
+  // Setup card states — refine card is hidden entirely in Doctor mode, never shown
+  updateStepNumbers();
 
   ['refine','translate','extract','questions'].forEach(id => {
     setCard(id, 'idle');
     const t = $('time-' + id); if (t) t.textContent = '';
   });
-  setBody('refine',    '<div class="ph">Waiting for refinement…</div>');
+  if (!isDoctorMode) setBody('refine', '<div class="ph">Waiting for refinement…</div>');
   setBody('translate', '<div class="ph">Waiting for translation…</div>');
   setBody('extract',   '<div class="ph">Waiting for extraction…</div>');
   setBody('questions', '<div class="ph">Waiting for questions…</div>');
@@ -768,7 +820,15 @@ btnSubmit.addEventListener('click', async () => {
   }
 
   function handleAnalyzeEvent(ev, d) {
-    if (ev === 'refinement_delta') {
+    if (ev === 'refinement_skipped') {
+      // Doctor mode: refinement step is bypassed server-side; transcript passes through as-is.
+      // The Refinement card stays hidden — nothing rendered into it.
+      refineBuf = d.refined_text || transBuf;
+      setBody('trans', `<div class="transcript">${esc(transBuf)}</div>`);
+      if (isAr) { setCard('translate','active'); setBody('translate','<div class="transcript c-blink" id="ttl"></div>'); }
+      else       { setCard('extract','active');  setBody('extract','<div class="ph">Extracting medical features…</div>'); }
+
+    } else if (ev === 'refinement_delta') {
       if (!refineBuf) { setCard('refine','active'); setBody('refine','<div class="transcript c-blink" id="rl"></div>'); }
       refineBuf += d.delta || '';
       const el = document.getElementById('rl'); if (el) el.textContent = refineBuf;
@@ -836,6 +896,7 @@ function extractQList(d) {
   return [];
 }
 
+/* ── Feature extraction: editable text fields + editable ICD-10 pill list ── */
 function renderFeatures(raw) {
   let obj = raw;
   if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch(_) { setBody('extract','<div class="ph">Could not parse features</div>'); return; } }
@@ -849,32 +910,87 @@ function renderFeatures(raw) {
   const imgs = src.imaging_results || '';
   const plan = src.plan || '';
   const fu   = src.follow_up || '';
+
   let html = '<div class="feat-layout">';
+
   if (cc || ass) {
     html += '<div class="feat-highlights">';
-    if (cc)  html += `<div class="feat-highlight complaint"><div class="feat-highlight-label">Chief Complaint</div><div class="feat-highlight-val">${esc(cc)}</div></div>`;
-    if (ass) html += `<div class="feat-highlight assessment"><div class="feat-highlight-label">Assessment</div><div class="feat-highlight-val">${esc(ass)}</div></div>`;
+    if (cc)  html += `<div class="feat-highlight complaint"><div class="feat-highlight-label">Chief Complaint</div><div class="feat-highlight-val" contenteditable="true" spellcheck="false">${esc(cc)}</div></div>`;
+    if (ass) html += `<div class="feat-highlight assessment"><div class="feat-highlight-label">Assessment</div><div class="feat-highlight-val" contenteditable="true" spellcheck="false">${esc(ass)}</div></div>`;
     html += '</div>';
   }
-  if (icds.length) {
-    html += '<div class="icd-row"><span class="icd-label">ICD-10</span>';
-    icds.forEach(c => { html += `<span class="icd-pill"><span class="icd-dot"></span>${esc(c)}</span>`; });
-    html += '</div>';
-  }
+
+  // ICD-10 row is always shown (even with 0 codes) so the doctor can add one manually.
+  html += `<div class="icd-row" id="icd-row">
+    <span class="icd-label">ICD-10</span>
+    <span id="icd-pills"></span>
+    <span class="icd-add">
+      <input type="text" id="icd-add-input" placeholder="Add code" />
+      <button type="button" id="icd-add-btn">+ Add</button>
+    </span>
+  </div>`;
+
   const cells = [
     { label:'History of illness', icon:'📋', val:hist },
     { label:'Current medication',  icon:'💊', val:meds },
     { label:'Imaging results',     icon:'🩻', val:imgs },
   ].filter(c => c.val);
-  if (cells.length) {
+  if (cells.length || plan || fu) {
     html += '<div class="feat-grid">';
-    cells.forEach(c => { html += `<div class="feat-cell"><div class="feat-cell-label"><span class="feat-cell-icon">${c.icon}</span>${esc(c.label)}</div><div class="feat-cell-val">${esc(c.val)}</div></div>`; });
-    if (plan) html += `<div class="feat-cell feat-wide feat-plan"><div class="feat-cell-label"><span class="feat-cell-icon">📝</span>Plan</div><div class="feat-cell-val">${esc(plan)}</div></div>`;
-    if (fu)   html += `<div class="feat-cell feat-wide feat-followup"><div class="feat-cell-label"><span class="feat-cell-icon">📅</span>Follow-up</div><div class="feat-cell-val">${esc(fu)}</div></div>`;
+    cells.forEach(c => { html += `<div class="feat-cell"><div class="feat-cell-label"><span class="feat-cell-icon">${c.icon}</span>${esc(c.label)}</div><div class="feat-cell-val" contenteditable="true" spellcheck="false">${esc(c.val)}</div></div>`; });
+    if (plan) html += `<div class="feat-cell feat-wide feat-plan"><div class="feat-cell-label"><span class="feat-cell-icon">📝</span>Plan</div><div class="feat-cell-val" contenteditable="true" spellcheck="false">${esc(plan)}</div></div>`;
+    if (fu)   html += `<div class="feat-cell feat-wide feat-followup"><div class="feat-cell-label"><span class="feat-cell-icon">📅</span>Follow-up</div><div class="feat-cell-val" contenteditable="true" spellcheck="false">${esc(fu)}</div></div>`;
     html += '</div>';
   }
   html += '</div>';
   setBody('extract', html || '<div class="ph">No features extracted</div>');
+
+  renderIcdPills(icds);
+  document.getElementById('icd-add-btn')?.addEventListener('click', addIcdCode);
+  document.getElementById('icd-add-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addIcdCode(); }
+  });
+}
+
+function renderIcdPills(codes) {
+  currentIcdCodes = codes.slice();
+  const container = document.getElementById('icd-pills');
+  if (!container) return;
+  if (currentIcdCodes.length === 0) {
+    container.innerHTML = '<span class="ph" style="font-size:12px;">No codes — add one</span>';
+    return;
+  }
+  container.innerHTML = currentIcdCodes.map((c, i) =>
+    `<span class="icd-pill" data-idx="${i}">
+       <span class="icd-dot"></span>
+       <span class="icd-pill-text" contenteditable="true" spellcheck="false">${esc(c)}</span>
+       <span class="icd-pill-remove" title="Remove code">×</span>
+     </span>`
+  ).join('');
+  container.querySelectorAll('.icd-pill-text').forEach((el, i) => {
+    el.addEventListener('blur', () => {
+      const val = el.textContent.trim();
+      if (val) { currentIcdCodes[i] = val; }
+      else      { currentIcdCodes.splice(i, 1); renderIcdPills(currentIcdCodes); }
+    });
+  });
+  container.querySelectorAll('.icd-pill-remove').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const pill = e.target.closest('.icd-pill');
+      currentIcdCodes.splice(Number(pill.dataset.idx), 1);
+      renderIcdPills(currentIcdCodes);
+    });
+  });
+}
+
+function addIcdCode() {
+  const input = document.getElementById('icd-add-input');
+  const val = (input?.value || '').trim();
+  if (!val) return;
+  currentIcdCodes.push(val);
+  renderIcdPills(currentIcdCodes);
+  input.value = '';
+  input.focus();
 }
 
 function renderQuestions(list) {
@@ -897,6 +1013,9 @@ function renderQuestions(list) {
   if (covered.length) html += `<div class="q-section-hd"><span>Already covered</span><div class="q-section-line"></div></div>` + renderGroup(covered, 'skip');
   setBody('questions', html);
 }
+
+/* ── Initial state — default mode is Doctor, so Refinement is hidden from the start ── */
+updateStepNumbers();
 </script>
 </body>
 </html>

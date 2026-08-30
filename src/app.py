@@ -234,13 +234,14 @@ async def ws_transcribe(websocket: WebSocket):
 @router.post("/analyze", summary="Run refine → translate → extract → questions on a provided transcript")
 async def analyze_transcript(
     request:  Request,
-    text:     str      = Form(...,              description="Raw transcript from live transcription"),
+    text:     str      = Form(...,              description="Raw transcript from live transcription (may include user edits)"),
     language: Language = Form(Language.english, description="Audio language"),
     mode:     Mode     = Form(Mode.doctor,      description="Doctor or Conversation mode"),
 ):
     pipeline_start  = time.perf_counter()
     is_arabic       = language == Language.arabic
     is_conversation = mode == Mode.conversation
+    skip_refinement = mode == Mode.doctor  # Doctor mode: transcript goes straight through, no refinement step
 
     async def event_stream():
         # Accumulated outputs — populated as each step completes
@@ -254,6 +255,7 @@ async def analyze_transcript(
             "total_sec":          None,
             "transcript":         text,
             "refined_text":       None,
+            "refinement_skipped": skip_refinement,
             "translated_text":    None,
             "extracted_features": None,
             "questions":          None,
@@ -262,27 +264,37 @@ async def analyze_transcript(
         try:
             # ── 1. Refine ─────────────────────────────────────────────────
             t0 = time.perf_counter()
-            refined_parts: list[str] = []
-            try:
-                refine_stream = (
-                    LLMService.refine_ar_transcription_stream(text, Config.OPENROUTER_API_KEY, is_conversation=is_conversation)
-                    if is_arabic else
-                    LLMService.refine_en_transcription_stream(text, Config.OPENROUTER_API_KEY, is_conversation=is_conversation)
-                )
-                async for delta in refine_stream:
-                    refined_parts.append(delta)
-                    yield {"event": "refinement_delta", "data": json.dumps({"delta": delta})}
-            except Exception as exc:
-                log["status"] = "error"
-                yield {"event": "error", "data": json.dumps({"step": "refinement", "detail": str(exc)})}
-                return
 
-            refined_text      = "".join(refined_parts)
-            log["refined_text"] = refined_text
-            yield {"event": "refinement_done", "data": json.dumps({
-                "refined_text":   refined_text,
-                "refinement_sec": round(time.perf_counter() - t0, 3),
-            })}
+            if skip_refinement:
+                # Doctor mode: skip the refinement LLM call entirely and pass the
+                # (possibly user-edited) transcript straight through to translate/extract.
+                refined_text = text
+                log["refined_text"] = refined_text
+                yield {"event": "refinement_skipped", "data": json.dumps({
+                    "refined_text": refined_text,
+                })}
+            else:
+                refined_parts: list[str] = []
+                try:
+                    refine_stream = (
+                        LLMService.refine_ar_transcription_stream(text, Config.OPENROUTER_API_KEY, is_conversation=is_conversation)
+                        if is_arabic else
+                        LLMService.refine_en_transcription_stream(text, Config.OPENROUTER_API_KEY, is_conversation=is_conversation)
+                    )
+                    async for delta in refine_stream:
+                        refined_parts.append(delta)
+                        yield {"event": "refinement_delta", "data": json.dumps({"delta": delta})}
+                except Exception as exc:
+                    log["status"] = "error"
+                    yield {"event": "error", "data": json.dumps({"step": "refinement", "detail": str(exc)})}
+                    return
+
+                refined_text      = "".join(refined_parts)
+                log["refined_text"] = refined_text
+                yield {"event": "refinement_done", "data": json.dumps({
+                    "refined_text":   refined_text,
+                    "refinement_sec": round(time.perf_counter() - t0, 3),
+                })}
 
             # ── 2. Translate (Arabic only) ────────────────────────────────
             if is_arabic:
