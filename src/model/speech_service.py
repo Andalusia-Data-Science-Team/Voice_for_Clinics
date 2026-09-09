@@ -7,6 +7,7 @@ import time
 import urllib.parse
 from typing import Optional, Tuple, Dict, Any, AsyncIterator
 
+import httpx
 import websockets
 from mistralai import Mistral
 from mistralai.models import (
@@ -28,6 +29,15 @@ MUNSIT_WS_URL = "wss://api.munsit.com/api/v1/listen"
 MUNSIT_MODEL = "munsit"          # or "munsit-en-ar" for code-switching sessions
 MUNSIT_IDLE_TIMEOUT_S = 12       # server closes at 12s with no audio/KeepAlive
 MUNSIT_KEEPALIVE_INTERVAL_S = 8  # send KeepAlive comfortably before the 12s cutoff
+
+# ---------------------------------------------------------------------------
+# Munsit Text-to-Speech — session recording-consent disclaimer
+# ---------------------------------------------------------------------------
+MUNSIT_TTS_API_BASE   = "https://api.munsit.com/api/v1"
+MUNSIT_TTS_MODEL      = "faseeh-v1-preview"   # Faseeh — Munsit's TTS model
+DISCLAIMER_VOICE_NAME = "Lina"
+DISCLAIMER_DIALECT    = "fusha"               # Modern Standard Arabic
+DISCLAIMER_TEXT       = "نود إعلامكم بأن هذه الجلسة يتم تسجيلها واستخدامها لأغراض التوثيق الطبي"
 
 _mistral_client: Optional[Mistral] = None
 
@@ -240,6 +250,11 @@ async def _transcribe_munsit_yield(
 
     speech_final=False on a "final" event means a forced 60s split mid-speech —
     the text is stable but the turn is still open (per Munsit docs).
+
+    Note: the sender's KeepAlive loop below runs on a fixed 8s cadence regardless
+    of whether audio chunks are arriving — including during a client-side pause,
+    where no audio is sent at all — so the socket survives an arbitrarily long
+    pause without hitting Munsit's 12s idle timeout.
     """
     url = _build_munsit_url(api_key, hotwords=hotwords, model=model)
 
@@ -249,9 +264,9 @@ async def _transcribe_munsit_yield(
             async def send_audio():
                 # Runs on a fixed cadence regardless of whether audio chunks are
                 # arriving, so it still fires during real gaps (backgrounded tab,
-                # suspended AudioContext, network stalls) — not just when a new
-                # chunk happens to show up. Munsit closes the socket with 1011
-                # after 12s of neither audio nor KeepAlive.
+                # suspended AudioContext, network stalls, a user-initiated pause)
+                # — not just when a new chunk happens to show up. Munsit closes
+                # the socket with 1011 after 12s of neither audio nor KeepAlive.
                 stop_keepalive = asyncio.Event()
 
                 async def keepalive_loop():
@@ -353,6 +368,93 @@ async def _transcribe_munsit_yield(
 
 
 # ---------------------------------------------------------------------------
+# Munsit Text-to-Speech — resolve "Lina" (fusha) and synthesize the disclaimer
+# ---------------------------------------------------------------------------
+
+# voice_id is an opaque string per Munsit's docs (only a few are human-readable,
+# and none are guaranteed enumerable) — it must be resolved by name via
+# GET /voices rather than hardcoded or pattern-matched. Cached in-process since
+# the voice catalogue changes rarely.
+_voice_id_cache: Dict[str, str] = {}
+_disclaimer_audio_cache: Optional[bytes] = None
+
+
+async def _resolve_voice_id(api_key: str, voice_name: str, dialect: Optional[str] = None) -> str:
+    cache_key = f"{voice_name.lower()}::{dialect or ''}"
+    if cache_key in _voice_id_cache:
+        return _voice_id_cache[cache_key]
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(f"{MUNSIT_TTS_API_BASE}/voices", headers={"x-api-key": api_key})
+        resp.raise_for_status()
+        voices = resp.json()
+
+    name_matches = [v for v in voices if (v.get("name") or "").strip().lower() == voice_name.lower()]
+    if not name_matches:
+        raise TranscriptionError(f"Munsit voice '{voice_name}' not found in voice library.")
+
+    match = None
+    if dialect:
+        for v in name_matches:
+            if dialect in (v.get("dialect") or []):
+                match = v
+                break
+    if match is None:
+        match = name_matches[0]  # fall back to the first name match
+
+    voice_id = match["voice_id"]
+    _voice_id_cache[cache_key] = voice_id
+    logger.info("[MunsitTTS] Resolved voice '%s' (dialect=%s) -> %s", voice_name, dialect, voice_id)
+    return voice_id
+
+
+async def _synthesize_wav(
+    api_key: str, text: str, voice_id: str, dialect: Optional[str] = None, speed: float = 1.0
+) -> bytes:
+    payload: Dict[str, Any] = {
+        "voice_id": voice_id,
+        "text": text,
+        "stability": 0.5,
+        "speed": speed,  # 0.7-1.2 per Munsit docs; 1.2 is the fastest allowed
+        "streaming": False,
+    }
+    if dialect:
+        payload["dialect"] = dialect
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.post(
+            f"{MUNSIT_TTS_API_BASE}/text-to-speech/{MUNSIT_TTS_MODEL}",
+            headers={"x-api-key": api_key, "Content-Type": "application/json"},
+            json=payload,
+        )
+        if resp.status_code != 200:
+            raise TranscriptionError(f"Munsit TTS failed ({resp.status_code}): {resp.text}")
+        return resp.content
+
+
+async def get_recording_disclaimer_audio(api_key: str) -> bytes:
+    """
+    WAV bytes for the fixed "this session is being recorded" consent line,
+    spoken by Lina in Fusha (MSA). The text is constant, so the rendered audio
+    is cached in-process after the first successful synthesis.
+    """
+    global _disclaimer_audio_cache
+    if _disclaimer_audio_cache is not None:
+        return _disclaimer_audio_cache
+    if not api_key:
+        raise ValueError("Missing Munsit API key.")
+
+    voice_id = await _resolve_voice_id(api_key, DISCLAIMER_VOICE_NAME, dialect=DISCLAIMER_DIALECT)
+    # speed=1.2 is the fastest Munsit allows — shortens the clip itself. The
+    # frontend additionally starts recording ~1s after playback begins rather
+    # than waiting for the clip to finish, so total perceived delay stays low
+    # regardless of clip length.
+    audio_bytes = await _synthesize_wav(api_key, DISCLAIMER_TEXT, voice_id, dialect=DISCLAIMER_DIALECT, speed=1.2)
+    _disclaimer_audio_cache = audio_bytes
+    return audio_bytes
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -363,10 +465,11 @@ class SpeechService:
       Arabic  → Munsit real-time transcription (dialect-aware, incl. Khaliji/Gulf)
 
     Entry points:
-      transcribe_audio()            – batch, from file  (Voxtral)
-      transcribe_audio_stream()     – streaming deltas, from file  (Voxtral, post-recording)
-      transcribe_live_stream()      – streaming deltas, from live WebSocket bytes  (Voxtral, English mic)
-      transcribe_live_stream_ar()   – streaming events, from live WebSocket bytes  (Munsit, Arabic mic)
+      transcribe_audio()               – batch, from file  (Voxtral)
+      transcribe_audio_stream()        – streaming deltas, from file  (Voxtral, post-recording)
+      transcribe_live_stream()         – streaming deltas, from live WebSocket bytes  (Voxtral, English mic)
+      transcribe_live_stream_ar()      – streaming events, from live WebSocket bytes  (Munsit, Arabic mic)
+      get_recording_disclaimer_audio() – WAV bytes of the Munsit-TTS recording-consent line (Lina, Fusha)
     """
 
     # ------------------------------------------------------------------
@@ -430,6 +533,13 @@ class SpeechService:
         Accept a live async iterator of float32 PCM bytes (from browser AudioContext),
         convert via ffmpeg (resampling from input_sample_rate → 16kHz), stream to
         Voxtral, yield text deltas in real time.
+
+        Note: unlike the Munsit path, this stream has no application-level
+        KeepAlive — a client-side pause simply means no new chunks arrive from
+        raw_pcm_iter for a while. This has not been an issue in testing, but if
+        Mistral's realtime session ever enforces its own server-side idle
+        timeout, a long pause in English mode could close the socket; watch for
+        that if pauses regularly exceed ~30-60s in English sessions.
         """
         audio_stream = _ffmpeg_stdin_stream(
             raw_pcm_iter,
@@ -467,6 +577,14 @@ class SpeechService:
         model = "munsit-en-ar" if code_switching else MUNSIT_MODEL
         async for event in _transcribe_munsit_yield(audio_stream, api_key, hotwords=hotwords, model=model):
             yield event
+
+    # ------------------------------------------------------------------
+    # Munsit TTS — recording-consent disclaimer (Lina, Fusha)
+    # ------------------------------------------------------------------
+    @staticmethod
+    async def get_recording_disclaimer_audio(api_key: str) -> bytes:
+        """WAV bytes of the recording-consent line, played once at session start."""
+        return await get_recording_disclaimer_audio(api_key)
 
     @staticmethod
     def transcribe_audio_sync(audio_file_path: str, api_key: str, **kwargs):

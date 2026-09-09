@@ -11,7 +11,7 @@ from sse_starlette.sse import EventSourceResponse
 from fastapi import FastAPI, APIRouter, Form, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from core.config import Config
 from model.speech_service import SpeechService
@@ -83,6 +83,36 @@ class Mode(str, Enum):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# GET /audio/tts-disclaimer — Munsit TTS recording-consent line (Lina, Fusha)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get(
+    "/audio/tts-disclaimer",
+    summary="Recording-consent disclaimer audio, spoken by Lina (Fusha/MSA) via Munsit TTS",
+)
+async def tts_disclaimer():
+    """
+    Returns a WAV file of the fixed Arabic recording-consent line, synthesized
+    via Munsit TTS (voice: Lina, dialect: fusha, model: faseeh-v1-preview).
+    The text never changes, so SpeechService caches the rendered audio
+    in-process after the first successful call.
+
+    Played once, client-side, at the very start of a new recording session —
+    never again on pause/resume within that same session.
+    """
+    try:
+        audio_bytes = await SpeechService.get_recording_disclaimer_audio(Config.MUNSIT_API_KEY)
+        return Response(content=audio_bytes, media_type="audio/wav")
+    except Exception as e:
+        logger.error("[TTS] Disclaimer synthesis failed: %s", e)
+        return Response(
+            content=json.dumps({"detail": str(e)}),
+            media_type="application/json",
+            status_code=502,
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # WebSocket — live real-time transcription
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -97,6 +127,10 @@ async def ws_transcribe(websocket: WebSocket):
       1. First text message: JSON  {"sampleRate": <int>, "language": "en"|"ar", "hotwords": "..."}
          "language" defaults to "en" if omitted, for backward compatibility.
       2. Binary messages: float32 little-endian PCM mono chunks.
+         The client may simply stop sending these for a while (pause) without
+         closing the socket — Munsit's server-side KeepAlive loop (see
+         speech_service.py) keeps the session alive through the gap, and
+         resuming binary messages picks the same transcript back up.
       3. Final text message: JSON  {"cmd": "done"}
 
     Protocol (server → client):
@@ -109,19 +143,19 @@ async def ws_transcribe(websocket: WebSocket):
     logger.info("[WS] Client connected — %s", websocket.client.host)
 
     input_sample_rate = 16000
-    language = "en"
+    language = "ar"
     hotwords = None
     try:
         init_text = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
         init_data = json.loads(init_text)
         input_sample_rate = int(init_data.get("sampleRate", 16000))
-        language = str(init_data.get("language", "en")).lower()
+        language = str(init_data.get("language", "ar")).lower()
         hotwords = init_data.get("hotwords") or None
         logger.info("[WS] Browser sample rate: %d Hz, language: %s", input_sample_rate, language)
     except asyncio.TimeoutError:
-        logger.warning("[WS] No init message within 5 s, assuming en/16000 Hz")
+        logger.warning("[WS] No init message within 5 s, assuming ar/16000 Hz")
     except Exception as e:
-        logger.warning("[WS] Bad init message: %s — assuming en/16000 Hz", e)
+        logger.warning("[WS] Bad init message: %s — assuming ar/16000 Hz", e)
 
     pcm_queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=200)
 

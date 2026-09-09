@@ -89,8 +89,10 @@
 
   .btn-record { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--border-mid); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; outline: none; box-shadow: var(--shadow-sm); }
   .btn-record:hover { border-color: var(--accent-2); box-shadow: var(--shadow-md); transform: scale(1.04); }
+  .btn-record:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: var(--shadow-sm); }
   .btn-record.recording { border-color: var(--red); box-shadow: 0 0 0 0 rgba(177,98,75,0.3); animation: rec-pulse 1.6s infinite; }
   @keyframes rec-pulse { 0%{box-shadow:0 0 0 0 rgba(177,98,75,0.3)} 70%{box-shadow:0 0 0 12px rgba(177,98,75,0)} 100%{box-shadow:0 0 0 0 rgba(177,98,75,0)} }
+  .btn-record.recording.is-paused { animation: none; box-shadow: var(--shadow-sm); }
   .btn-record.processing { border-color: var(--amber); opacity: 0.6; cursor: not-allowed; animation: none; }
   .mic-icon { width: 26px; height: 26px; color: var(--text-3); transition: color 0.2s; }
   .btn-record.recording .mic-icon { color: var(--red); }
@@ -125,6 +127,27 @@
   @keyframes livepulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
   .rec-label { font-size: 12px; color: var(--text-3); text-align: center; }
+
+  /* Pause / Resume pill — only shown once a recording session is active */
+  .btn-pause {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 15px;
+    border: 1px solid var(--border-mid);
+    border-radius: 99px;
+    background: var(--surface);
+    color: var(--text-2);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .btn-pause.show { display: inline-flex; }
+  .btn-pause:hover { background: var(--surface-3); }
+  .btn-pause.is-paused { border-color: var(--amber); color: var(--amber); background: var(--amber-light); }
+  .btn-pause .p-icon { font-size: 11px; line-height: 1; }
 
   .btn-primary { width: 100%; font-family: var(--sans); font-size: 13px; font-weight: 500; padding: 9px; border: none; border-radius: var(--r-md); background: linear-gradient(135deg, #7a4b27, #a06e40); color: #fff; cursor: pointer; transition: opacity 0.15s, box-shadow 0.15s; box-shadow: 0 2px 8px rgba(122,75,39,0.25); letter-spacing: 0.01em; }
   .btn-primary:hover:not(:disabled) { opacity: 0.9; box-shadow: 0 4px 12px rgba(122,75,39,0.35); }
@@ -185,6 +208,8 @@
   .ph { font-size: 13px; color: var(--text-3); font-style: italic; }
   /* Provisional (interim) text — Munsit only, may still be revised */
   .interim { color: var(--text-3); opacity: 0.75; }
+  /* Marks where a pause/resume happened, inline in the live transcript */
+  .pause-mark { color: var(--text-3); font-size: 11px; font-style: italic; opacity: 0.7; }
 
   /* Editable transcript / feature fields */
   [contenteditable="true"] { outline: none; }
@@ -298,8 +323,8 @@
       <div class="field">
         <label>Language</label>
         <select id="sel-lang">
-          <option value="en" selected>English</option>
-          <option value="ar">Arabic (العربية)</option>
+          <option value="en">English</option>
+          <option value="ar" selected>Arabic (العربية)</option>
         </select>
       </div>
       <div class="field">
@@ -329,6 +354,11 @@
           </svg>
           <!-- Stop square (shown while recording) -->
           <div class="stop-icon"></div>
+        </button>
+
+        <!-- Pause / Resume — only visible once a recording session is active -->
+        <button class="btn-pause" id="btn-pause" type="button">
+          <span class="p-icon" id="pause-icon">⏸</span><span id="pause-label">Pause</span>
         </button>
 
         <div class="rec-timer" id="rec-timer">—</div>
@@ -418,8 +448,15 @@
    State
 ───────────────────────────────────────────────────────────────────────────── */
 let recording    = false;
+let paused       = false;   // true while mic capture is paused but the WS session stays open
 let timerSec     = 0;
 let timerInterval = null;
+
+// Session-level "have we already played the recording-consent line" gate —
+// true from the moment it starts playing until the session fully stops
+// (stopRecording / resetAll). Never replayed across a pause/resume.
+let announcementPlayed  = false;
+let announcementPlaying = false;
 
 // Live transcription
 let ws               = null;   // WebSocket
@@ -437,6 +474,7 @@ let currentIcdCodes  = [];
 
 const $        = id => document.getElementById(id);
 const btnRecord  = $('btn-record');
+const btnPause   = $('btn-pause');
 const btnSubmit  = $('btn-submit');
 const btnReset   = $('btn-reset');
 const recTimer   = $('rec-timer');
@@ -496,13 +534,18 @@ function resetAll() {
   interimText     = '';
   transcriptReady = false;
   recording       = false;
+  paused          = false;
+  announcementPlayed  = false;
+  announcementPlaying = false;
   timerSec        = 0;
   clearInterval(timerInterval);
   currentIcdCodes = [];
 
   btnSubmit.disabled  = true;
   btnRecord.disabled  = false;
-  btnRecord.classList.remove('recording', 'processing');
+  btnRecord.classList.remove('recording', 'processing', 'is-paused');
+  btnPause.classList.remove('show', 'is-paused');
+  setPauseButtonLabel(false);
   recTimer.textContent = '—';
   recTimer.className   = 'rec-timer';
   recLabel.textContent = 'Click to record';
@@ -521,6 +564,45 @@ function resetAll() {
   updateStepNumbers();
 }
 btnReset.addEventListener('click', resetAll);
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Recording-consent disclaimer — Munsit TTS (Lina, Fusha)
+   Played once at the start of a session, never replayed on pause/resume.
+
+   Fetched ahead of time (prefetchDisclaimer, kicked off on page load) so
+   there's no network latency when Start is pressed. Playback then starts
+   instantly and recording begins ~1s later, in parallel with the message
+   still finishing — total delay before the mic goes live stays ~1s
+   regardless of how long the clip itself runs.
+───────────────────────────────────────────────────────────────────────────── */
+const DISCLAIMER_START_DELAY_MS = 1000;
+
+let disclaimerBlobUrl     = null;
+let disclaimerReadyPromise = null;
+
+function prefetchDisclaimer() {
+  if (disclaimerReadyPromise) return disclaimerReadyPromise;
+  disclaimerReadyPromise = fetch(API_BASE + '/audio/tts-disclaimer')
+    .then(resp => { if (!resp.ok) throw new Error('HTTP ' + resp.status); return resp.blob(); })
+    .then(blob => { disclaimerBlobUrl = URL.createObjectURL(blob); return disclaimerBlobUrl; })
+    .catch(e => { console.warn('[Disclaimer] Prefetch failed:', e); disclaimerReadyPromise = null; throw e; });
+  return disclaimerReadyPromise;
+}
+prefetchDisclaimer(); // warm the cache as soon as the page loads
+
+// Starts the consent line playing (fire-and-forget) and resolves after a
+// fixed short delay — NOT when the audio finishes. Recording starts right
+// after this resolves, overlapping the tail of the message.
+async function startSessionDisclaimer() {
+  try {
+    const url = await prefetchDisclaimer();
+    const audio = new Audio(url);
+    audio.play().catch(e => console.warn('[Disclaimer] Playback failed:', e));
+  } catch (e) {
+    console.warn('[Disclaimer] Could not play consent notice, continuing without it:', e);
+  }
+  await new Promise(r => setTimeout(r, DISCLAIMER_START_DELAY_MS));
+}
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Live transcription via WebSocket
@@ -543,10 +625,16 @@ function renderLiveTranscript() {
   el.innerHTML = committedHtml + interimHtml;
 }
 
+function setPauseButtonLabel(isPaused) {
+  $('pause-icon').textContent  = isPaused ? '▶' : '⏸';
+  $('pause-label').textContent = isPaused ? 'Resume' : 'Pause';
+}
+
 async function startRecording() {
   liveTranscript  = '';
   interimText     = '';
   transcriptReady = false;
+  paused          = false;
 
   const lang = $('sel-lang').value; // 'en' | 'ar' — decides which STT engine the server uses
 
@@ -654,7 +742,10 @@ async function startRecording() {
   sourceNode = audioContext.createMediaStreamSource(mediaStream);
   scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
   scriptProcessor.onaudioprocess = event => {
-    if (ws && ws.readyState === WebSocket.OPEN) {
+    // While paused we keep the mic and WS alive but simply stop sending frames —
+    // Munsit's server-side KeepAlive loop keeps the session from timing out
+    // during the gap, so resuming continues the same transcript in place.
+    if (ws && ws.readyState === WebSocket.OPEN && !paused) {
       const channelData = event.inputBuffer.getChannelData(0);
       const copy = new Float32Array(channelData.length);
       copy.set(channelData);
@@ -677,14 +768,48 @@ async function startRecording() {
   recTimer.className   = 'rec-timer on';
   recLabel.textContent = 'Recording — click to stop';
   btnRecord.classList.add('recording');
+  btnRecord.classList.remove('is-paused');
   waveform.classList.add('active');
   liveBadge.classList.add('show');
+  btnPause.classList.add('show');
+  btnPause.classList.remove('is-paused');
+  setPauseButtonLabel(false);
   timerInterval = setInterval(() => { timerSec++; recTimer.textContent = fmtTime(timerSec); }, 1000);
 }
+
+function togglePause() {
+  if (!recording) return;
+  paused = !paused;
+
+  if (paused) {
+    clearInterval(timerInterval);
+    recTimer.className = 'rec-timer';
+    waveform.classList.remove('active');
+    liveBadge.classList.remove('show');
+    recLabel.textContent = 'Paused — click Resume to continue';
+    btnRecord.classList.add('is-paused');
+    btnPause.classList.add('is-paused');
+    setPauseButtonLabel(true);
+    // Mark the pause point inline so it's visible on review, without breaking the flow of text.
+    interimText = '';
+    renderLiveTranscript();
+  } else {
+    recTimer.className = 'rec-timer on';
+    waveform.classList.add('active');
+    liveBadge.classList.add('show');
+    recLabel.textContent = 'Recording — click to stop';
+    btnRecord.classList.remove('is-paused');
+    btnPause.classList.remove('is-paused');
+    setPauseButtonLabel(false);
+    timerInterval = setInterval(() => { timerSec++; recTimer.textContent = fmtTime(timerSec); }, 1000);
+  }
+}
+btnPause.addEventListener('click', togglePause);
 
 function stopRecording() {
   if (!recording) return;
   recording = false;
+  paused    = false;
   clearInterval(timerInterval);
 
   // Disconnect audio (closes ffmpeg stdin → server-side STT flushes remaining audio)
@@ -695,10 +820,15 @@ function stopRecording() {
     ws.send(JSON.stringify({ cmd: 'done' }));
   }
 
+  // Session is over — a future recording is a *new* session, so the consent
+  // line should play again next time the record button starts one.
+  announcementPlayed = false;
+
   // UI — waiting for the STT engine to finish
-  btnRecord.classList.remove('recording');
+  btnRecord.classList.remove('recording', 'is-paused');
   btnRecord.classList.add('processing');
   btnRecord.disabled   = true;
+  btnPause.classList.remove('show', 'is-paused');
   waveform.classList.remove('active');
   liveBadge.classList.remove('show');
   recTimer.className   = 'rec-timer';
@@ -713,32 +843,48 @@ function cleanupAudio() {
 }
 
 function resetRecordingUI() {
-  btnRecord.classList.remove('recording', 'processing');
+  btnRecord.classList.remove('recording', 'processing', 'is-paused');
   btnRecord.disabled   = false;
+  btnPause.classList.remove('show', 'is-paused');
   waveform.classList.remove('active');
   liveBadge.classList.remove('show');
   recTimer.className   = 'rec-timer';
   recTimer.textContent = '—';
 }
 
-/* ── Mic button ── */
+/* ── Mic button — starts/stops a session. Pause/Resume is the separate pill above. ── */
 btnRecord.addEventListener('click', async () => {
   if (recording) {
     stopRecording();
-  } else if (!btnRecord.classList.contains('processing')) {
-    // Reset result cards before a new session
-    ['refine','translate','extract','questions'].forEach(id => {
-      setCard(id, 'idle');
-      const t = $('time-' + id); if (t) t.textContent = '';
-    });
-    if ($('sel-mode').value !== 'doctor') setBody('refine', '<div class="ph">Refined transcript will appear here</div>');
-    setBody('translate', '<div class="ph">English translation will appear here</div>');
-    setBody('extract',   '<div class="ph">Medical features will appear here</div>');
-    setBody('questions', '<div class="ph">Generated questions will appear here</div>');
-    btnSubmit.disabled = true;
-    transcriptReady    = false;
-    await startRecording();
+    return;
   }
+  if (btnRecord.classList.contains('processing') || announcementPlaying) return;
+
+  // Reset result cards before a new session
+  ['refine','translate','extract','questions'].forEach(id => {
+    setCard(id, 'idle');
+    const t = $('time-' + id); if (t) t.textContent = '';
+  });
+  if ($('sel-mode').value !== 'doctor') setBody('refine', '<div class="ph">Refined transcript will appear here</div>');
+  setBody('translate', '<div class="ph">English translation will appear here</div>');
+  setBody('extract',   '<div class="ph">Medical features will appear here</div>');
+  setBody('questions', '<div class="ph">Generated questions will appear here</div>');
+  btnSubmit.disabled = true;
+  transcriptReady    = false;
+
+  // Play the recording-consent line once, only at the true start of a session.
+  // Recording starts ~1s later, in parallel with the message still finishing.
+  if (!announcementPlayed) {
+    announcementPlayed  = true;  // mark immediately — this is a one-shot per session
+    announcementPlaying = true;
+    btnRecord.disabled  = true;
+    recLabel.textContent = 'Playing consent notice…';
+    await startSessionDisclaimer();
+    announcementPlaying = false;
+    btnRecord.disabled  = false;
+  }
+
+  await startRecording();
 });
 
 /* ─────────────────────────────────────────────────────────────────────────────
