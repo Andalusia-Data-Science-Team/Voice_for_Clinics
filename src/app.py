@@ -5,6 +5,7 @@ import asyncio
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
+from typing import Optional
 
 import uvicorn
 from sse_starlette.sse import EventSourceResponse
@@ -18,6 +19,7 @@ from model.speech_service import SpeechService
 from model.llm_service import LLMService
 from model.extract_features import ExtractFeature
 from model.question_generator import QuestionGenerator
+from model.specialty_terms import correct_specialty_terms, SPECIALTIES
 
 
 logger = logging.getLogger(__name__)
@@ -80,6 +82,10 @@ class Language(str, Enum):
 class Mode(str, Enum):
     doctor       = "doctor"
     conversation = "conversation"
+
+
+# Built from model.specialty_terms.SPECIALTIES so the two never drift apart.
+Specialty = Enum("Specialty", {s.replace(" ", "_").replace("&", "and"): s for s in SPECIALTIES}, type=str)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -267,15 +273,24 @@ async def ws_transcribe(websocket: WebSocket):
 
 @router.post("/analyze", summary="Run refine → translate → extract → questions on a provided transcript")
 async def analyze_transcript(
-    request:  Request,
-    text:     str      = Form(...,              description="Raw transcript from live transcription (may include user edits)"),
-    language: Language = Form(Language.english, description="Audio language"),
-    mode:     Mode     = Form(Mode.doctor,      description="Doctor or Conversation mode"),
+    request:   Request,
+    text:      str      = Form(...,              description="Raw transcript from live transcription (may include user edits)"),
+    language:  Language = Form(Language.english, description="Audio language"),
+    mode:      Mode      = Form(Mode.doctor,      description="Doctor or Conversation mode"),
+    specialty: Optional[Specialty] = Form(None,   description="Medical specialty — drives fuzzy term correction and refinement prompt context"),
 ):
     pipeline_start  = time.perf_counter()
     is_arabic       = language == Language.arabic
     is_conversation = mode == Mode.conversation
     skip_refinement = mode == Mode.doctor  # Doctor mode: transcript goes straight through, no refinement step
+    specialty_value = specialty.value if specialty else None
+
+    # Deterministic fuzzy-matching pass — corrects near-miss specialty terms
+    # in the raw transcript before anything else. Runs regardless of mode, so
+    # Doctor-mode transcripts (which skip LLM refinement entirely) still get
+    # it; Conversation-mode transcripts get it again implicitly via the LLM
+    # refinement prompt's specialty context below.
+    text = correct_specialty_terms(text, specialty_value)
 
     async def event_stream():
         # Accumulated outputs — populated as each step completes
@@ -285,6 +300,7 @@ async def analyze_transcript(
             "user_agent":         request.headers.get("user-agent", "unknown"),
             "language":           language.value,
             "mode":               mode.value,
+            "specialty":          specialty_value,
             "status":             "ok",
             "total_sec":          None,
             "transcript":         text,
@@ -311,9 +327,9 @@ async def analyze_transcript(
                 refined_parts: list[str] = []
                 try:
                     refine_stream = (
-                        LLMService.refine_ar_transcription_stream(text, Config.OPENROUTER_API_KEY, is_conversation=is_conversation)
+                        LLMService.refine_ar_transcription_stream(text, Config.OPENROUTER_API_KEY, is_conversation=is_conversation, specialty=specialty_value)
                         if is_arabic else
-                        LLMService.refine_en_transcription_stream(text, Config.OPENROUTER_API_KEY, is_conversation=is_conversation)
+                        LLMService.refine_en_transcription_stream(text, Config.OPENROUTER_API_KEY, is_conversation=is_conversation, specialty=specialty_value)
                     )
                     async for delta in refine_stream:
                         refined_parts.append(delta)

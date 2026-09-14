@@ -37,7 +37,7 @@ MUNSIT_TTS_API_BASE   = "https://api.munsit.com/api/v1"
 MUNSIT_TTS_MODEL      = "faseeh-v1-preview"   # Faseeh — Munsit's TTS model
 DISCLAIMER_VOICE_NAME = "Lina"
 DISCLAIMER_DIALECT    = "fusha"               # Modern Standard Arabic
-DISCLAIMER_TEXT       = "نود إعلامكم بأن هذه الجلسة يتم تسجيلها واستخدامها لأغراض التوثيق الطبي"
+DISCLAIMER_TEXT       = ".نود إعلامكم بأن هذه الجلسة يتم تسجيلها واستخدامها لأغراض التوثيق الطبي"
 
 _mistral_client: Optional[Mistral] = None
 

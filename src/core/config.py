@@ -17,6 +17,11 @@ class Config:
     MUNSIT_API_KEY = os.getenv("MUNSIT_API_KEY")
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
+    _openrouter_extra_raw = os.getenv("OPENROUTER_API_KEYS", "")
+    OPENROUTER_API_KEYS = [k.strip() for k in _openrouter_extra_raw.split(",") if k.strip()]
+    if OPENROUTER_API_KEY and OPENROUTER_API_KEY not in OPENROUTER_API_KEYS:
+        OPENROUTER_API_KEYS.insert(0, OPENROUTER_API_KEY)
+
     SPEECH_API_KEY = os.getenv("speech")
     REFINE_API_KEY = os.getenv("refine")
     TRANSLATE_API_KEY = os.getenv("translation")

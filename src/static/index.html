@@ -334,6 +334,27 @@
           <option value="conversation">Conversation</option>
         </select>
       </div>
+      <div class="field">
+        <label>Specialty</label>
+        <select id="sel-specialty">
+          <option value="" selected>General / Not specified</option>
+          <option value="Dentistry">Dentistry</option>
+          <option value="Pediatric">Pediatric</option>
+          <option value="Internal Medicine">Internal Medicine</option>
+          <option value="Dermatology">Dermatology</option>
+          <option value="Ophthalmology">Ophthalmology</option>
+          <option value="General Surgery">General Surgery</option>
+          <option value="Pain Management">Pain Management</option>
+          <option value="OB & GYN">OB &amp; GYN</option>
+          <option value="Pulmonary">Pulmonary</option>
+          <option value="Neurology">Neurology</option>
+          <option value="ENT">ENT</option>
+          <option value="Rheumatology">Rheumatology</option>
+          <option value="Urology">Urology</option>
+          <option value="Cardiology">Cardiology</option>
+          <option value="Orthopedics">Orthopedics</option>
+        </select>
+      </div>
     </div>
 
     <div>
@@ -900,6 +921,7 @@ btnSubmit.addEventListener('click', async () => {
 
   const lang     = $('sel-lang').value;
   const mode     = $('sel-mode').value;
+  const specialty = $('sel-specialty').value; // '' when "General / Not specified" — sent as empty, backend treats as None
   const isAr  = lang === 'ar';
   const isDoctorMode = mode === 'doctor';
 
@@ -923,6 +945,7 @@ btnSubmit.addEventListener('click', async () => {
   form.append('text',     liveTranscript);
   form.append('language', lang);
   form.append('mode',     mode);
+  if (specialty) form.append('specialty', specialty);
 
   let refineBuf    = '';
   let translateBuf = '';
