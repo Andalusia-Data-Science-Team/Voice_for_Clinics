@@ -7,8 +7,52 @@ def _specialty_context_line(specialty):
         f"Pay particular attention to {specialty}-specific terminology, abbreviations, "
         f"procedure names, and drug names common in this specialty when correcting the text.\n"
     )
- 
- 
+
+
+def _history_block(patient_history_text):
+    """Shared helper — the scoped patient-history context block, or "" if none."""
+    if not patient_history_text:
+        return ""
+    return f"""
+
+Patient History (this patient's visits over the last year, most recent
+first). Use this ONLY to inform your "icd10_codes" and "final_diagnosis"
+recommendations — for example, recognizing a chronic or recurring
+condition, a relevant prior diagnosis, or a comorbidity that changes the
+differential for today's presentation. Do NOT use it to fill in any other
+field (chief complaint, examination, plan, etc.) — those must come only
+from today's text. If none of this history is actually relevant to today's
+visit, ignore it and say so in "history_notes".
+
+{patient_history_text}
+"""
+
+
+_HISTORY_FIELDS_DOC = """  - "history_considered": "Yes" if the patient history block above genuinely
+    changed or supported your icd10_codes/final_diagnosis recommendation,
+    otherwise "No". If no patient history block was provided above, this
+    must always be "No" — never claim you considered history that wasn't given to you.
+    - "history_notes": If history_considered is "Yes", a short note citing the
+    SPECIFIC prior diagnosis code(s) and date(s) that influenced your
+    recommendation (e.g. "D64.8 - Other specified anaemias documented
+    6/17/2026, matching today's fatigue/pallor/palpitations"). If more than
+    one prior diagnosis in the history is relevant to today's presentation,
+    name all of them, not just one — the doctor needs to see the competing
+    evidence, not just your final pick. Otherwise ""."""
+
+
+_FINAL_DIAGNOSIS_RATIONALE_DOC = """  - "final_diagnosis_rationale": ALWAYS populate this — a short (1-2
+    sentence) clinician-readable explanation of WHY you chose this specific
+    final_diagnosis, citing the concrete symptoms, exam findings, or results
+    from TODAY'S text that support it (e.g. "Fatigue, pallor, and
+    palpitations are consistent with anaemia; CBC was ordered to confirm").
+    If history_considered is "Yes", also weave in the specific prior
+    diagnosis/date that reinforced the choice, rather than just repeating
+    history_notes verbatim — this should read as ONE coherent justification
+    a doctor can sanity-check at a glance. Never leave this blank if
+    final_diagnosis is populated."""
+
+
 def get_refine_arabic_prompt_deepseek(raw_text, specialty=None):
     specialty_line = _specialty_context_line(specialty)
     return f"""
@@ -16,7 +60,7 @@ Act as a senior medical transcription editor specializing in Arabic healthcare d
 {specialty_line}
 **ORIGINAL TRANSCRIPTION:**
 {raw_text}
- 
+
 **EDITING TASKS:**
 - Correct grammatical errors and awkward phrasing
 - Improve sentence structure and flow
@@ -24,7 +68,7 @@ Act as a senior medical transcription editor specializing in Arabic healthcare d
 - De-identify speaker references when possible
 - Ensure professional medical Arabic standards
 - Enhance readability for medical professionals
- 
+
 **CRITICAL RULES:**
 → Output ONLY the corrected Arabic text
 → No additional commentary or explanations
@@ -33,11 +77,11 @@ Act as a senior medical transcription editor specializing in Arabic healthcare d
 → Ensure refining any mentioned medications
 → Do NOT add, infer, or make more specific any clinical detail that was not explicitly stated — e.g. do not add a side (left/right), a position (upper/lower), a severity, or a location that the original text did not mention. Fix language only; never add medical information.
 → Do not use asterisks (*) anywhere in the output, for any reason
- 
+
 **CORRECTED MEDICAL TEXT:**
 """
- 
- 
+
+
 def get_refine_english_prompt_deepseek(translated_text, specialty=None):
     specialty_line = _specialty_context_line(specialty)
     return f"""
@@ -54,8 +98,8 @@ def get_refine_english_prompt_deepseek(translated_text, specialty=None):
     \"\"\"{translated_text}\"\"\"
     **ONLY return the refinment no more**
     """
- 
- 
+
+
 # --- Conversation Mode Prompts ---
 def get_refine_arabic_prompt_deepseek_conversation(raw_text, specialty=None):
     specialty_line = _specialty_context_line(specialty)
@@ -64,18 +108,18 @@ def get_refine_arabic_prompt_deepseek_conversation(raw_text, specialty=None):
     {specialty_line}
     **CONVERSATION TO PROCESS:**
     {raw_text}
- 
+
     **SPEAKER IDENTIFICATION:**
     - الدكتور: Medical professional (asks questions, examines, diagnoses, prescribes)
     - المريض: Patient (describes symptoms, answers questions, shares history)
- 
+
     **QUALITY STANDARDS:**
     1. Accuracy: Preserve all medical content, terminology, and clinical context
     2. Clarity: Fix grammatical errors and improve sentence flow
     3. Format: Clearly label each speaker turn with plain text "الدكتور:" or "المريض:" — no bold, no asterisks
     4. Anonymization: Minimize personal identifiers while keeping dialogue intact
     5. Professionalism: Use formal medical Arabic appropriate for clinical documentation
- 
+
     **CRITICAL:**
     → Output ONLY the refined conversation in Arabic
     → No additional text, explanations, or commentary
@@ -85,11 +129,11 @@ def get_refine_arabic_prompt_deepseek_conversation(raw_text, specialty=None):
     → Ensure refining any mentioned medications
     → Do NOT add, infer, or make more specific any clinical detail that was not explicitly stated — e.g. do not add a side (left/right), a position (upper/lower), a severity, or a location that the original text did not mention. Fix language only; never add medical information.
     → Do not use asterisks (*) anywhere in the output, for any reason — not around speaker labels, not anywhere else
- 
+
     **REFINED CLINICAL CONVERSATION:**
 """
- 
- 
+
+
 def get_refine_english_prompt_deepseek_conversation(translated_text, specialty=None):
     specialty_line = _specialty_context_line(specialty)
     return f"""
@@ -105,17 +149,17 @@ Instructions:
 7. Do NOT add, infer, or make more specific any clinical detail that was not explicitly stated — e.g. do not add a side (left/right), a position (upper/lower), a severity, or a location that the original text did not mention. Fix language only; never add medical information.
 8. Do not use asterisks (*) anywhere in the output, for any reason.
 9. Return ONLY the refined conversation in dialogue format — no introductions, explanations, or extra text.
- 
+
 Example format:
 Doctor: Good morning. What brings you in today?
 Patient: I’ve had chest pain for a few days.
- 
+
 Doctor: What kind of pain?
 Patient: A pressure in the center of my chest, worse when I climb stairs.
- 
+
 ORIGINAL TEXT:
 \"\"\"{translated_text}\"\"\"
- 
+
 Only return the dialogue no more — plain text speaker labels, no asterisks anywhere
 """
 
@@ -173,364 +217,476 @@ def get_translation_prompt_deepseek_conversation(refined_text):
 **ENGLISH TRANVERSATION:**
 """
 
-
-def get_dynamic_extraction_prompt_llama(translated_text):
+ 
+# ═══════════════════════════════ ER — extraction ═══════════════════════════
+ 
+def get_er_extraction_prompt(translated_text, patient_history_text=""):
     return f"""
-You are a medical expert Given the following medical text, extract relevant medical features and provide a summary for the patient case. Return a JSON object with two fields:
-- "json_data": A dictionary containing the following medical features:
-  - "chief_complaint": The primary reason for the visit (string) you will get a diagnose of a patient so you must output a chief complain.
-  - "icd10_codes": A list of ICD-10 codes with descriptions (list of strings) RECOMMEND RELATED ICD10 codes as most as you can.
-  - "history_of_illness": Details of the patient's medical history (string).
-  - "current_medication": Current medications prescribed or taken (string).
-  - "imaging_results": Results from imaging studies (string).
-  - "plan": Treatment or management plan (string).
-  - "assessment": Clinical assessment or diagnosis (string).
-  - "follow_up": Follow-up instructions (string).
-- "summary": A string explaining the rationale behind the extracted features.
-
-Leave fields empty ("" for strings, [] for lists) if no relevant information is found in the text.
-
+You are a medical expert. Given the following clinical text from an
+Emergency Room (ER) encounter, extract the fields below for the ER Clinical
+Note template. Return a JSON object with two fields:
+- "json_data": A dictionary with exactly these keys (all strings, except
+  icd10_codes which is a list of strings):
+  - "chief_complaint": Primary reason for the visit/procedure. All patient complaints, signs, and symptoms should be captured here, even if they are not the main reason for the visit.
+  - "onset": when and/or how the symptom or complaint started.
+    Include the reported starting point and whether the onset was sudden, gradual, acute, or insidious, if explicitly mentioned.
+    Do not infer the onset if it is not stated.
+  - "course": Extract how the symptom or complaint has changed or behaved over time since it started.
+    Examples include improving, worsening, progressively worsening, stable, intermittent, recurrent, persistent, fluctuating, or unchanged.
+    Only report the course if it is explicitly stated or clearly described in the conversation.
+    Do not infer a course from the severity of the symptom alone.
+  - "duration": Extract how long the symptom or complaint has been present.
+    Include the exact duration when available, such as hours, days, weeks, months, or years. including any recent change in severity if mentioned (e.g. "2 months, worse over the last 3 weeks").
+    Do not calculate or infer a duration unless it is explicitly supported by the patient's statement.
+  - "past_medical_history": Relevant past medical history. "No Past Medical History" if explicitly stated as such.
+  - "past_surgical_history": Relevant past surgical history. "No Past Surgical History" if explicitly stated as such.
+  - "medication_history": Current home medications the patient is taking. "No Medication History" if explicitly stated as such.
+  - "allergy_status": Documented drug/food/other allergies. "No Known Allergies" if explicitly stated as such.
+  - "family_history": Relevant family history (e.g. hereditary/familial conditions), if mentioned.
+  - "social_history": Relevant social history — smoking, alcohol, occupation, living situation — if mentioned.
+  - "airway": Primary survey — Airway (A) findings.
+  - "breathing": Primary survey — Breathing (B) findings.
+  - "circulation": Primary survey — Circulation (C) findings.
+  - "disability": Primary survey — Disability (D), neuro status.
+  - "exposure": Primary survey — Exposure (E) findings.
+  - "examination": General/focused physical examination findings. Do not include laboratory, ECG, or imaging results here — those belong in "investigations".
+  - "investigations": Relevant laboratory, ECG, or imaging results mentioned (e.g. troponin, ECG findings, CBC, renal function tests). Leave as "" if none mentioned.
+  - "plan_of_care": The intended management plan (e.g. admission, monitoring, treatment, further workup). Do not include specific specialty consultations/referrals here — those belong in "requested_consultation".
+  - "requested_consultation": Any specialty consultations or referrals requested (e.g. "Cardiology", "Infectious Disease", "ICU consultant review"), if mentioned.
+  - "discharge_instructions": Instructions given for discharge. If the patient is being admitted rather than discharged, state that discharge instructions are not applicable due to admission.
+  - "patient_disposition": The patient's disposition/destination from the ER (e.g. "Admitted to CCU", "Admitted to ICU", "Discharged home", "Transferred").
+  - "sick_leave": Sick leave duration/details, if mentioned. State "Not applicable" if the patient is being admitted rather than discharged.
+  - "triage_priority": ALWAYS populate this — the patient's triage urgency
+    classification. If a triage level wasn't explicitly stated, infer your
+    best classification from the clinical context (vitals, primary survey
+    findings, presentation) using a standard scale, e.g. "ESI 2 - Emergent"
+    (Emergency Severity Index, 1 = most urgent / resuscitation to 5 = least
+    urgent / non-urgent), with a brief inline justification, e.g. "ESI 2 -
+    Emergent (stable vitals but high-risk presentation)". This is your
+    clinical judgement, not a transcription — never leave it blank.
+  - "icd10_codes": ALWAYS populate this — a list of your recommended
+    possible/differential ICD-10 codes WITH descriptions, based on your own
+    clinical judgement of the case (e.g. ["K35.80 - Unspecified acute
+    appendicitis", "R10.31 - Right lower quadrant pain"]). This is your
+    recommendation, not a transcription — never return an empty list if the
+    text describes any clinical presentation at all.
+  - "final_diagnosis": ALWAYS populate this — your single best-supported
+    working diagnosis, formatted EXACTLY as "<ICD-10 code> - <diagnosis
+    text>", e.g. "K35.80 - Acute appendicitis". Never leave it blank if the
+    text describes any clinical presentation at all.
+{_FINAL_DIAGNOSIS_RATIONALE_DOC}
+{_HISTORY_FIELDS_DOC}
+- "summary": A short string explaining the rationale behind the extraction.
+ 
+For every field EXCEPT icd10_codes, final_diagnosis, final_diagnosis_rationale,
+history_considered, and history_notes: leave it as "" if it is not mentioned
+in the text. Do not invent information that is not present or reasonably
+implied.
+{_history_block(patient_history_text)}
 Text: {translated_text}
-
+ 
 Example output:
 {{
   "json_data": {{
-    "chief_complaint": "Persistent cough and fever",
-    "icd10_codes": [
-      "J11.1 - Influenza with respiratory manifestations",
-      "R05 - Cough"
-    ],
-    "history_of_illness": "Patient has a history of asthma and seasonal allergies.",
-    "current_medication": "Albuterol inhaler, Oseltamivir 75mg twice daily",
-    "imaging_results": "Chest X-ray shows no consolidation.",
-    "plan": "Continue Oseltamivir for 5 days, use Albuterol as needed.",
-    "assessment": "Influenza with acute respiratory symptoms",
-    "follow_up": "Return in 7 days or sooner if symptoms worsen."
+    "chief_complaint": "Right lower quadrant abdominal pain",
+    "onset": "2 days ago",
+    "course": "Progressively worsening",
+    "duration": "2 days",
+    "past_medical_history": "Hypertension",
+    "past_surgical_history": "No past surgical history",
+    "medication_history": "Amlodipine 5mg once daily",
+    "allergy_status": "No known drug allergies",
+    "family_history": "",
+    "social_history": "Non-smoker",
+    "airway": "Patent",
+    "breathing": "Spontaneous, saturating 98% on room air",
+    "circulation": "BP 128/82, HR 88, warm and well perfused",
+    "disability": "GCS 15, alert and oriented",
+    "exposure": "No external injuries noted",
+    "examination": "Tenderness and guarding at McBurney's point, positive Rovsing's sign",
+    "investigations": "WBC mildly elevated. Abdominal ultrasound pending.",
+    "plan_of_care": "Laparoscopic appendectomy",
+    "requested_consultation": "General Surgery",
+    "discharge_instructions": "Wound care, avoid heavy lifting for 2 weeks, return if fever or worsening pain",
+    "patient_disposition": "Admitted for surgery",
+    "sick_leave": "5 days",
+    "triage_priority": "ESI 3 - Urgent (stable vitals, localized peritoneal signs, needs timely surgical evaluation)",
+    "icd10_codes": ["K35.80 - Unspecified acute appendicitis", "R10.31 - Right lower quadrant pain"],
+    "final_diagnosis": "K35.80 - Acute appendicitis",
+    "final_diagnosis_rationale": "Tenderness and guarding at McBurney's point with a positive Rovsing's sign are classic for acute appendicitis, and the planned laparoscopic appendectomy is consistent with that diagnosis.",
+    "history_considered": "No",
+    "history_notes": ""
   }},
-  "summary": "The text describes a patient with cough and fever, leading to a diagnosis of influenza. ICD-10 codes J11.1 and R05 are assigned based on the symptoms. The history of asthma and allergies is noted. Current medications include Oseltamivir for influenza and Albuterol for asthma. Chest X-ray is normal, supporting a viral etiology. The plan includes antiviral treatment and symptom management, with a follow-up in 7 days."
+  "summary": "Chief complaint and history extracted from the presenting complaint. Primary survey (ABCDE) taken from the pre-operative assessment. ICD-10 codes and final diagnosis are the model's clinical recommendation based on the presentation."
 }}
 """
-
-# --- Conversation Mode Dynamic Extraction ---
-def get_dynamic_extraction_prompt_llama_conversation(translated_text):
+ 
+ 
+def get_er_extraction_prompt_conversation(translated_text, patient_history_text=""):
     return f"""
-You are a medical expert. Given the following medical conversation between a doctor and patient, extract relevant medical features and provide a summary for the patient case. Return a JSON object with two fields:
-- "json_data": A dictionary containing the following medical features:
-  - "chief_complaint": The primary reason for the visit (string) - extract from patient's initial statements.
-  - "icd10_codes": A list of ICD-10 codes with descriptions (list of strings) - based on doctor's diagnosis and patient's symptoms.
-  - "history_of_illness": Details of the patient's medical history (string) - gather from patient's responses about their medical background.
-  - "current_medication": Current medications prescribed or taken (string) - mentioned by patient or prescribed by doctor.
-  - "imaging_results": Results from imaging studies (string) - discussed by doctor.
-  - "plan": Treatment or management plan (string) - extract from doctor's recommendations.
-  - "assessment": Clinical assessment or diagnosis (string) - based on doctor's conclusions.
-  - "follow_up": Follow-up instructions (string) - extract from doctor's final instructions.
-  - "conversation_summary": A brief summary of the consultation (string) - optional overview of the interaction.
-- "summary": A string explaining the rationale behind the extracted features and how they were identified from the conversation.
-
-Leave fields empty ("" for strings, [] for lists) if no relevant information is found in the conversation.
-
-Instructions:
-- Extract information from both doctor's statements and patient's responses
-- Chief complaint should come from patient's initial description
-- Medical history should be gathered from patient's answers
-- Treatment plans and assessments should come from doctor's recommendations
-- Add "conversation_summary" field if not in features list
-
+You are a medical expert. Given the following doctor-patient conversation
+from an Emergency Room (ER) encounter, extract the fields below for the ER
+Clinical Note template. Return a JSON object with two fields:
+- "json_data": A dictionary with exactly these keys (all strings, except
+  icd10_codes which is a list of strings):
+  - "chief_complaint": Primary reason for the visit — from the patient's opening statements. All patient complaints, signs, and symptoms should be captured here, even if they are not the main reason for the visit.
+  - "onset": when and/or how the symptom or complaint started.
+    Include the reported starting point and whether the onset was sudden, gradual, acute, or insidious, if explicitly mentioned.
+    Do not infer the onset if it is not stated.
+  - "course": Extract how the symptom or complaint has changed or behaved over time since it started.
+    Examples include improving, worsening, progressively worsening, stable, intermittent, recurrent, persistent, fluctuating, or unchanged.
+    Only report the course if it is explicitly stated or clearly described in the conversation.
+    Do not infer a course from the severity of the symptom alone.
+  - "duration": Extract how long the symptom or complaint has been present.
+    Include the exact duration when available, such as hours, days, weeks, months, or years. including any recent change in severity if mentioned (e.g. "2 months, worse over the last 3 weeks").
+    Do not calculate or infer a duration unless it is explicitly supported by the patient's statement.
+  - "past_medical_history": Relevant past medical history — from patient's answers. "No Past Medical History" if explicitly stated as such.
+  - "past_surgical_history": Relevant past surgical history — from patient's answers. "No Past Surgical History" if explicitly stated as such.
+  - "medication_history": Current home medications, from patient's answers. "No Medication History" if explicitly stated as such.
+  - "allergy_status": Documented drug/food/other allergies, from patient's answers. "No Known Allergies" if explicitly stated as such.
+  - "family_history": Relevant family history, from patient's answers, if mentioned.
+  - "social_history": Relevant social history — smoking, alcohol, occupation, living situation — from patient's answers, if mentioned.
+  - "airway": Primary survey — Airway (A) findings, from doctor's assessment.
+  - "breathing": Primary survey — Breathing (B) findings.
+  - "circulation": Primary survey — Circulation (C) findings.
+  - "disability": Primary survey — Disability (D), neuro status.
+  - "exposure": Primary survey — Exposure (E) findings.
+  - "examination": General/focused examination findings, from doctor's statements. Do not include laboratory, ECG, or imaging results here — those belong in "investigations".
+  - "investigations": Relevant laboratory, ECG, or imaging results mentioned in the conversation. Leave as "" if none mentioned.
+  - "plan_of_care": The intended management plan, from doctor's recommendations. Do not include specific specialty consultations/referrals here — those belong in "requested_consultation".
+  - "requested_consultation": Any specialty consultations or referrals requested, if mentioned.
+  - "discharge_instructions": Instructions given for discharge. If the patient is being admitted rather than discharged, state that discharge instructions are not applicable due to admission.
+  - "patient_disposition": The patient's disposition/destination from the ER (e.g. "Admitted to CCU", "Admitted to ICU", "Discharged home", "Transferred").
+  - "sick_leave": Sick leave duration/details, if mentioned. State "Not applicable" if the patient is being admitted rather than discharged.
+  - "triage_priority": ALWAYS populate this — the patient's triage urgency
+    classification. If a triage level wasn't explicitly stated, infer your
+    best classification from the clinical context (vitals, primary survey
+    findings, presentation) using a standard scale, e.g. "ESI 2 - Emergent"
+    (Emergency Severity Index, 1 = most urgent / resuscitation to 5 = least
+    urgent / non-urgent), with a brief inline justification. This is your
+    clinical judgement, not a transcription — never leave it blank.
+  - "icd10_codes": ALWAYS populate this — a list of your recommended
+    possible/differential ICD-10 codes WITH descriptions, based on doctor's
+    diagnosis and patient's symptoms. Never return an empty list if the
+    conversation describes any clinical presentation at all.
+  - "final_diagnosis": ALWAYS populate this — your single best-supported
+    working diagnosis, formatted EXACTLY as "<ICD-10 code> - <diagnosis
+    text>", from doctor's conclusions. Never leave it blank if the
+    conversation describes any clinical presentation at all.
+{_FINAL_DIAGNOSIS_RATIONALE_DOC}
+{_HISTORY_FIELDS_DOC}
+- "summary": A short string explaining the rationale behind the extraction and how it was identified from the conversation.
+ 
+For every field EXCEPT icd10_codes, final_diagnosis, final_diagnosis_rationale,
+history_considered, and history_notes: leave it as "" if it is not mentioned.
+Do not invent information.
+{_history_block(patient_history_text)}
 Conversation: {translated_text}
-
+"""
+ 
+ 
+# ═══════════════════════════════ OPD — extraction ═══════════════════════════
+ 
+def get_opd_extraction_prompt(translated_text, patient_history_text=""):
+    return f"""
+You are a medical expert. Given the following clinical text from an
+Outpatient Department (OPD) visit, extract the fields below for the OPD
+Clinical Note template. Return a JSON object with two fields:
+- "json_data": A dictionary with exactly these keys (all strings, except
+  icd10_codes which is a list of strings):
+  - "allergy_status": Documented drug/food/other allergies.
+  - "chief_complaint": Primary reason for the visit. All patient complaints, signs, and symptoms should be captured here, even if they are not the main reason for the visit.
+  - "onset": when and/or how the symptom or complaint started.
+    Include the reported starting point and whether the onset was sudden, gradual, acute, or insidious, if explicitly mentioned.
+    Do not infer the onset if it is not stated.
+  - "course": Extract how the symptom or complaint has changed or behaved over time since it started.
+    Examples include improving, worsening, progressively worsening, stable, intermittent, recurrent, persistent, fluctuating, or unchanged.
+    Only report the course if it is explicitly stated or clearly described in the conversation.
+    Do not infer a course from the severity of the symptom alone.
+  - "duration": Extract how long the symptom or complaint has been present.
+    Include the exact duration when available, such as hours, days, weeks, months, or years. including any recent change in severity if mentioned (e.g. "2 months, worse over the last 3 weeks").
+    Do not calculate or infer a duration unless it is explicitly supported by the patient's statement.
+  - "comorbidities": Existing comorbid conditions.
+  - "medication_history": Current medications (part of medical history). "No Medication History" if explicitly stated as such.
+  - "past_medical_history": Relevant past medical history — INCLUDE any ongoing
+    chronic conditions the patient reports (e.g. diabetes, hypertension,
+    asthma) even though the same condition is also captured under
+    "comorbidities" above; the two fields feed different parts of the note
+    template. Excludes current medications (see medication_history).
+  - "past_surgical_history": Relevant past surgical history. "No Past Surgical History" if explicitly stated as such.
+  - "social_family_history": Social, marital, or family history.
+  - "examination_finding": Examination findings, including vital signs where documented.
+  - "plan_of_care": Short/long term plan of care.
+  - "procedures_planned": Any investigations, imaging, labs, or procedures planned/ordered, even if also mentioned in the plan of care.
+  - "referrals": Referrals made or recommended.
+  - "follow_up_timing": When the patient should follow up.
+  - "patient_instructions": Instructions given to the patient.
+  - "outcome_progress_status": Outcome/progress status if this is a follow-up visit, else "".
+  - "icd10_codes": ALWAYS populate this — a list of your recommended
+    possible/differential ICD-10 codes WITH descriptions, based on your own
+    clinical judgement of the case. Never return an empty list if the text
+    describes any clinical presentation at all.
+  - "final_diagnosis": ALWAYS populate this — your single best-supported
+    working diagnosis, formatted EXACTLY as "<ICD-10 code> - <diagnosis
+    text>", e.g. "J18.9 - Community-acquired pneumonia". Never leave it
+    blank if the text describes any clinical presentation at all.
+{_FINAL_DIAGNOSIS_RATIONALE_DOC}
+{_HISTORY_FIELDS_DOC}
+- "summary": A short string explaining the rationale behind the extraction.
+ 
+For every field EXCEPT icd10_codes, final_diagnosis, final_diagnosis_rationale,
+history_considered, and history_notes: leave it as "" if it is not mentioned
+in the text. Do not invent information that is not present or reasonably
+implied.
+{_history_block(patient_history_text)}
+Text: {translated_text}
+ 
 Example output:
 {{
   "json_data": {{
-    "chief_complaint": "Persistent cough and fever for 5 days",
-    "icd10_codes": [
-      "J11.1 - Influenza with respiratory manifestations",
-      "R05 - Cough"
-    ],
-    "history_of_illness": "Patient reports history of asthma and seasonal allergies.",
-    "current_medication": "Albuterol inhaler, Doctor prescribed Oseltamivir 75mg twice daily",
-    "imaging_results": "Chest X-ray shows no consolidation.",
-    "plan": "Continue Oseltamivir for 5 days, use Albuterol as needed.",
-    "assessment": "Influenza with acute respiratory symptoms",
-    "follow_up": "Return in 7 days or sooner if symptoms worsen."
-    "conversation_summary": "Patient presented with 5-day history of cough and fever. Examination and chest X-ray ruled out pneumonia. Diagnosed with influenza and prescribed antiviral treatment."
+    "allergy_status": "No known drug allergies",
+    "chief_complaint": "Persistent cough and fever",
+    "onset": "Gradual, started 5 days ago",
+    "course": "Gradually worsening",
+    "duration": "5 days",
+    "comorbidities": "Type 2 diabetes",
+    "medication_history": "Metformin 500mg twice daily",
+    "past_medical_history": "Type 2 diabetes; seasonal allergies",
+    "past_surgical_history": "No past surgical history",
+    "social_family_history": "Non-smoker, lives with family",
+    "examination_finding": "Temp 38.2C, bilateral crackles on auscultation",
+    "plan_of_care": "Start antibiotics, symptomatic treatment",
+    "procedures_planned": "CBC; Chest X-ray",
+    "referrals": "None",
+    "follow_up_timing": "1 week",
+    "patient_instructions": "Rest, hydration, return if breathless",
+    "outcome_progress_status": "",
+    "icd10_codes": ["J18.9 - Pneumonia, unspecified organism"],
+    "final_diagnosis": "J18.9 - Community-acquired pneumonia",
+    "final_diagnosis_rationale": "Fever with bilateral crackles on auscultation over a gradually worsening 5-day course, backed by the ordered chest X-ray, supports a community-acquired pneumonia rather than a simple upper respiratory infection.",
+    "history_considered": "No",
+    "history_notes": ""
   }},
-  "summary": "Chief complaint identified from patient's opening description. Medical history extracted from patient's responses about previous conditions. Doctor's diagnosis informed ICD-10 code selection. Treatment plan based on doctor's recommendations during consultation. Follow-up instructions from doctor's closing remarks."
+  "summary": "Chief complaint, comorbidities, and medication history extracted directly from the transcript. ICD-10 codes and final diagnosis are the model's clinical recommendation based on the presentation."
+}}
+ 
+Example output WHEN a relevant patient history block IS provided (e.g. this
+patient has a documented visit for "E11.65 - Type 2 diabetes mellitus with
+poor control" within the last year, and today's presentation is consistent
+with a diabetes-related complication):
+{{
+  "json_data": {{
+    "...": "... (other fields as normal) ...",
+    "icd10_codes": ["E11.65 - Type 2 diabetes mellitus with poor control", "E11.9 - Type 2 diabetes mellitus without complications"],
+    "final_diagnosis": "E11.65 - Type 2 diabetes mellitus with poor control",
+    "final_diagnosis_rationale": "Today's presentation is consistent with a diabetes-related complication, and the patient has a documented history of Type 2 diabetes mellitus with poor control from a prior visit — carried forward as the likely underlying diagnosis.",
+    "history_considered": "Yes",
+    "history_notes": "Patient has a documented history of Type 2 diabetes mellitus with poor control from a prior visit — carried forward as the likely underlying diagnosis given today's presentation."
+  }},
+  "summary": "..."
 }}
 """
-
-
-# --- Question Generation Prompts ---
-def get_question_generation_prompt_llama(translated_text):
+ 
+ 
+def get_opd_extraction_prompt_conversation(translated_text, patient_history_text=""):
     return f"""
-    You are a medical expert. Based on the following medical dictation by a doctor according to the patient condition, generate a list of essential medical questions that the doctor MUST ask or should have asked the patient.
-
-    For each question:
-    1. Determine if the answer is already provided in the text
-    2. If answered, extract the answer
-    3. If not answered, mark it as "needs_asking" so the doctor knows to ask the patient
-
-    Return a JSON object with:
-    - "questions": A list of objects, each containing:
-      - "question": The medical question (string)
-      - "answer": The answer if found in text, or null if not mentioned (string or null)
-      - "needs_asking": true if doctor needs to ask this, false if already answered (boolean)
-      - "category": The category of the question - one of: "chief_complaint", "history", "medications", "allergies", "vital_signs", "physical_exam", "assessment", "plan" (string)
-
-      
-    **MEDICAL CATEGORIES TO COVER:**
-    - Chief Complaint: Why is the patient here?
-    - Medical History: Past illnesses, surgeries, chronic conditions
-    - Current Medications: What drugs is the patient taking?
-    - Allergies: Drug or food allergies
-    - Vital Signs: Blood pressure, temperature, pulse, etc.
-    - Physical Examination: Relevant findings
-    - Assessment/Diagnosis: What's the clinical impression?
-    - Plan: Treatment, follow-up, referrals
-
-    ** The questions must be generated differently based on patient condition **
-
-    Text: {translated_text}
-
-    Example output:
-    
-      "questions": [
-        {{
-          "question": "What is the patient's chief complaint?",
-          "answer": "Persistent cough and fever for 5 days",
-          "needs_asking": false,
-          "category": "chief_complaint"
-        }},
-        {{
-          "question": "Does the patient have any known drug allergies?",
-          "answer": null,
-          "needs_asking": true,
-          "category": "allergies"
-        }},
-        {{
-          "question": "What is the patient's current blood pressure?",
-          "answer": "120/80 mmHg",
-          "needs_asking": false,
-          "category": "vital_signs"
-        }},
-        {{
-          "question": "Has the patient had any recent surgeries?",
-          "answer": null,
-          "needs_asking": true,
-          "category": "history"
-        }}
-      ]
-      
-    Return ONLY a valid JSON object. Do NOT wrap in markdown code fences. Do NOT include ```json or ```. Do NOT include any text outside the JSON object. Do NOT use astrisks at all.
-    """
-
-
-def get_question_generation_prompt_llama_conversation(translated_text):
+You are a medical expert. Given the following doctor-patient conversation
+from an Outpatient Department (OPD) visit, extract the fields below for the
+OPD Clinical Note template. Return a JSON object with two fields:
+- "json_data": A dictionary with exactly these keys (all strings, except
+  icd10_codes which is a list of strings):
+  - "allergy_status": Documented drug/food/other allergies.
+  - "chief_complaint": Primary reason for the visit — from patient's initial statements. All patient complaints, signs, and symptoms should be captured here, even if they are not the main reason for the visit.
+  - "onset": when and/or how the symptom or complaint started.
+      Include the reported starting point and whether the onset was sudden, gradual, acute, or insidious, if explicitly mentioned.
+      Do not infer the onset if it is not stated.
+  - "course": Extract how the symptom or complaint has changed or behaved over time since it started.
+    Examples include improving, worsening, progressively worsening, stable, intermittent, recurrent, persistent, fluctuating, or unchanged.
+    Only report the course if it is explicitly stated or clearly described in the conversation.
+    Do not infer a course from the severity of the symptom alone.
+  - "duration": Extract how long the symptom or complaint has been present.
+    Include the exact duration when available, such as hours, days, weeks, months, or years. including any recent change in severity if mentioned (e.g. "2 months, worse over the last 3 weeks").
+    Do not calculate or infer a duration unless it is explicitly supported by the patient's statement.
+  - "medication_history": Current medications mentioned by patient or prescribed by doctor. "No Medication History" if explicitly stated as such.
+  - "past_medical_history": Relevant past medical history — INCLUDE any ongoing
+    chronic conditions the patient reports (e.g. diabetes, hypertension,
+    asthma) even though the same condition is also captured under
+    "comorbidities" above; the two fields feed different parts of the note
+    template. Excludes current medications (see medication_history).
+  - "past_surgical_history": Relevant past surgical history from patient's answers. "No Past Surgical History" if explicitly stated as such.
+  - "social_family_history": Social, marital, or family history.
+  - "examination_finding": Examination findings discussed by the doctor, including vital signs where documented.
+  - "plan_of_care": Short/long term plan of care, from doctor's recommendations.
+  - "procedures_planned": Any investigations, imaging, labs, or procedures planned/ordered, even if also mentioned in the plan of care.
+  - "referrals": Referrals made or recommended.
+  - "follow_up_timing": When the patient should follow up.
+  - "patient_instructions": Instructions given to the patient, from doctor's closing remarks.
+  - "outcome_progress_status": Outcome/progress status if this is a follow-up visit, else "".
+  - "icd10_codes": ALWAYS populate this — a list of your recommended
+    possible/differential ICD-10 codes WITH descriptions, based on doctor's
+    diagnosis and patient's symptoms. Never return an empty list if the
+    conversation describes any clinical presentation at all.
+  - "final_diagnosis": ALWAYS populate this — your single best-supported
+    working diagnosis, formatted EXACTLY as "<ICD-10 code> - <diagnosis
+    text>", from doctor's conclusions. Never leave it blank if the
+    conversation describes any clinical presentation at all.
+{_FINAL_DIAGNOSIS_RATIONALE_DOC}
+{_HISTORY_FIELDS_DOC}
+- "summary": A short string explaining the rationale behind the extraction and how it was identified from the conversation.
+ 
+For every field EXCEPT icd10_codes, final_diagnosis, final_diagnosis_rationale,
+history_considered, and history_notes: leave it as "" if it is not mentioned.
+Do not invent information.
+{_history_block(patient_history_text)}
+Conversation: {translated_text}
+"""
+ 
+ 
+# ══════════════════════════════ Dental — extraction ═════════════════════════
+ 
+def get_dental_extraction_prompt(translated_text, patient_history_text=""):
     return f"""
-    You are a medical expert. Based on the following medical conversation between a doctor and patient, generate a list of essential medical questions that were either:
-    1. Already asked and answered during the conversation
-    2. Should have been asked according to patient condition but were not
-
-    For each question:
-    1. Check if it was discussed in the conversation
-    2. If answered, extract the answer from patient's response
-    3. If not asked, mark it as "needs_asking" so the doctor knows to ask
-
-    Return a JSON object with:
-    - "questions": A list of objects, each containing:
-      - "question": The medical question (string)
-      - "answer": The answer from conversation, or null if not discussed (string or null)
-      - "needs_asking": true if doctor should still ask this, false if already covered (boolean)
-      - "category": The category - one of: "chief_complaint", "history", "medications", "allergies", "vital_signs", "physical_exam", "assessment", "plan" (string)
-
-      
-    **MEDICAL CATEGORIES TO COVER:**
-    - Chief Complaint: Why is the patient here?
-    - Medical History: Past illnesses, surgeries, chronic conditions
-    - Current Medications: What drugs is the patient taking?
-    - Allergies: Drug or food allergies
-    - Vital Signs: Blood pressure, temperature, pulse, etc.
-    - Physical Examination: Relevant findings
-    - Assessment/Diagnosis: What's the clinical impression?
-    - Plan: Treatment, follow-up, referrals
-
-    ** The questions must be generated differently based on patient condition **
-
-    Conversation: {translated_text}
-
-    Example output:
-    
-      "questions": [
-        {{
-          "question": "What brings you to the clinic today?",
-          "answer": "Persistent cough and fever for 5 days",
-          "needs_asking": false,
-          "category": "chief_complaint"
-        }},
-        {{
-          "question": "Do you have any chronic medical conditions?",
-          "answer": "Patient mentioned history of asthma since childhood",
-          "needs_asking": false,
-          "category": "history"
-        }},
-        {{
-          "question": "Are you allergic to any medications?",
-          "answer": null,
-          "needs_asking": true,
-          "category": "allergies"
-        }},
-        {{
-          "question": "What medications are you currently taking?",
-          "answer": "Albuterol inhaler as needed",
-          "needs_asking": false,
-          "category": "medications"
-        }},
-        {{
-          "question": "Have you had any recent weight changes?",
-          "answer": null,
-          "needs_asking": true,
-          "category": "history"
-        }}
-      ]
-
-    Return ONLY a valid JSON object. Do NOT wrap in markdown code fences. Do NOT include ```json or ```. Do NOT include any text outside the JSON object. Do NOT use astrisks at all.
-    """
-
-# def get_extraction_prompt_deepseek(translated_text):
-#     return f"""
-#     Extract patient information from this medical text into exactly two sections:
-
-#     # SECTION 1: PATIENT DATA (JSON FORMAT)
-#     ```json
-#     {{
-#     "chief_complaint": "",
-#     "icd10_codes": [
-#         "Code1 - Description",
-#         "Code2 - Description"
-#     ],
-#     "history_of_illness": "",
-#     "current_medication": "",
-#     "imaging_results": "",
-#     "plan": "",
-#     "assessment": "",
-#     "follow_up": ""
-#     }}
-#     ```
-
-#     # SECTION 2: ANALYSIS NOTES
-#     Brief justification for data extraction and ICD10 code selections.
-
-#     Rules:
-#     - Use 'null' for missing data
-#     - Include all relevant ICD10 codes with descriptions
-#     - Properly format JSON with no explanatory text inside
-
-#     TEXT:
-#     \"\"\"{translated_text}\"\"\"
-#     """
-
-
-# def get_refine_arabic_prompt_llama(raw_text):
-#     return f"""
-# SYSTEM: You are a medical language processor that outputs ONLY corrected text with NO explanations.
-
-# USER: Correct this Arabic medical text:
-# \"\"\"{raw_text}\"\"\"
-
-# ASSISTANT:
-# """
-
-
-# def get_translation_prompt_llama(refined_text):
-#     return f"""
-# SYSTEM: You are a translation system that outputs ONLY the English translation with NO explanations.
-
-# USER: Translate to English:
-# \"\"\"{refined_text}\"\"\"
-
-# ASSISTANT:
-# """
-
-# def get_refine_english_prompt_llama(translated_text):
-#     return f"""
-# SYSTEM: You are a text processor that outputs ONLY the corrected English text with NO explanations.
-
-# USER: Correct this medical text:
-# \"\"\"{translated_text}\"\"\"
-
-# ASSISTANT:
-# """
-
-
-# def get_refine_english_prompt_deepseek_conv(translated_text):
-#     return f"""
-#     Refine this English medical conversation while preserving speaker labels:
-#     1. Fix any grammatical errors or awkward phrasing
-#     2. Ensure medical terminology is used correctly
-#     3. Maintain the conversational flow and natural dialogue
-#     4. Preserve the **DOCTOR:** and **PATIENT:** labels
-    
-#     Return ONLY the refined English conversation without any additional commentary.
-#     ORIGINAL TEXT:
-# \"\"\"{translated_text}\"\"\"
-#     """
-
-
-# def get_refine_arabic_prompt_llama_conv(raw_text):
-#     return f"""
-# SYSTEM: You are an Arabic medical transcription system that outputs ONLY formatted text with speaker labels. Any additional text will trigger system errors.
-
-# USER: Format with **DOCTOR:** and **PATIENT:** labels:
-# \"\"\"{raw_text}\"\"\"
-
-# ASSISTANT:
-# """
-
-
-# def get_refine_english_prompt_llama_conv(translated_text):
-#     return f"""
-# SYSTEM: You are a text processor that outputs ONLY the refined English conversation with speaker labels. No explanations.
-
-# USER: Refine this conversation:
-# \"\"\"{translated_text}\"\"\"
-
-# ASSISTANT:
-# """
-
-
-# def get_refine_arabic_prompt_deepseek_conv(raw_text):
-#     return f"""
-#     Analyze this Arabic medical conversation in different dialects and format it properly it usually starts with greeting from one of the speakers:
-    
-#     1. Identify speakers based on these clear role indicators:
-#        - DOCTOR: The person who asks questions, examines the patient, provides diagnoses, and recommends treatments
-#        - PATIENT: The person who describes symptoms, answers questions, explains concerns, and shares their medical history
-    
-#     2. Format the conversation by labeling each speaker as **DOCTOR:** or **PATIENT:** before their dialogue
-    
-#     3. Return ONLY the properly formatted Arabic dialogue with speaker labels, without any additional commentary or explanation
-    
-#     ORIGINAL TEXT:
-#     \"\"\"{raw_text}\"\"\"
-#     """
-
-
-# def get_translation_prompt_deepseek_conv(refined_text):
-#     return f"""
-#     Translate this Arabic medical conversation to English.
-#     Preserve speaker labels (**DOCTOR:** and **PATIENT:**).
-#     Return only the English translation without commentary.
-
-#     ARABIC TEXT:
-#     \"\"\"{refined_text}\"\"\"
-#     """
-
-
-# def get_translation_prompt_llama_conv(refined_text):
-#     return f"""
-# SYSTEM: You are a translation system that outputs ONLY the English translation with speaker labels preserved. No explanations.
-
-# USER: Translate with **DOCTOR:** and **PATIENT:** labels:
-# \"\"\"{refined_text}\"\"\"
-
-# ASSISTANT:
-# """
+You are a dental clinical documentation expert. Given the following clinical
+text from a dental visit, extract the fields below for the Dental Clinical
+Note template. Return a JSON object with two fields:
+- "json_data": A dictionary with exactly these keys (all strings, except
+  icd10_codes which is a list of strings):
+  - "chief_complaint": Primary reason for the visit. All patient complaints, signs, and symptoms should be captured here, even if they are not the main reason for the visit.
+  - "onset": when and/or how the symptom or complaint started.
+      Include the reported starting point and whether the onset was sudden, gradual, acute, or insidious, if explicitly mentioned.
+      Do not infer the onset if it is not stated.
+  - "course": Extract how the symptom or complaint has changed or behaved over time since it started.
+    Examples include improving, worsening, progressively worsening, stable, intermittent, recurrent, persistent, fluctuating, or unchanged.
+    Only report the course if it is explicitly stated or clearly described in the conversation.
+    Do not infer a course from the severity of the symptom alone.
+  - "duration": Extract how long the symptom or complaint has been present.
+    Include the exact duration when available, such as hours, days, weeks, months, or years. including any recent change in severity if mentioned (e.g. "2 months, worse over the last 3 weeks").
+    Do not calculate or infer a duration unless it is explicitly supported by the patient's statement.
+  - "past_medical_history": Relevant past medical history mentioned (e.g. systemic conditions, current medications affecting treatment). "No Past Medical History" if explicitly stated as such.
+  - "consent_obtained": Legal/ethical consent status — "Yes", "No", "Verbal", or "Not Applicable".
+  - "treatment_plan_status": Milestone of the overall care plan — "Started", "In-Progress", or "Completed".
+  - "charge_category": Billing tier — "Standard", "Insurance", or "Discounted".
+  - "patient_education_given": Whether post-procedure care instructions were communicated — "Yes" or "No".
+  - "radiographs_taken": Which X-ray type(s) were captured and at which stage — Pre-treatment / Intra-treatment / Post-treatment — using modalities such as PA (Periapical), BW (Bitewing), OPG (Panoramic), or CBCT (e.g. "Pre-treatment: Periapical").
+  - "tooth_number": Tooth identifier(s) using Universal (1-32) or FDI notation.
+  - "subspecialty_focus": Dental branch governing the procedure (Endodontics, Periodontics, Orthodontics, Prosthodontics, Surgery, Pedo, or General).
+  - "procedure_executed": Short summary of the actual clinical intervention performed.
+  - "materials_inventory": Specific brands, sizes, or materials used.
+  - "re_make": Whether a restoration/appliance/impression had to be redone — "Yes" or "No".
+  - "complication_if_present": Any adverse events or unexpected issues, or "" if none.
+  - "internal_referral": Whether patient was referred to another specialist within the practice, and which specialty.
+  - "service_leakage_alert": Lost revenue/care gap — External Referral Reason or Patient Refusal, or "" if none.
+  - "next_visit_tooth_number": Target tooth for the upcoming appointment.
+  - "next_visit_treatment": Planned procedure/goal for the next appointment.
+  - "retention_priority": Triage label for how critical it is to retain this patient (e.g. "High", "Medium", "Low").
+  - "followup_timeline": Scheduled timeframe for the next check-in.
+  - "icd10_codes": ALWAYS populate this — a list of your recommended
+    possible/differential ICD-10 (or relevant dental diagnostic) codes WITH
+    descriptions, based on your own clinical judgement of the case. Never
+    return an empty list if the text describes any clinical presentation at
+    all.
+  - "final_diagnosis": ALWAYS populate this — your single best-supported
+    working dental diagnosis, formatted EXACTLY as "<ICD-10 code> -
+    <diagnosis text>", e.g. "K04.0 - Irreversible pulpitis, tooth 36". Never
+    leave it blank if the text describes any clinical presentation at all.
+{_FINAL_DIAGNOSIS_RATIONALE_DOC}
+{_HISTORY_FIELDS_DOC}
+- "summary": A short string explaining the rationale behind the extraction.
+ 
+For every field EXCEPT icd10_codes, final_diagnosis, final_diagnosis_rationale,
+history_considered, and history_notes: leave it as "" if it is not mentioned
+in the text. Do not invent information that is not present or reasonably
+implied.
+{_history_block(patient_history_text)}
+Text: {translated_text}
+ 
+Example output:
+{{
+  "json_data": {{
+    "chief_complaint": "Severe pain on the lower left back tooth when chewing",
+    "onset": "1 week ago",
+    "course": "Progressively worsening",
+    "duration": "1 week",
+    "past_medical_history": "Controlled hypertension, on Amlodipine",
+    "consent_obtained": "Yes",
+    "treatment_plan_status": "In-Progress",
+    "charge_category": "Insurance",
+    "patient_education_given": "Yes",
+    "radiographs_taken": "Pre-treatment: Periapical",
+    "tooth_number": "FDI 36",
+    "subspecialty_focus": "Endodontics",
+    "procedure_executed": "Root canal treatment, first sitting",
+    "materials_inventory": "Rotary NiTi files, calcium hydroxide dressing",
+    "re_make": "No",
+    "complication_if_present": "",
+    "internal_referral": "",
+    "service_leakage_alert": "",
+    "next_visit_tooth_number": "FDI 36",
+    "next_visit_treatment": "Root canal obturation",
+    "retention_priority": "High",
+    "followup_timeline": "1 week",
+    "icd10_codes": ["K04.0 - Pulpitis"],
+    "final_diagnosis": "K04.0 - Irreversible pulpitis, tooth 36",
+    "final_diagnosis_rationale": "Severe pain on chewing localized to tooth 36, together with a positive periapical finding, is consistent with irreversible pulpitis rather than reversible pulpal inflammation.",
+    "history_considered": "No",
+    "history_notes": ""
+  }},
+  "summary": "Chief complaint and procedure details extracted from the documented clinical steps. ICD-10 codes and final diagnosis are the model's clinical recommendation based on the presentation."
+}}
+"""
+ 
+ 
+def get_dental_extraction_prompt_conversation(translated_text, patient_history_text=""):
+    return f"""
+You are a dental clinical documentation expert. Given the following
+doctor-patient conversation from a dental visit, extract the fields below for
+the Dental Clinical Note template. Return a JSON object with two fields:
+- "json_data": A dictionary with exactly these keys (all strings, except
+  icd10_codes which is a list of strings):
+  - "chief_complaint": Primary reason for the visit — from the patient's opening statements.
+  - "onset": when and/or how the symptom or complaint started.
+      Include the reported starting point and whether the onset was sudden, gradual, acute, or insidious, if explicitly mentioned.
+      Do not infer the onset if it is not stated.
+  - "course": Extract how the symptom or complaint has changed or behaved over time since it started.
+    Examples include improving, worsening, progressively worsening, stable, intermittent, recurrent, persistent, fluctuating, or unchanged.
+    Only report the course if it is explicitly stated or clearly described in the conversation.
+    Do not infer a course from the severity of the symptom alone.
+  - "duration": Extract how long the symptom or complaint has been present.
+    Include the exact duration when available, such as hours, days, weeks, months, or years. including any recent change in severity if mentioned (e.g. "2 months, worse over the last 3 weeks").
+    Do not calculate or infer a duration unless it is explicitly supported by the patient's statement.
+  - "past_medical_history": Relevant past medical history mentioned (e.g. systemic conditions, current medications affecting treatment). "No Past Medical History" if explicitly stated as such.
+  - "consent_obtained": Legal/ethical consent status — "Yes", "No", "Verbal", or "Not Applicable".
+  - "treatment_plan_status": Milestone of the overall care plan — "Started", "In-Progress", or "Completed".
+  - "charge_category": Billing tier — "Standard", "Insurance", or "Discounted".
+  - "patient_education_given": Whether post-procedure care instructions were communicated — "Yes" or "No".
+  - "radiographs_taken": Which X-ray type(s) were captured and at which stage — Pre-treatment / Intra-treatment / Post-treatment — using modalities such as PA (Periapical), BW (Bitewing), OPG (Panoramic), or CBCT.
+  - "tooth_number": Tooth identifier(s) using Universal (1-32) or FDI notation.
+  - "subspecialty_focus": Dental branch governing the procedure.
+  - "procedure_executed": Short summary of the actual clinical intervention performed, from doctor's statements.
+  - "materials_inventory": Specific brands, sizes, or materials used.
+  - "re_make": Whether a restoration/appliance/impression had to be redone — "Yes" or "No".
+  - "complication_if_present": Any adverse events or unexpected issues mentioned, or "" if none.
+  - "internal_referral": Whether patient was referred internally, and which specialty.
+  - "service_leakage_alert": External Referral Reason or Patient Refusal, or "" if none.
+  - "next_visit_tooth_number": Target tooth for the upcoming appointment.
+  - "next_visit_treatment": Planned procedure/goal for the next appointment.
+  - "retention_priority": Triage label for how critical it is to retain this patient.
+  - "followup_timeline": Scheduled timeframe for the next check-in.
+  - "icd10_codes": ALWAYS populate this — a list of your recommended
+    possible/differential ICD-10 (or relevant dental diagnostic) codes WITH
+    descriptions. Never return an empty list if the conversation describes
+    any clinical presentation at all.
+  - "final_diagnosis": ALWAYS populate this — your single best-supported
+    working dental diagnosis, formatted EXACTLY as "<ICD-10 code> -
+    <diagnosis text>", from doctor's conclusions. Never leave it blank if
+    the conversation describes any clinical presentation at all.
+{_FINAL_DIAGNOSIS_RATIONALE_DOC}
+{_HISTORY_FIELDS_DOC}
+- "summary": A short string explaining the rationale behind the extraction and how it was identified from the conversation.
+ 
+For every field EXCEPT icd10_codes, final_diagnosis, final_diagnosis_rationale,
+history_considered, and history_notes: leave it as "" if it is not mentioned.
+Do not invent information.
+{_history_block(patient_history_text)}
+Conversation: {translated_text}
+"""

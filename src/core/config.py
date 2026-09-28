@@ -29,7 +29,10 @@ class Config:
     QUESTIONS_API_KEY = os.getenv("questions")
 
     DATABASE_PATH = "app_data.db"
-    
+    PATIENT_HISTORY_CSV_PATH = os.getenv("PATIENT_HISTORY_CSV_PATH", "/home/ai/Workspace/Doha/MedVoice/src/data/Visit Level History.csv")
+    XLSX_PATH = os.getenv("XLSX_PATH", "/home/ai/Workspace/Doha/MedVoice/src/data/Medical_Voice_Assistant_Expected_Fields_Expanded.xlsx")
+    DASHBOARD_USERNAME = os.getenv("DASHBOARD_USERNAME", "DohaMahmoud")
+    DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "1811")
     # Create upload folder if it doesn't exist
     if not os.path.exists(UPLOAD_FOLDER):
         os.makedirs(UPLOAD_FOLDER)

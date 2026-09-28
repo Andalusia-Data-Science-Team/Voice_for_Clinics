@@ -144,6 +144,15 @@ class LLMService:
     DEEPSEEK_MODEL = "deepseek/deepseek-chat-v3-0324"   # fast DeepSeek for text tasks
     FAST_MODEL     = "openai/gpt-4o-mini"               # fast + reliable structured JSON
 
+    # Department -> prompt_type key used in _get_prompt's mapping table below.
+    # "opd" is the fallback for anything unrecognized, since it's the most
+    # general-purpose of the three note types.
+    _DEPARTMENT_EXTRACT_PROMPT_TYPES = {
+        "er":     "extract_er",
+        "opd":    "extract_opd",
+        "dental": "extract_dental",
+    }
+
     # ── Non-streaming text methods ──────────────────────────────────────
     @staticmethod
     def refine_en_transcription(raw_text: str, api_key: str, is_conversation: bool = False, specialty: Optional[str] = None):
@@ -175,17 +184,48 @@ class LLMService:
 
     # ── Structured output methods (extraction + questions) ───────────────
     @staticmethod
-    def extract_features(translated_text: str, api_key: str, is_conversation: bool = False):
+    def extract_features(
+        translated_text: str,
+        api_key: str,
+        department: str = "opd",
+        patient_history_text: str = "",
+        is_conversation: bool = False,
+    ):
+        """
+        Extract department-specific structured features.
+
+        `department` selects which field schema / prompt template is used:
+        "er", "opd", or "dental" (case-insensitive). Unrecognized values fall
+        back to "opd".
+
+        `patient_history_text` — pre-formatted text from
+        model.patient_history.format_history_for_prompt(), or "" if the
+        doctor opted out / no history exists. Only affects icd10_codes and
+        final_diagnosis (see the extraction prompts) — never backfills any
+        other field.
+        """
+        prompt_type = LLMService._DEPARTMENT_EXTRACT_PROMPT_TYPES.get(
+            (department or "").strip().lower(), "extract_opd"
+        )
         return LLMService._call_structured(
             text=translated_text,
             api_key=api_key,
-            prompt_type="extract_dynamic",
+            prompt_type=prompt_type,
             pydantic_model=ExtractedFeatures,
             is_conversation=is_conversation,
+            patient_history_text=patient_history_text,
         )
 
     @staticmethod
     def generate_questions(translated_text: str, api_key: str, is_conversation: bool = False):
+        """
+        Deprecated for this pipeline — question generation is now derived
+        deterministically from the extracted-features JSON by
+        model.question_generator.QuestionGenerator, not from a second LLM
+        pass over the raw transcript (which could disagree with what
+        extraction had already found). Kept only so any external caller
+        still using the old generic path doesn't break.
+        """
         return LLMService._call_structured(
             text=translated_text,
             api_key=api_key,
@@ -219,8 +259,9 @@ class LLMService:
         prompt_type: str,
         pydantic_model: Type[BaseModel],
         is_conversation: bool,
+        patient_history_text: str = "",
     ):
-        prompt = LLMService._get_prompt(prompt_type, text, is_conversation)
+        prompt = LLMService._get_prompt(prompt_type, text, is_conversation, patient_history_text=patient_history_text)
 
         def make_call(key: str):
             client = _get_client(key)
@@ -293,7 +334,13 @@ class LLMService:
 
     # ── Prompt dispatch ───────────────────────────────────────────────────
     @staticmethod
-    def _get_prompt(prompt_type: str, text: str, is_conversation: bool, specialty: Optional[str] = None) -> str:
+    def _get_prompt(
+        prompt_type: str,
+        text: str,
+        is_conversation: bool,
+        specialty: Optional[str] = None,
+        patient_history_text: str = "",
+    ) -> str:
         mapping = {
             ("refine_english",     False): prompt_utils.get_refine_english_prompt_deepseek,
             ("refine_english",     True):  prompt_utils.get_refine_english_prompt_deepseek_conversation,
@@ -301,19 +348,30 @@ class LLMService:
             ("refine_arabic",      True):  prompt_utils.get_refine_arabic_prompt_deepseek_conversation,
             ("translate",          False): prompt_utils.get_translation_prompt_deepseek,
             ("translate",          True):  prompt_utils.get_translation_prompt_deepseek_conversation,
-            ("extract_dynamic",    False): prompt_utils.get_dynamic_extraction_prompt_llama,
-            ("extract_dynamic",    True):  prompt_utils.get_dynamic_extraction_prompt_llama_conversation,
-            ("generate_questions", False): prompt_utils.get_question_generation_prompt_llama,
-            ("generate_questions", True):  prompt_utils.get_question_generation_prompt_llama_conversation,
+            # Legacy generic extraction — kept for backward compatibility with
+            # Department-specific extraction — one schema per clinical note template.
+            ("extract_er",         False): prompt_utils.get_er_extraction_prompt,
+            ("extract_er",         True):  prompt_utils.get_er_extraction_prompt_conversation,
+            ("extract_opd",        False): prompt_utils.get_opd_extraction_prompt,
+            ("extract_opd",        True):  prompt_utils.get_opd_extraction_prompt_conversation,
+            ("extract_dental",     False): prompt_utils.get_dental_extraction_prompt,
+            ("extract_dental",     True):  prompt_utils.get_dental_extraction_prompt_conversation,
+            # Legacy generic question generation — kept only for backward
+            # compatibility with LLMService.generate_questions(); this
+            # pipeline no longer calls it (see model/question_generator.py).
         }
         func = mapping.get((prompt_type, is_conversation))
         if func is None:
             raise ValueError(f"Unsupported prompt_type={prompt_type}, is_conversation={is_conversation}")
 
         # Only the refinement prompts currently accept specialty context —
-        # translate/extract/questions prompt functions take text only.
+        # translate/questions prompt functions take text only.
         if prompt_type in ("refine_english", "refine_arabic"):
             return func(text, specialty=specialty)
+        # Extraction prompts accept optional patient-history context —
+        # everything else (translate, legacy generate_questions) takes text only.
+        if prompt_type in ("extract_er", "extract_opd", "extract_dental"):
+            return func(text, patient_history_text=patient_history_text)
         return func(text)
 
     # ── Legacy process_text (kept for backward compat) ────────────────────
