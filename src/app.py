@@ -23,7 +23,13 @@ from model.extract_features import ExtractFeature
 from model.question_generator import QuestionGenerator
 from model.refine_text import RefineText
 from model.specialty_terms import correct_specialty_terms, SPECIALTIES
-from model.patient_history import get_patient_visits, format_history_for_prompt, check_history_usage
+from model.patient_history import (
+    get_patient_visits,
+    format_history_for_prompt,
+    check_history_usage,
+    BusinessUnit,
+    PatientHistoryError,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -287,21 +293,31 @@ async def tts_disclaimer():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# GET /patient/{patient_id}/history — "Show Patient Previous Visits Over the
-# Last Year" button, and the source of the context sent to the LLM when the
-# doctor opts in to "Use patient history?" on /audio/analyze.
+# GET /patient/{patient_code}/history?business_unit=AHJ|AMH|ANC — "Show Patient
+# Previous Visits Over the Last Year" button, and the same lookup that feeds the
+# context sent to the LLM when the doctor opts in to "Use patient history?" on
+# /audio/analyze.
+#
+# Each business unit has its own HCMS database, so business_unit is required.
+# A failed lookup (DB unreachable, bad credentials, ...) is a 503 — deliberately
+# different from a patient with no history, which is a normal 200 with
+# visit_count 0.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @patient_router.get(
-    "/{patient_id}/history",
-    summary="Visit history for a PatientID, from Visit Level History.csv, newest first",
+    "/{patient_code}/history",
+    summary="Visit history for a PatientCode in one business unit, newest first",
 )
-async def patient_history(patient_id: str):
-    visits = get_patient_visits(patient_id)
+async def patient_history(patient_code: str, business_unit: BusinessUnit):
+    try:
+        visits = await asyncio.to_thread(get_patient_visits, patient_code, business_unit)
+    except PatientHistoryError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     return {
-        "patient_id":  patient_id,
-        "visit_count": len(visits),
-        "visits":      visits,
+        "patient_code":  patient_code,
+        "business_unit": business_unit.value,
+        "visit_count":   len(visits),
+        "visits":        visits,
     }
 
 
@@ -522,8 +538,9 @@ async def analyze_transcript(
     mode:       Mode       = Form(Mode.doctor,        description="Doctor or Conversation mode"),
     department: Department = Form(Department.opd,     description="Clinical note template to fill: ER, OPD, or Dental"),
     specialty:  Optional[Specialty] = Form(None,      description="Medical specialty — drives fuzzy term correction and refinement prompt context"),
-    use_history: bool      = Form(False,              description="If true, look up patient_id's visit history and factor it into icd10_codes/final_diagnosis"),
-    patient_id: Optional[str] = Form(None,            description="PatientID to match against Visit Level History.csv — required when use_history is true"),
+    use_history: bool      = Form(False,              description="If true, look up the patient's visit history and factor it into icd10_codes/final_diagnosis"),
+    patient_id: Optional[str] = Form(None,            description="Patient Code (the 'Code' field on the Patient Info card) — required when use_history is true"),
+    business_unit: Optional[BusinessUnit] = Form(None, description="AHJ, AMH or ANC — which business unit's database holds this patient's history. Required when use_history is true"),
     clinician_name: Optional[str] = Form(None,        description="Self-reported doctor name, from the Patient Info 'Dr' field — best-effort session attribution"),
     transcription_sec: Optional[float] = Form(None,   description="Client-measured duration of the transcription session (recording start to STT completion) — this endpoint doesn't do transcription itself, so it can only log what the browser measured"),
     session_id: Optional[str] = Form(None,            description="Client-generated ID for this record→analyze→feedback cycle, so a later feedback submission can be joined back to this exact session on the dashboard"),
@@ -535,21 +552,37 @@ async def analyze_transcript(
     specialty_value = specialty.value if specialty else None
     department_value = department.value
 
-    # Patient history lookup — only when the doctor opted in AND gave a
-    # patient_id. A requested-but-missing patient_id is not an error (the
-    # doctor may just not have entered a code yet); it simply means no
-    # history context is sent, same as opting out.
+    # Patient history lookup — only when the doctor opted in. Opting in without
+    # both a patient code and a business unit is a client error (the frontend
+    # blocks it too), since we can't know which database to query.
+    #
+    # A lookup that FAILS (DB unreachable, bad credentials, ...) does not abort
+    # the analysis: the note is still generated, just without history context,
+    # and history_error is passed to the frontend so the doctor is told history
+    # was requested but NOT applied — rather than silently looking like the
+    # patient simply had no history.
     patient_history_visits: list = []
     patient_history_text   = ""
-    if use_history and patient_id:
-        patient_history_visits = get_patient_visits(patient_id)
-        patient_history_text   = format_history_for_prompt(patient_history_visits)
-        logger.info(
-            f"[Analyze] use_history=true for patient_id={patient_id!r} — "
-            f"found {len(patient_history_visits)} prior visit(s)"
-        )
-    elif use_history and not patient_id:
-        logger.warning("[Analyze] use_history=true but no patient_id was provided — proceeding without history")
+    history_error: Optional[str] = None
+    if use_history:
+        if not patient_id or not business_unit:
+            raise HTTPException(
+                status_code=400,
+                detail="use_history requires both patient_id (Patient Code) and business_unit",
+            )
+        try:
+            patient_history_visits = await asyncio.to_thread(get_patient_visits, patient_id, business_unit)
+            patient_history_text   = format_history_for_prompt(patient_history_visits)
+            logger.info(
+                f"[Analyze] use_history=true for patient_code={patient_id!r} ({business_unit.value}) — "
+                f"found {len(patient_history_visits)} prior visit(s)"
+            )
+        except PatientHistoryError as exc:
+            history_error = str(exc)
+            logger.error(
+                f"[Analyze] History lookup failed for patient_code={patient_id!r} ({business_unit.value}) — "
+                f"continuing without history: {exc}"
+            )
 
     # Deterministic fuzzy-matching pass — corrects near-miss specialty terms
     # in the raw transcript before anything else. Runs regardless of mode, so
@@ -572,8 +605,10 @@ async def analyze_transcript(
             "department":         department_value,
             "specialty":          specialty_value,
             "patient_id":         patient_id,
+            "business_unit":      business_unit.value if business_unit else None,
             "use_history":        use_history,
             "history_visit_count": len(patient_history_visits),
+            "history_error":      history_error,
             "status":             "ok",
             "total_sec":          None,
             "transcription_sec":  transcription_sec,  # known immediately — client-measured, not computed by this endpoint
@@ -691,13 +726,13 @@ async def analyze_transcript(
                 history_check = check_history_usage(patient_history_visits, extracted_features)
                 if history_check["flag"] == "claims_used_no_overlap":
                     logger.warning(
-                        f"[Analyze] patient_id={patient_id}: model reported history_considered=Yes "
+                        f"[Analyze] patient_code={patient_id}: model reported history_considered=Yes "
                         f"but no ICD-10 family overlap with the patient's history was found — "
                         f"history_notes={extracted_features.get('history_notes')!r}"
                     )
                 elif history_check["flag"] == "overlap_but_not_flagged":
                     logger.warning(
-                        f"[Analyze] patient_id={patient_id}: ICD-10 family overlap with patient history "
+                        f"[Analyze] patient_code={patient_id}: ICD-10 family overlap with patient history "
                         f"found ({history_check['overlap_families']}) but the model did not report "
                         f"history_considered=Yes"
                     )
@@ -743,6 +778,7 @@ async def analyze_transcript(
                 "history_used":            bool(patient_history_text),
                 "history_visit_count":     len(patient_history_visits),
                 "history_check":           history_check,
+                "history_error":           history_error,
                 "questions":               raw_questions,
                 "question_generation_sec": question_generation_sec,
                 "total_sec":               total_sec,

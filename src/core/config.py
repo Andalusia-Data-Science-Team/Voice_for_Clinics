@@ -36,3 +36,13 @@ class Config:
     # Create upload folder if it doesn't exist
     if not os.path.exists(UPLOAD_FOLDER):
         os.makedirs(UPLOAD_FOLDER)
+
+    BUSINESS_UNITS = {
+        "AHJ": {"server": "10.111.111.169", "database": "AHJ.Env.HCMS"},
+        "AMH": {"server": "172.31.44.169",  "database": "AMH.Env.HCMS"},
+        "ANC": {"server": "172.31.44.169",  "database": "ANC.Env.HCMS"},
+    }
+
+    PATIENT_DB_UID = os.getenv("PATIENT_DB_UID")
+    PATIENT_DB_PWD = os.getenv("PATIENT_DB_PWD")
+    PATIENT_DB_DRIVER = os.getenv("PATIENT_DB_DRIVER", "{ODBC Driver 17 for SQL Server}")

@@ -1,44 +1,91 @@
 """
-Loads "Visit Level History.csv" (PatientCode -> past visits, over roughly
-the last year) and answers two questions:
+Looks up a patient's past visits (roughly the last year) LIVE from the
+hospital's HCMS replica database and answers two questions:
 
-  1. get_patient_visits(patient_code) — for the "Show Patient Previous Visits
-     Over the Last Year" button: the raw rows for that patient, newest first.
+  1. get_patient_visits(patient_code, business_unit) — for the "Show Patient
+     Previous Visits Over the Last Year" button: one dict per visit, newest
+     first.
 
   2. format_history_for_prompt(visits) — a compact text block handed to the
      extraction prompt when the doctor opts in to "Use patient history?",
      so the LLM can factor prior diagnoses into today's ICD-10 codes /
      Final Diagnosis recommendation (see utils/prompt.py).
 
-Matching is on the sheet's PatientCode column — the same "Code" value typed
-into the frontend's Patient Info card — NOT the PatientID column. The two
-are different identifiers in this sheet (PatientID is the internal record
-ID; PatientCode is the human-facing code the doctor actually has on hand),
-and only PatientCode is something the doctor can type in. Older CSVs that
-only have a PatientID column (no PatientCode) are still supported as a
-fallback, so this doesn't break on a sheet from before the two were split.
+Matching is on PatientCode — the same "Code" value typed into the frontend's
+Patient Info card — NOT the internal PatientID.
 
-The file is read fresh on every call (it's tiny — a few thousand rows at
-most for a single clinic) rather than cached, so updates to the CSV show up
-immediately without a restart. Delimiter (tab or comma) is auto-detected so
-either a straight tab-paste or a proper comma CSV both work.
+Each business unit (AHJ / AMH / ANC) lives in its own database, so the caller
+must say which one to query. Server/database per unit come from
+Config.BUSINESS_UNITS; the shared login comes from Config.PATIENT_DB_UID /
+PATIENT_DB_PWD (i.e. the environment, never hardcoded).
+
+The SQL lives in model/sql/patient_history.sql and takes ONE bound parameter
+(the patient code). Every call opens a fresh connection and closes it, so
+there's no stale state and no cache to invalidate. pyodbc is blocking —
+call get_patient_visits from async code via asyncio.to_thread.
+
+The return shape of get_patient_visits is identical to the old CSV-backed
+version, so format_history_for_prompt / check_history_usage and the frontend
+table are unchanged.
 """
 
-import csv
 import logging
+from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
+
+import pyodbc
 
 from core.config import Config
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CSV_PATH = Path(__file__).resolve().parent.parent / "data" / "Visit Level History.csv"
+_SQL_PATH = Path(__file__).resolve().parent.parent / "sql" / "patient_history.sql"
+_SQL = _SQL_PATH.read_text(encoding="utf-8")
 
 
-def _csv_path() -> Path:
-    configured = getattr(Config, "PATIENT_HISTORY_CSV_PATH", None)
-    return Path(configured) if configured else DEFAULT_CSV_PATH
+class BusinessUnit(str, Enum):
+    AHJ = "AHJ"
+    AMH = "AMH"
+    ANC = "ANC"
+
+
+class PatientHistoryError(Exception):
+    """
+    The history lookup itself failed (DB unreachable, bad credentials, query
+    error, missing config). Deliberately distinct from "this patient has no
+    history on file", which is a normal empty result, not an error.
+    """
+
+
+def _connect(business_unit: BusinessUnit) -> pyodbc.Connection:
+    unit_cfg = getattr(Config, "BUSINESS_UNITS", {}).get(business_unit.value)
+    if not unit_cfg:
+        raise PatientHistoryError(f"No database configured for business unit {business_unit.value}")
+
+    uid = getattr(Config, "PATIENT_DB_UID", None)
+    pwd = getattr(Config, "PATIENT_DB_PWD", None)
+    if not uid or not pwd:
+        raise PatientHistoryError("Patient history database credentials are not configured")
+
+    driver = getattr(Config, "PATIENT_DB_DRIVER", "{ODBC Driver 17 for SQL Server}")
+    pwd_escaped = pwd.replace("}", "}}")  # ODBC brace-escaping, so ; { } in a password can't break the string
+
+    conn_str = (
+        f"DRIVER={driver};"
+        f"SERVER={unit_cfg['server']};"
+        f"DATABASE={unit_cfg['database']};"
+        f"UID={uid};"
+        f"PWD={{{pwd_escaped}}};"
+        "TrustServerCertificate=yes;"
+    )
+    conn = pyodbc.connect(conn_str, timeout=10)  # login timeout (seconds)
+    conn.timeout = 30                            # per-query timeout (seconds)
+    return conn
+
+
+def _fmt_date(value) -> str:
+    return value.strftime("%Y-%m-%d") if hasattr(value, "strftime") else str(value or "")
 
 
 def _split_diagnoses(raw: Optional[str]) -> List[str]:
@@ -47,94 +94,58 @@ def _split_diagnoses(raw: Optional[str]) -> List[str]:
     return [d.strip() for d in raw.split("|") if d.strip()]
 
 
-def _row_patient_code(row: Dict[str, str]) -> str:
+def get_patient_visits(patient_code: str, business_unit: BusinessUnit) -> List[Dict]:
     """
-    The sheet's PatientCode column is the match key (same value as the
-    frontend's Patient Info "Code" field). Falls back to PatientID only for
-    older CSVs that predate the PatientCode column existing at all — if a
-    row has a PatientCode column, that value always wins even when empty,
-    so a genuinely blank code doesn't silently fall back to matching on the
-    unrelated internal PatientID.
-    """
-    if "PatientCode" in row:
-        return (row.get("PatientCode") or "").strip()
-    return (row.get("PatientID") or "").strip()
-
-
-def _row_current_icd10(row: Dict[str, str]) -> Optional[str]:
-    """CurrentICD10 is the sheet's present column name; ICD10_Diagnoses is
-    kept as a fallback for older CSVs."""
-    if "CurrentICD10" in row:
-        return row.get("CurrentICD10")
-    return row.get("ICD10_Diagnoses")
-
-
-def _sniff_dialect(sample: str):
-    try:
-        return csv.Sniffer().sniff(sample, delimiters="\t,")
-    except csv.Error:
-        # Sniffer gives up on very short/uniform samples — fall back to
-        # whichever separator actually shows up in the header line.
-        first_line = sample.splitlines()[0] if sample else ""
-        return csv.excel_tab if "\t" in first_line else csv.excel
-
-
-def _load_rows() -> List[Dict[str, str]]:
-    path = _csv_path()
-    if not path.exists():
-        logger.warning(f"[PatientHistory] CSV not found at {path}")
-        return []
-    try:
-        with path.open(newline="", encoding="cp1252") as f:
-            sample = f.read(4096)
-            f.seek(0)
-            dialect = _sniff_dialect(sample)
-            reader = csv.DictReader(f, dialect=dialect)
-            return [row for row in reader]
-    except Exception as e:
-        logger.error(f"[PatientHistory] Failed to read {path}: {e}")
-        return []
-
-
-def _visit_sort_key(visit: Dict) -> tuple:
-    # VisitDate is stored as "M/D/YYYY" text — parse for sorting, newest first.
-    try:
-        m, d, y = visit["visit_date"].split("/")
-        return (int(y), int(m), int(d))
-    except Exception:
-        return (0, 0, 0)
-
-
-def get_patient_visits(patient_code: str) -> List[Dict]:
-    """
-    Returns every row in the CSV matching this PatientCode (the same value
-    the doctor types into the "Code" field on the Patient Info card),
-    newest visit first. Each item:
+    Returns every visit in the last 12 months for this PatientCode in the
+    given business unit, newest first (the SQL already orders them). Each item:
       {visit_id, visit_date, specialty, icd10_diagnoses (list[str]),
        department, visit_type, previous_visit_count}
-    Empty list if the patient has no history on file (not an error —
-    plenty of patients will be genuinely new).
+    Empty list if the patient has no history on file (not an error — plenty of
+    patients will be genuinely new).
+
+    Raises PatientHistoryError if the lookup itself fails.
     """
     code = str(patient_code).strip()
     if not code:
         return []
 
-    visits = []
-    for row in _load_rows():
-        if _row_patient_code(row) != code:
-            continue
-        visits.append({
-            "visit_id":             (row.get("VisitID") or "").strip(),
-            "visit_date":           (row.get("VisitDate") or "").strip(),
-            "specialty":            (row.get("Specialty") or "").strip(),
-            "icd10_diagnoses":      _split_diagnoses(_row_current_icd10(row)),
-            "department":           (row.get("Department") or "").strip(),
-            "visit_type":           (row.get("VisitTypeName") or "").strip(),
-            "previous_visit_count": (row.get("PreviousVisitCount") or "").strip(),
-        })
+    try:
+        conn = _connect(business_unit)
+        try:
+            cursor = conn.cursor()
+            cursor.execute(_SQL, code)
+            columns = [c[0] for c in cursor.description]
+            rows = [dict(zip(columns, r)) for r in cursor.fetchall()]
+        finally:
+            conn.close()
+    except PatientHistoryError:
+        raise
+    except pyodbc.Error as e:
+        logger.error(
+            "[PatientHistory] %s lookup failed for patient_code=%r: %s",
+            business_unit.value, code, e,
+        )
+        raise PatientHistoryError(
+            f"Could not retrieve patient history from {business_unit.value}"
+        ) from e
 
-    visits.sort(key=_visit_sort_key, reverse=True)
-    return visits
+    logger.info(
+        "[PatientHistory] %s: %d visit(s) found for patient_code=%r",
+        business_unit.value, len(rows), code,
+    )
+
+    return [
+        {
+            "visit_id":             str(r.get("VisitID") or ""),
+            "visit_date":           _fmt_date(r.get("VisitDate")),
+            "specialty":            (r.get("Specialty") or "").strip(),
+            "icd10_diagnoses":      _split_diagnoses(r.get("CurrentICD10")),
+            "department":           (r.get("Department") or "").strip(),
+            "visit_type":           (r.get("VisitTypeName") or "").strip(),
+            "previous_visit_count": str(r.get("PreviousVisitCount") or 0),
+        }
+        for r in rows
+    ]
 
 
 def format_history_for_prompt(visits: List[Dict]) -> str:
