@@ -1,4 +1,5 @@
 import os
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,10 +18,32 @@ class Config:
     MUNSIT_API_KEY = os.getenv("MUNSIT_API_KEY")
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
+    # Process-local settings for the shared asynchronous OpenRouter runtime.
+    LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")
+    LLM_API_KEY = os.getenv("LLM_API_KEY") or OPENROUTER_API_KEY
+    LLM_TIMEOUT_S = float(os.getenv("LLM_TIMEOUT_S", "45"))
+    LLM_CONNECT_TIMEOUT_S = float(os.getenv("LLM_CONNECT_TIMEOUT_S", "5"))
+    LLM_MAX_ATTEMPTS = int(os.getenv("LLM_MAX_ATTEMPTS", "4"))
+    LLM_BACKOFF_MAX_S = float(os.getenv("LLM_BACKOFF_MAX_S", "8"))
+    LLM_RETRY_AFTER_MAX_S = float(os.getenv("LLM_RETRY_AFTER_MAX_S", "30"))
+    LLM_LIMIT_DEFAULT = int(os.getenv("LLM_LIMIT_DEFAULT", "8"))
+    LLM_MAX_CONNECTIONS = int(os.getenv("LLM_MAX_CONNECTIONS", "100"))
+    LLM_MAX_KEEPALIVE_CONNECTIONS = int(os.getenv("LLM_MAX_KEEPALIVE_CONNECTIONS", "20"))
+
     _openrouter_extra_raw = os.getenv("OPENROUTER_API_KEYS", "")
     OPENROUTER_API_KEYS = [k.strip() for k in _openrouter_extra_raw.split(",") if k.strip()]
-    if OPENROUTER_API_KEY and OPENROUTER_API_KEY not in OPENROUTER_API_KEYS:
-        OPENROUTER_API_KEYS.insert(0, OPENROUTER_API_KEY)
+    if LLM_API_KEY and LLM_API_KEY not in OPENROUTER_API_KEYS:
+        OPENROUTER_API_KEYS.insert(0, LLM_API_KEY)
+
+    @classmethod
+    def llm_model_limit(cls, model: str) -> int:
+        """Return the configured semaphore size for an OpenRouter model slug."""
+        env_name = "LLM_LIMIT__" + re.sub(r"[^A-Za-z0-9]", "_", model).upper()
+        raw_limit = os.getenv(env_name)
+        limit = int(raw_limit) if raw_limit is not None else cls.LLM_LIMIT_DEFAULT
+        if limit < 1:
+            raise ValueError(f"{env_name} must be at least 1")
+        return limit
 
     SPEECH_API_KEY = os.getenv("speech")
     REFINE_API_KEY = os.getenv("refine")

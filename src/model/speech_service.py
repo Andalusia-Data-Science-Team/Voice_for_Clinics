@@ -296,8 +296,10 @@ async def _transcribe_munsit_yield(
                     keepalive_task.cancel()
                     try:
                         await keepalive_task
-                    except (asyncio.CancelledError, Exception):
+                    except asyncio.CancelledError:
                         pass
+                    except Exception as exc:
+                        logger.debug("[Munsit] keepalive task ended: %s", exc)
 
             sender_task = asyncio.create_task(send_audio())
 
@@ -358,8 +360,10 @@ async def _transcribe_munsit_yield(
                 sender_task.cancel()
                 try:
                     await sender_task
-                except (asyncio.CancelledError, Exception):
+                except asyncio.CancelledError:
                     pass
+                except Exception as exc:
+                    logger.debug("[Munsit] sender task ended: %s", exc)
 
     except websockets.exceptions.InvalidStatusCode as e:
         raise TranscriptionError(f"Munsit connection rejected: {e}") from e

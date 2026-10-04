@@ -395,7 +395,6 @@
   .feat-history-caution { margin-top: 8px; padding: 7px 10px; background: var(--amber-light); border: 1px solid #e8d9c5; border-radius: var(--r-sm); font-size: 11.5px; color: var(--amber); line-height: 1.5; }
   .feat-history-error { background: var(--amber-light); border-color: #e8d9c5; }
   .feat-history-error .feat-cell-label { color: var(--amber); }
-  .feat-dx-rationale { margin-top: 8px; font-size: 11.5px; font-style: italic; color: var(--text-3); line-height: 1.5; }
 
   /* Questions */
   .q-summary { display: flex; gap: 12px; margin-bottom: 18px; }
@@ -528,6 +527,16 @@
           <option value="yes">Yes — factor into ICD-10 / diagnosis</option>
         </select>
         <span class="field-hint" id="use-history-hint">Uses the Patient Code and Business Unit entered in the Patient info card to look up last year's visits.</span>
+      </div>
+      <div class="field">
+        <label>Extraction model</label>
+        <select id="sel-extraction-model"></select>
+        <span class="field-hint">Fills the clinical note fields.</span>
+      </div>
+      <div class="field">
+        <label>Reasoning model</label>
+        <select id="sel-reasoning-model"></select>
+        <span class="field-hint">Recommends ICD-10 codes (ER: also differentials + triage).</span>
       </div>
     </div>
 
@@ -662,10 +671,21 @@
       <div class="phase-body" id="body-extract"><div class="ph">Medical features will appear here</div></div>
     </div>
 
+    <!-- 4b. ICD-10 diagnosis recommendation — runs in parallel with field extraction -->
+    <div class="phase-card" id="card-diagnosis">
+      <div class="phase-hd">
+        <div class="step-num" id="num-diagnosis">4</div>
+        <div class="phase-title">Diagnosis recommendation <span class="phase-subtitle" id="diagnosis-subtitle">(ICD-10 · reasoning)</span></div>
+        <span class="phase-badge b-idle" id="badge-diagnosis">Waiting</span>
+        <span class="phase-time" id="time-diagnosis"></span>
+      </div>
+      <div class="phase-body" id="body-diagnosis"><div class="ph">ICD-10 recommendations will appear here</div></div>
+    </div>
+
     <!-- 5. Follow-up questions -->
     <div class="phase-card" id="card-questions">
       <div class="phase-hd">
-        <div class="step-num" id="num-questions">4</div>
+        <div class="step-num" id="num-questions">5</div>
         <div class="phase-title">Questions for the doctor <span class="phase-subtitle">(missing fields only)</span></div>
         <span class="phase-badge b-idle" id="badge-questions">Waiting</span>
         <span class="phase-time" id="time-questions"></span>
@@ -676,7 +696,7 @@
     <!-- 6. Summary — everything that will print, as copyable free text -->
     <div class="phase-card" id="card-summary">
       <div class="phase-hd">
-        <div class="step-num" id="num-summary">5</div>
+        <div class="step-num" id="num-summary">6</div>
         <div class="phase-title">Summary <span class="phase-subtitle">(what will be printed)</span></div>
         <span class="phase-badge b-idle" id="badge-summary">Waiting</span>
       </div>
@@ -746,30 +766,25 @@ let interimText      = '';     // provisional text not yet committed (Munsit onl
 let transcriptReady  = false;  // true after WS "done" received
 let transcriptStartMs = 0;     // for elapsed timer on transcription card
 
-// Editable ICD-10 code list (kept in sync with the DOM pills)
-let currentIcdCodes  = [];
+// Editable pill lists shown in the Diagnosis card (kept in sync with the DOM):
+// ICD-10 recommendations, and (ER only) differential diagnoses.
+let pillLists = { icd10: [], differential: [] };
 
 // The exact text that fed the extraction step — becomes the template's
 // "Patient Story" field verbatim. Set from the server's "extraction" event.
 let patientStoryText = '';
 
-// Whether patient history was actually sent for the last extraction, and
+// Whether patient history was actually sent for the last analysis, and
 // what the model reported doing with it (see history_considered/history_notes
-// in the extracted features) — used to render the audit cell + print view.
+// in the diagnosis result) — used to render the audit cell + print view.
 let lastHistoryUsed = false;
 let lastHistoryVisitCount = 0;
 let lastHistoryCheck = null;
 
 // Set when the doctor asked for history but the lookup itself failed
-// server-side (DB unreachable etc.) — the note was generated WITHOUT history,
-// and the UI says so instead of looking like "patient has no history".
+// server-side (DB unreachable etc.) — the recommendation was generated WITHOUT
+// history, and the UI says so instead of looking like "patient has no history".
 let lastHistoryError = null;
-
-// The model's own short explanation of why it picked the recommended final
-// diagnosis (see final_diagnosis_rationale in the extraction prompts) —
-// shown as a small caption under the Final Diagnosis cell, and echoed into
-// the summary/print view, same treatment as history_notes above.
-let lastFinalDxRationale = '';
 
 const $        = id => document.getElementById(id);
 const btnRecord  = $('btn-record');
@@ -806,9 +821,9 @@ function micButtonHTML(key, title) {
 /* ─────────────────────────────────────────────────────────────────────────────
    Department field schema — one entry per template field, in template order.
    `key` must match the JSON key the department's extraction prompt returns
-   (see utils/prompt.py: get_or/opd/dental_extraction_prompt). ICD-10 codes,
-   Final Diagnosis, and Patient Story are handled separately below since they
-   appear identically at the bottom of all three templates.
+   (see utils/clinical_prompts.py). ICD-10 codes, differential diagnoses,
+   triage priority and reasoning come from the separate diagnosis step and are
+   rendered in the Diagnosis card; Patient Story is appended to the field grid.
 ───────────────────────────────────────────────────────────────────────────── */
 const DEPARTMENT_LABELS = { er: 'ER', opd: 'OPD', dental: 'Dental' };
 
@@ -912,6 +927,13 @@ function setBody(id, html) { const el = $('body-' + id); if (el) el.innerHTML = 
 function showCard(id) { $('card-' + id)?.classList.remove('hidden'); }
 function hideCard(id) { $('card-' + id)?.classList.add('hidden'); }
 
+/* Field extraction and diagnosis recommendation run in parallel server-side,
+   so both cards go "processing" together. */
+function markAnalysisActive() {
+  setCard('extract', 'active');   setBody('extract',   '<div class="ph">Extracting clinical note fields…</div>');
+  setCard('diagnosis', 'active'); setBody('diagnosis', '<div class="ph">Recommending ICD-10 diagnoses…</div>');
+}
+
 /* ── Department / Language / Mode selectors ──
    Refinement is skipped entirely in Doctor mode (see app.py), so its card is
    hidden from the frontend altogether when Doctor mode is selected — it never
@@ -929,6 +951,7 @@ function updateStepNumbers() {
   if (!isDoctor) { $('num-refine').textContent = n; n++; }
   if (isAr)      { $('num-translate').textContent = n; n++; }
   $('num-extract').textContent   = n; n++;
+  $('num-diagnosis').textContent = n; n++;
   $('num-questions').textContent = n; n++;
   $('num-summary').textContent   = n;
 }
@@ -938,6 +961,21 @@ function updateDepartmentSubtitle() {
 $('sel-lang').addEventListener('change', updateStepNumbers);
 $('sel-mode').addEventListener('change', updateStepNumbers);
 $('sel-department').addEventListener('change', updateDepartmentSubtitle);
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Model selection — the dropdown contents come from GET /models so the UI and
+   backend registry (core/model_registry.py) can never drift apart.
+───────────────────────────────────────────────────────────────────────────── */
+async function loadModelOptions() {
+  try {
+    const cfg = await (await fetch(API_BASE + '/models')).json();
+    [['extraction', 'sel-extraction-model'], ['reasoning', 'sel-reasoning-model']].forEach(([step, id]) => {
+      const sel = $(id);
+      sel.innerHTML = cfg[step].models.map(m => `<option value="${esc(m.id)}">${esc(m.label)}</option>`).join('');
+      sel.value = cfg[step].default;
+    });
+  } catch (e) { console.warn('[Models] could not load model list', e); }
+}
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Patient history — "Show Patient Previous Visits Over the Last Year" button.
@@ -1061,13 +1099,12 @@ function resetAll() {
   timerSec        = 0;
   lastTranscriptionSec = null;
   clearInterval(timerInterval);
-  currentIcdCodes = [];
+  pillLists = { icd10: [], differential: [] };
   patientStoryText = '';
   lastHistoryUsed = false;
   lastHistoryVisitCount = 0;
   lastHistoryCheck = null;
   lastHistoryError = null;
-  lastFinalDxRationale = '';
 
   btnSubmit.disabled  = true;
   btnPrint.disabled   = true;
@@ -1081,7 +1118,7 @@ function resetAll() {
   liveBadge.classList.remove('show');
   waveform.classList.remove('active');
 
-  ['trans','refine','translate','extract','questions','summary'].forEach(id => {
+  ['trans','refine','translate','extract','diagnosis','questions','summary'].forEach(id => {
     setCard(id, 'idle');
     const t = $('time-' + id); if (t) t.textContent = '';
   });
@@ -1089,10 +1126,12 @@ function resetAll() {
   if ($('sel-mode').value !== 'doctor') setBody('refine', '<div class="ph">Refined transcript will appear here</div>');
   setBody('translate','<div class="ph">English translation will appear here</div>');
   setBody('extract',  '<div class="ph">Medical features will appear here</div>');
+  setBody('diagnosis','<div class="ph">ICD-10 recommendations will appear here</div>');
   setBody('questions','<div class="ph">Generated questions will appear here</div>');
   setBody('summary',  '<div class="ph">A copyable summary of the clinical note will appear here once fields are extracted</div>');
   updateStepNumbers();
   updateDepartmentSubtitle();
+  $('diagnosis-subtitle').textContent = '(ICD-10 · reasoning)';
 }
 btnReset.addEventListener('click', resetAll);
 
@@ -1277,6 +1316,9 @@ async function startRecording() {
 
   // ── Step 5: connect audio nodes and start streaming ──
   sourceNode = audioContext.createMediaStreamSource(mediaStream);
+  // ScriptProcessorNode is retained as a compatibility fallback for browsers
+  // where the AudioWorklet path is unavailable. Modern browsers should use
+  // AudioWorkletNode so microphone processing does not run on the main thread.
   scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
   scriptProcessor.onaudioprocess = event => {
     // While paused we keep the mic and WS alive but simply stop sending frames —
@@ -1398,13 +1440,14 @@ btnRecord.addEventListener('click', async () => {
   if (btnRecord.classList.contains('processing') || announcementPlaying) return;
 
   // Reset result cards before a new session
-  ['refine','translate','extract','questions'].forEach(id => {
+  ['refine','translate','extract','diagnosis','questions'].forEach(id => {
     setCard(id, 'idle');
     const t = $('time-' + id); if (t) t.textContent = '';
   });
   if ($('sel-mode').value !== 'doctor') setBody('refine', '<div class="ph">Refined transcript will appear here</div>');
   setBody('translate', '<div class="ph">English translation will appear here</div>');
   setBody('extract',   '<div class="ph">Medical features will appear here</div>');
+  setBody('diagnosis', '<div class="ph">ICD-10 recommendations will appear here</div>');
   setBody('questions', '<div class="ph">Generated questions will appear here</div>');
   btnSubmit.disabled = true;
   btnPrint.disabled  = true;
@@ -1463,14 +1506,16 @@ btnSubmit.addEventListener('click', async () => {
   // Setup card states — refine card is hidden entirely in Doctor mode, never shown
   updateStepNumbers();
   updateDepartmentSubtitle();
+  $('diagnosis-subtitle').textContent = '(ICD-10 · reasoning)';
 
-  ['refine','translate','extract','questions'].forEach(id => {
+  ['refine','translate','extract','diagnosis','questions'].forEach(id => {
     setCard(id, 'idle');
     const t = $('time-' + id); if (t) t.textContent = '';
   });
   if (!isDoctorMode) setBody('refine', '<div class="ph">Waiting for refinement…</div>');
   setBody('translate', '<div class="ph">Waiting for translation…</div>');
   setBody('extract',   '<div class="ph">Waiting for extraction…</div>');
+  setBody('diagnosis', '<div class="ph">Waiting for diagnosis recommendation…</div>');
   setBody('questions', '<div class="ph">Waiting for questions…</div>');
 
   const form = new FormData();
@@ -1479,6 +1524,8 @@ btnSubmit.addEventListener('click', async () => {
   form.append('mode',       mode);
   form.append('department', department);
   if (specialty) form.append('specialty', specialty);
+  if ($('sel-extraction-model').value) form.append('extraction_model', $('sel-extraction-model').value);
+  if ($('sel-reasoning-model').value)  form.append('reasoning_model',  $('sel-reasoning-model').value);
   form.append('use_history', useHistory ? 'true' : 'false');
   if (patientId) form.append('patient_id', patientId);
   if (businessUnit) form.append('business_unit', businessUnit);
@@ -1512,11 +1559,11 @@ btnSubmit.addEventListener('click', async () => {
     // valid, fully-formed data, dropped with zero trace.
     let eName     = null;
 
-    // Marks a step (and, for 'extraction', the Questions card riding along
-    // with it) as failed, and makes sure the Record/Analyse buttons never get
-    // stuck disabled just because this one step's data never arrived —
-    // 'extraction' is normally what re-enables them on success, so a failure
-    // here needs to do it too, or the doctor is stuck with no way to retry.
+    // Marks a step (and, for 'extraction', the Diagnosis and Questions cards
+    // riding along with it) as failed, and makes sure the Record/Analyse
+    // buttons never get stuck disabled just because this one step's data never
+    // arrived — 'extraction' is normally what re-enables them on success, so a
+    // failure here needs to do it too, or the doctor is stuck with no way to retry.
     function failStep(ev, message) {
       const cardId = SSE_EVENT_TO_CARD[ev];
       if (cardId) {
@@ -1524,6 +1571,8 @@ btnSubmit.addEventListener('click', async () => {
         setBody(cardId, '<div class="err-box">' + esc(message) + '</div>');
       }
       if (ev === 'extraction') {
+        setCard('diagnosis', 'error');
+        setBody('diagnosis', '<div class="err-box">' + esc(message) + '</div>');
         setCard('questions', 'error');
         setBody('questions', '<div class="err-box">' + esc(message) + '</div>');
         btnRecord.disabled = false;
@@ -1571,7 +1620,7 @@ btnSubmit.addEventListener('click', async () => {
     // explicit 'error' event either (that path is already handled above) —
     // this is the connection itself ending early, mid-pipeline. Silent on
     // the wire, but must not be silent in the UI: without this, the extract/
-    // questions cards would just sit on their "Extracting…" placeholder
+    // diagnosis/questions cards would just sit on their placeholders
     // forever with no indication anything went wrong, and Analyse would stay
     // disabled with no way to retry.
     const extractCard = $('card-extract');
@@ -1593,7 +1642,7 @@ btnSubmit.addEventListener('click', async () => {
       refineBuf = d.refined_text || transBuf;
       setBody('trans', `<div class="transcript">${esc(transBuf)}</div>`);
       if (isAr) { setCard('translate','active'); setBody('translate','<div class="transcript c-blink" id="ttl"></div>'); }
-      else       { setCard('extract','active');  setBody('extract','<div class="ph">Extracting clinical note fields…</div>'); }
+      else       { markAnalysisActive(); }
 
     } else if (ev === 'refinement_delta') {
       if (!refineBuf) { setCard('refine','active'); setBody('refine','<div class="transcript c-blink" id="rl"></div>'); }
@@ -1610,7 +1659,7 @@ btnSubmit.addEventListener('click', async () => {
          <div class="tab-pane" id="panel-refined"><div class="transcript">${esc(refineBuf)}</div></div>`);
       setBody('refine', '<div class="transcript">' + esc(refineBuf) + '</div>');
       if (isAr) { setCard('translate','active'); setBody('translate','<div class="transcript c-blink" id="ttl"></div>'); }
-      else       { setCard('extract','active');  setBody('extract','<div class="ph">Extracting clinical note fields…</div>'); }
+      else       { markAnalysisActive(); }
 
     } else if (ev === 'translation_delta') {
       translateBuf += d.delta || '';
@@ -1620,32 +1669,55 @@ btnSubmit.addEventListener('click', async () => {
       translateBuf = d.final_text || translateBuf;
       setCard('translate','done'); setTime('translate', d.translation_sec);
       setBody('translate', `<div class="xlat-pill">🌐 Translated from Arabic</div><div class="transcript">${esc(translateBuf)}</div>`);
-      setCard('extract','active'); setBody('extract','<div class="ph">Extracting clinical note fields…</div>');
+      markAnalysisActive();
 
     } else if (ev === 'extraction') {
-      // Extraction + questions now arrive together as one atomic event (see
-      // app.py) — two separate large events each turned out to be an
-      // independent point of failure through this deployment's network path,
-      // and losing just one used to leave the UI half-rendered with no error
-      // shown. Handling both here means it's now all-or-nothing.
-      setCard('extract','done'); setTime('extract', d.extraction_sec);
-      patientStoryText = d.patient_story || transBuf;
-      lastHistoryUsed = !!d.history_used;
+      // One atomic event carrying BOTH parallel steps (see app.py) — field
+      // extraction (+ its questions) and the ICD-10 diagnosis recommendation.
+      // Two separate large events each turned out to be an independent point
+      // of failure through this deployment's network path, so they still ship
+      // together; but either step may have failed on its own (d.errors says
+      // which), so each card is resolved independently.
+      const errs = d.errors || {};
+      const dept = d.department || department;
+      patientStoryText      = d.patient_story || transBuf;
+      lastHistoryUsed       = !!d.history_used;
       lastHistoryVisitCount = d.history_visit_count || 0;
-      lastHistoryCheck = d.history_check || null;
-      lastHistoryError = d.history_error || null;
-      renderFeatures(d.extracted_features, d.department || department);
-      btnPrint.disabled = false; // note fields are populated — printable from here on
+      lastHistoryCheck      = d.history_check || null;
+      lastHistoryError      = d.history_error || null;
+      if (d.models) {
+        $('extract-subtitle').textContent   = '(' + (DEPARTMENT_LABELS[dept] || dept) + ' · ' + d.models.extraction + ')';
+        $('diagnosis-subtitle').textContent = '(ICD-10 · ' + d.models.reasoning + ')';
+      }
 
-      setCard('questions','done'); setTime('questions', d.question_generation_sec);
-      renderQuestions(extractQList(d), department);
+      if (errs.extraction) {
+        const box = '<div class="err-box">Extraction failed: ' + esc(errs.extraction) + '</div>';
+        setCard('extract', 'error');   setBody('extract', box);
+        setCard('questions', 'error'); setBody('questions', box);
+      } else {
+        setCard('extract', 'done'); setTime('extract', d.extraction_sec);
+        renderFeatures(d.extracted_features, dept);
+        btnPrint.disabled = false; // note fields are populated — printable from here on
+        setCard('questions', 'done'); setTime('questions', d.question_generation_sec);
+        renderQuestions(extractQList(d), department);
+      }
+
+      if (errs.diagnosis) {
+        setCard('diagnosis', 'error');
+        setBody('diagnosis', '<div class="err-box">Diagnosis recommendation failed: ' + esc(errs.diagnosis) + '</div>');
+      } else {
+        setCard('diagnosis', 'done'); setTime('diagnosis', d.diagnosis_sec);
+        renderDiagnosis(d.diagnosis, dept);
+        btnPrint.disabled = false;
+      }
+
       updateSummary();
       // Re-enable for another recording
       btnRecord.disabled  = false;
       btnSubmit.disabled  = false;
 
     } else if (ev === 'error') {
-      const idMap = { refinement:'refine', translation:'translate', extraction:'extract', questions:'questions' };
+      const idMap = { refinement:'refine', translation:'translate', extraction:'extract', diagnosis:'diagnosis', questions:'questions' };
       const id    = idMap[d.step || ''] || 'refine';
       setCard(id,'error'); setBody(id,'<div class="err-box">' + esc(d.detail || 'Unknown error') + '</div>');
       if (id === 'extract') setCard('questions', 'error');
@@ -1677,22 +1749,19 @@ function extractQList(d) {
   return [];
 }
 
-/* ── Feature extraction: department-driven editable field grid + ICD-10 pills
-      + Final Diagnosis + Patient Story. EVERY field for the department is
-      rendered, in template order — fields with no extracted value render as
-      an empty, placeholder-hinted editable cell so the doctor can fill them
-      in by hand rather than the field disappearing. Every field carries
-      data-field="<key>" so the print view (buildPrintHTML) can read back
-      any edits made here. ── */
+/* ── Feature extraction: department-driven editable field grid + Patient Story.
+      EVERY field for the department is rendered, in template order — fields
+      with no extracted value render as an empty, placeholder-hinted editable
+      cell so the doctor can fill them in by hand rather than the field
+      disappearing. Every field carries data-field="<key>" so the print view
+      (buildPrintHTML) can read back any edits made here. Diagnoses live in
+      the separate Diagnosis card (renderDiagnosis). ── */
 function renderFeatures(raw, department) {
   let obj = raw;
   if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch(_) { setBody('extract','<div class="ph">Could not parse features</div>'); return; } }
   if (!obj || typeof obj !== 'object') { setBody('extract','<div class="ph">No features extracted</div>'); return; }
   const src    = (obj.json_data && typeof obj.json_data === 'object') ? obj.json_data : obj;
   const fields = DEPARTMENT_FIELDS[department] || DEPARTMENT_FIELDS.opd;
-  const icds   = Array.isArray(src.icd10_codes) ? src.icd10_codes.filter(Boolean) : (src.icd10_codes ? [src.icd10_codes] : []);
-  const finalDx = src.final_diagnosis || '';
-  lastFinalDxRationale = (src.final_diagnosis_rationale || '').trim();
   const PLACEHOLDER = 'Not mentioned — click to add';
 
   let html = '<div class="feat-layout">';
@@ -1704,26 +1773,6 @@ function renderFeatures(raw, department) {
     html += `<div class="feat-highlights"><div class="feat-highlight complaint"><div class="feat-highlight-label"><span>${esc(ccField.label)}</span>${micButtonHTML(ccField.key)}</div><div class="feat-highlight-val" data-field="${ccField.key}" data-placeholder="${esc(PLACEHOLDER)}" contenteditable="true" spellcheck="false">${esc(src[ccField.key] || '')}</div></div></div>`;
   }
 
-  // Triage Priority (ER only) — always AI-recommended like icd10_codes/
-  // final_diagnosis, so it's rendered the same way: outside the per-field
-  // grid, always shown, expected pre-populated. Placed right before the
-  // ICD-10 row per department order.
-  if (department === 'er') {
-    const triage = src.triage_priority || '';
-    html += `<div class="feat-cell feat-wide feat-triage"><div class="feat-cell-label"><span class="feat-cell-icon">🚦</span>Triage Priority</div><div class="feat-cell-val" data-field="triage_priority" data-placeholder="e.g. ESI 3 - Urgent" contenteditable="true" spellcheck="false">${esc(triage)}</div></div>`;
-  }
-
-  // ICD-10 row — always shown; these are always AI-recommended (see extraction
-  // prompts), so it's expected to already be populated, but stays editable.
-  html += `<div class="icd-row" id="icd-row">
-    <span class="icd-label">ICD-10</span>
-    <span id="icd-pills"></span>
-    <span class="icd-add">
-      <input type="text" id="icd-add-input" placeholder="Add code" />
-      <button type="button" id="icd-add-btn">+ Add</button>
-    </span>
-  </div>`;
-
   // Every remaining field — mentioned or not — gets a cell.
   const cells = fields.filter(f => f.key !== (ccField && ccField.key));
   html += '<div class="feat-grid">';
@@ -1734,100 +1783,137 @@ function renderFeatures(raw, department) {
     const missingClass = value ? '' : 'feat-missing';
     html += `<div class="feat-cell ${wideClass} ${themeClass} ${missingClass}"><div class="feat-cell-label"><span><span class="feat-cell-icon">${f.icon || '📋'}</span>${esc(f.label)}</span>${micButtonHTML(f.key)}</div><div class="feat-cell-val" data-field="${f.key}" data-placeholder="${esc(PLACEHOLDER)}" contenteditable="true" spellcheck="false">${esc(value)}</div></div>`;
   });
-  // Final Diagnosis — always rendered; expected to already be populated (AI-recommended).
-  const dxRationaleHtml = lastFinalDxRationale
-    ? `<div class="feat-dx-rationale">💡 ${esc(lastFinalDxRationale)}</div>`
-    : '';
-  html += `<div class="feat-cell feat-wide"><div class="feat-cell-label"><span class="feat-cell-icon">🎯</span>Final Diagnosis</div><div class="feat-cell-val" data-field="final_diagnosis" data-placeholder="e.g. K35.80 - Acute appendicitis" contenteditable="true" spellcheck="false">${esc(finalDx)}</div>${dxRationaleHtml}</div>`;
-  // Patient History Considered — only shown when history was actually sent for
-  // this extraction; surfaces the model's self-reported history_considered /
-  // history_notes so the doctor (and you) can verify it was actually used,
-  // not just silently ignored.
-  if (lastHistoryUsed) {
-    const considered = (src.history_considered || 'No').trim();
-    const notes = (src.history_notes || '').trim();
-    const usedClass = considered.toLowerCase() === 'yes' ? 'feat-history-used' : 'feat-history-notused';
-    const icon = considered.toLowerCase() === 'yes' ? '✅' : '➖';
-    const bodyText = considered.toLowerCase() === 'yes'
-      ? (notes || 'The model reported using this patient\'s history, but gave no further detail.')
-      : `Reviewed ${lastHistoryVisitCount} prior visit(s) on file, but none were relevant to today's presentation.`;
-    let cautionHtml = '';
-    if (lastHistoryCheck && lastHistoryCheck.flag === 'claims_used_no_overlap') {
-      cautionHtml = `<div class="feat-history-caution">⚠️ The model said it used the patient's history, but none of today's ICD-10 codes share a category with anything in their history — worth a quick manual check.</div>`;
-    } else if (lastHistoryCheck && lastHistoryCheck.flag === 'overlap_but_not_flagged') {
-      cautionHtml = `<div class="feat-history-caution">⚠️ Today's diagnosis shares an ICD-10 category (${esc(lastHistoryCheck.overlap_families.join(', '))}) with something in this patient's history, but the model didn't flag history as considered — worth a quick manual check.</div>`;
-    }
-    html += `<div class="feat-cell feat-wide ${usedClass}"><div class="feat-cell-label"><span class="feat-cell-icon">${icon}</span>Patient History Considered: ${esc(considered)}</div><div class="feat-cell-val" data-field="history_notes">${esc(bodyText)}</div>${cautionHtml}</div>`;
-  }
-  // Patient History Not Applied — the doctor asked for history but the lookup
-  // itself failed server-side (DB unreachable, etc.), so this note was
-  // generated WITHOUT it. Deliberately distinct from "patient has no history".
-  // No data-field, so it never leaks into the summary/print output.
-  if (lastHistoryError) {
-    html += `<div class="feat-cell feat-wide feat-history-error"><div class="feat-cell-label"><span class="feat-cell-icon">⚠️</span>Patient History Not Applied</div><div class="feat-cell-val" style="white-space:normal;">${esc(lastHistoryError)}. This note was generated without the patient's visit history — try Analyse again, or check the diagnosis manually.</div></div>`;
-  }
   // Patient Story — always rendered, filled from the pre-extraction transcript text.
   html += `<div class="feat-cell feat-wide feat-story"><div class="feat-cell-label"><span class="feat-cell-icon">📖</span>Patient Story</div><div class="feat-cell-val" data-field="patient_story" contenteditable="true" spellcheck="false">${esc(patientStoryText || '')}</div></div>`;
   html += '</div>';
 
   html += '</div>';
   setBody('extract', html);
-
-  renderIcdPills(icds);
-  document.getElementById('icd-add-btn')?.addEventListener('click', addIcdCode);
-  document.getElementById('icd-add-input')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); addIcdCode(); }
-  });
 }
 
-function renderIcdPills(codes) {
-  currentIcdCodes = codes.slice();
-  const container = document.getElementById('icd-pills');
+/* ── Diagnosis card: ICD-10 pills, reasoning, and (ER only) triage priority +
+      differential-diagnosis pills. Everything here is editable and feeds the
+      summary / print view. ── */
+function toList(v) { return Array.isArray(v) ? v.filter(Boolean).map(String) : (v ? [String(v)] : []); }
+
+function pillRowHTML(name, label, placeholder) {
+  return `<div class="icd-row" id="row-${name}">
+    <span class="icd-label">${esc(label)}</span>
+    <span id="pills-${name}"></span>
+    <span class="icd-add"><input type="text" id="add-input-${name}" placeholder="${esc(placeholder)}" /><button type="button" id="add-btn-${name}">+ Add</button></span>
+  </div>`;
+}
+
+function renderPills(name) {
+  const list = pillLists[name];
+  const container = document.getElementById('pills-' + name);
   if (!container) return;
-  if (currentIcdCodes.length === 0) {
-    container.innerHTML = '<span class="ph" style="font-size:12px;">No codes — add one</span>';
+  if (list.length === 0) {
+    container.innerHTML = '<span class="ph" style="font-size:12px;">None — add one</span>';
     return;
   }
-  container.innerHTML = currentIcdCodes.map((c, i) =>
+  container.innerHTML = list.map((c, i) =>
     `<span class="icd-pill" data-idx="${i}">
        <span class="icd-dot"></span>
        <span class="icd-pill-text" contenteditable="true" spellcheck="false">${esc(c)}</span>
-       <span class="icd-pill-remove" title="Remove code">×</span>
+       <span class="icd-pill-remove" title="Remove">×</span>
      </span>`
   ).join('');
   container.querySelectorAll('.icd-pill-text').forEach((el, i) => {
     el.addEventListener('blur', () => {
       const val = el.textContent.trim();
-      if (val) { currentIcdCodes[i] = val; }
-      else      { currentIcdCodes.splice(i, 1); renderIcdPills(currentIcdCodes); }
+      if (val) { list[i] = val; }
+      else      { list.splice(i, 1); renderPills(name); }
       updateSummary();
     });
   });
   container.querySelectorAll('.icd-pill-remove').forEach(btn => {
     btn.addEventListener('click', e => {
       const pill = e.target.closest('.icd-pill');
-      currentIcdCodes.splice(Number(pill.dataset.idx), 1);
-      renderIcdPills(currentIcdCodes);
+      list.splice(Number(pill.dataset.idx), 1);
+      renderPills(name);
       updateSummary();
     });
   });
 }
 
-function addIcdCode() {
-  const input = document.getElementById('icd-add-input');
+function addPill(name) {
+  const input = document.getElementById('add-input-' + name);
   const val = (input?.value || '').trim();
   if (!val) return;
-  currentIcdCodes.push(val);
-  renderIcdPills(currentIcdCodes);
+  pillLists[name].push(val);
+  renderPills(name);
   input.value = '';
   input.focus();
   updateSummary();
 }
 
+function wirePillRow(name) {
+  renderPills(name);
+  document.getElementById('add-btn-' + name)?.addEventListener('click', () => addPill(name));
+  document.getElementById('add-input-' + name)?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addPill(name); }
+  });
+}
+
+function renderDiagnosis(dx, department) {
+  dx = dx || {};
+  const isEr = department === 'er';
+  pillLists.icd10        = toList(dx.icd10_codes);
+  pillLists.differential = isEr ? toList(dx.differential_diagnoses) : [];
+
+  let html = '<div class="feat-layout">';
+
+  // Triage Priority (ER only) — AI-recommended, always shown, editable.
+  if (isEr) {
+    html += `<div class="feat-cell feat-wide feat-triage"><div class="feat-cell-label"><span class="feat-cell-icon">🚦</span>Triage Priority</div><div class="feat-cell-val" data-field="triage_priority" data-placeholder="e.g. ESI 3 - Urgent" contenteditable="true" spellcheck="false">${esc(dx.triage_priority || '')}</div></div>`;
+  }
+
+  // ICD-10 row (most likely first) and, for ER, the differential diagnoses row.
+  html += pillRowHTML('icd10', 'ICD-10', 'Add code');
+  if (isEr) html += pillRowHTML('differential', 'Differential Dx', 'Add diagnosis');
+
+  // The model's own explanation for why it picked the leading code.
+  html += `<div class="feat-cell feat-wide"><div class="feat-cell-label"><span class="feat-cell-icon">💡</span>Reasoning</div><div class="feat-cell-val" data-field="reasoning" data-placeholder="No reasoning returned — click to add" contenteditable="true" spellcheck="false">${esc(dx.reasoning || '')}</div></div>`;
+
+  // Patient History Considered — only shown when history was actually sent;
+  // surfaces the model's self-reported history_considered / history_notes so
+  // the doctor can verify it was used, not silently ignored. History only ever
+  // feeds this step.
+  if (lastHistoryUsed) {
+    const considered = (dx.history_considered || 'No').trim();
+    const notes = (dx.history_notes || '').trim();
+    const yes = considered.toLowerCase() === 'yes';
+    const bodyText = yes
+      ? (notes || "The model reported using this patient's history, but gave no further detail.")
+      : `Reviewed ${lastHistoryVisitCount} prior visit(s) on file, but none were relevant to today's presentation.`;
+    let caution = '';
+    if (lastHistoryCheck && lastHistoryCheck.flag === 'claims_used_no_overlap') {
+      caution = `<div class="feat-history-caution">⚠️ The model said it used the patient's history, but none of today's ICD-10 codes share a category with anything in their history — worth a quick manual check.</div>`;
+    } else if (lastHistoryCheck && lastHistoryCheck.flag === 'overlap_but_not_flagged') {
+      caution = `<div class="feat-history-caution">⚠️ Today's diagnosis shares an ICD-10 category (${esc(lastHistoryCheck.overlap_families.join(', '))}) with something in this patient's history, but the model didn't flag history as considered — worth a quick manual check.</div>`;
+    }
+    html += `<div class="feat-cell feat-wide ${yes ? 'feat-history-used' : 'feat-history-notused'}"><div class="feat-cell-label"><span class="feat-cell-icon">${yes ? '✅' : '➖'}</span>Patient History Considered: ${esc(considered)}</div><div class="feat-cell-val" data-field="history_notes">${esc(bodyText)}</div>${caution}</div>`;
+  }
+  // Patient History Not Applied — the doctor asked for history but the lookup
+  // itself failed server-side (DB unreachable, etc.), so this recommendation
+  // was generated WITHOUT it. Deliberately distinct from "patient has no
+  // history". No data-field, so it never leaks into the summary/print output.
+  if (lastHistoryError) {
+    html += `<div class="feat-cell feat-wide feat-history-error"><div class="feat-cell-label"><span class="feat-cell-icon">⚠️</span>Patient History Not Applied</div><div class="feat-cell-val" style="white-space:normal;">${esc(lastHistoryError)}. This recommendation was generated without the patient's visit history — try Analyse again, or check the diagnosis manually.</div></div>`;
+  }
+
+  html += '</div>';
+  setBody('diagnosis', html);
+
+  wirePillRow('icd10');
+  if (isEr) wirePillRow('differential');
+}
+
 /* Questions are now exclusively "field not mentioned in the transcript" —
    the department prompt never returns an entry for a field that was already
    covered, so there's no ask/skip split to render anymore, and ICD-10 /
-   Final Diagnosis are never among them (enforced in the prompt itself). */
+   diagnoses are never among them (they're produced by the diagnosis step). */
 function renderQuestions(list, department) {
   if (!Array.isArray(list) || list.length === 0) {
     setBody('questions', '<div class="ph">All clinical note fields were covered in the transcript — nothing further to ask.</div>');
@@ -2038,16 +2124,17 @@ document.querySelector('.main').addEventListener('click', e => {
 ───────────────────────────────────────────────────────────────────────────── */
 function buildSummaryText(department) {
   const fields = DEPARTMENT_FIELDS[department] || DEPARTMENT_FIELDS.opd;
-  const icds   = currentIcdCodes.length ? currentIcdCodes.join(', ') : '—';
   const line = (label, value) => `${label}: ${(value || '').trim() || '—'}`;
 
   const lines = [];
   lines.push('— Clinical Note —');
   fields.forEach(f => lines.push(line(f.label, fieldValue(f.key))));
+  lines.push('');
+  lines.push('— Diagnosis Recommendation —');
   if (department === 'er') lines.push(line('Triage Priority', fieldValue('triage_priority')));
-  lines.push(line('Possible Diagnoses (ICD-10 Codes)', icds));
-  lines.push(line('Final Diagnosis', fieldValue('final_diagnosis')));
-  if (lastFinalDxRationale) lines.push(line('Diagnosis Rationale', lastFinalDxRationale));
+  lines.push(line('Possible Diagnoses (ICD-10 Codes)', pillLists.icd10.join(', ')));
+  if (department === 'er') lines.push(line('Differential Diagnoses', pillLists.differential.join(', ')));
+  lines.push(line('Diagnosis Reasoning', fieldValue('reasoning')));
   if (lastHistoryUsed) lines.push(line('Patient History Considered', fieldValue('history_notes')));
   lines.push('');
   lines.push('— Patient Story —');
@@ -2099,11 +2186,12 @@ function updateSummary() {
 }
 
 // Keep the summary live as the doctor edits any field by hand (contenteditable
-// cells, ICD pills, patient-info inputs) — debounced so fast typing doesn't
+// cells, pills, patient-info inputs) — debounced so fast typing doesn't
 // rebuild the whole block on every keystroke.
 let summaryDebounce = null;
 document.querySelector('.main').addEventListener('input', () => {
-  if (!$('card-extract')?.classList.contains('done')) return; // nothing extracted yet
+  // nothing extracted or recommended yet
+  if (!$('card-extract')?.classList.contains('done') && !$('card-diagnosis')?.classList.contains('done')) return;
   clearTimeout(summaryDebounce);
   summaryDebounce = setTimeout(updateSummary, 400);
 });
@@ -2114,22 +2202,32 @@ document.querySelector('.main').addEventListener('input', () => {
    state, then opens the browser print dialog. No server round-trip; whatever
    the doctor sees on screen (including manual corrections) is what prints.
 ───────────────────────────────────────────────────────────────────────────── */
+// Reads a field's current text from either the note-fields card or the
+// diagnosis card (both carry data-field attributes).
 function fieldValue(key) {
-  const el = document.querySelector(`#body-extract [data-field="${key}"]`);
+  const el = document.querySelector(`#body-extract [data-field="${key}"], #body-diagnosis [data-field="${key}"]`);
   return el ? el.innerText.trim() : '';
 }
 
 function buildPrintHTML(department) {
   const val = id => (document.getElementById(id)?.value || '').trim();
   const fields = DEPARTMENT_FIELDS[department] || DEPARTMENT_FIELDS.opd;
-  const icds   = currentIcdCodes.length ? currentIcdCodes.join(', ') : '';
   const deptLabel = DEPARTMENT_LABELS[department] || department;
+  const row   = (label, html) => `<div class="pf-row"><span class="pf-label">${esc(label)}:</span> <span class="pf-val">${html || '—'}</span></div>`;
+  const multi = s => esc(s).replace(/\n/g, '<br>');
 
   let rows = '';
-  fields.forEach(f => {
-    const v = fieldValue(f.key);
-    rows += `<div class="pf-row"><span class="pf-label">${esc(f.label)}:</span> <span class="pf-val">${(esc(v).replace(/\n/g,'<br>')) || '—'}</span></div>`;
-  });
+  fields.forEach(f => { rows += row(f.label, multi(fieldValue(f.key))); });
+
+  let dx = '';
+  if (department === 'er') dx += row('Triage Priority', esc(fieldValue('triage_priority')));
+  dx += row('Possible Diagnoses (ICD-10 Codes)', esc(pillLists.icd10.join(', ')));
+  if (department === 'er') dx += row('Differential Diagnoses', esc(pillLists.differential.join(', ')));
+  dx += row('Diagnosis Reasoning', multi(fieldValue('reasoning')));
+  if (lastHistoryUsed) {
+    dx += row('Patient History Considered', esc(fieldValue('history_notes')) +
+      (lastHistoryCheck && lastHistoryCheck.flag ? ' (⚠ flagged for manual review — see app)' : ''));
+  }
 
   return `
     <h1>${esc(deptLabel)} Clinical Note</h1>
@@ -2150,12 +2248,8 @@ function buildPrintHTML(department) {
     </div>
     <h2>Clinical Note</h2>
     ${rows}
-    ${department === 'er' ? `<div class="pf-row"><span class="pf-label">Triage Priority:</span> <span class="pf-val">${esc(fieldValue('triage_priority')) || '—'}</span></div>` : ''}
-    <div class="pf-row"><span class="pf-label">Possible Diagnoses (ICD-10 Codes):</span> <span class="pf-val">${esc(icds) || '—'}</span></div>
-    <div class="pf-row"><span class="pf-label">Final Diagnosis:</span> <span class="pf-val">${esc(fieldValue('final_diagnosis')) || '—'}</span></div>
-    ${lastFinalDxRationale ? `<div class="pf-row"><span class="pf-label">Diagnosis Rationale:</span> <span class="pf-val">${esc(lastFinalDxRationale)}</span></div>` : ''}
-    ${lastHistoryUsed ? `<div class="pf-row"><span class="pf-label">Patient History Considered:</span> <span class="pf-val">${esc(fieldValue('history_notes')) || '—'}</span>${lastHistoryCheck && lastHistoryCheck.flag ? ' <span class="pf-val">(⚠ flagged for manual review — see app)</span>' : ''}</div>` : ''}
-    <div class="pf-row"><span class="pf-label">Patient Story:</span> <span class="pf-val">${esc(fieldValue('patient_story') || patientStoryText).replace(/\n/g,'<br>') || '—'}</span></div>
+    ${dx}
+    ${row('Patient Story', multi(fieldValue('patient_story') || patientStoryText))}
   `;
 }
 
@@ -2229,6 +2323,7 @@ btnPrint.addEventListener('click', () => {
 /* ── Initial state — default mode is Doctor, so Refinement is hidden from the start ── */
 updateStepNumbers();
 updateDepartmentSubtitle();
+loadModelOptions();
 </script>
 </body>
 </html>

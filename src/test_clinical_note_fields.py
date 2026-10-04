@@ -597,13 +597,19 @@ def _judge_hint(bucket: str, expected_text: str) -> str:
     return ""
 
 
+_shared_judge_client = None
+
+
 def _judge_client():
+    global _shared_judge_client
     from openai import OpenAI
 
     api_key = getattr(Config, "OPENROUTER_API_KEY", None) or os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         pytest.skip("No OPENROUTER_API_KEY configured — cannot run the pipeline or the LLM judge.")
-    return OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
+    if _shared_judge_client is None:
+        _shared_judge_client = OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
+    return _shared_judge_client
 
 
 def _safe_parse_json(raw: str) -> dict:

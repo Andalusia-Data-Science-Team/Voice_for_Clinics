@@ -3,6 +3,7 @@ import json
 import logging
 import asyncio
 import secrets
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -10,7 +11,16 @@ from typing import Optional
 
 import uvicorn
 from sse_starlette.sse import EventSourceResponse
-from fastapi import FastAPI, APIRouter, Depends, Form, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    FastAPI,
+    Form,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
@@ -19,9 +29,8 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from core.config import Config
 from model.speech_service import SpeechService
 from model.llm_service import LLMService
-from model.extract_features import ExtractFeature
 from model.question_generator import QuestionGenerator
-from model.refine_text import RefineText
+from core.model_registry import get_model, registry_for_ui
 from model.specialty_terms import correct_specialty_terms, SPECIALTIES
 from model.patient_history import (
     get_patient_visits,
@@ -30,18 +39,47 @@ from model.patient_history import (
     BusinessUnit,
     PatientHistoryError,
 )
+from llm.runtime import LLMRuntime, get_llm_runtime
 
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/audio", tags=["Audio Processing"])
 patient_router = APIRouter(prefix="/patient", tags=["Patient History"])
-app    = FastAPI(title="Medical Voice API")
 
-app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
+
+def get_current_request(request: Request) -> Request:
+    """Provide the current Starlette request through FastAPI dependency injection."""
+    return request
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Create and close one shared asynchronous LLM runtime per worker."""
+    app.state.llm = LLMRuntime()
+    try:
+        yield
+    finally:
+        await app.state.llm.close()
+
+
+app = FastAPI(title="Medical Voice API", lifespan=lifespan)
+
+app.mount(
+    "/static",
+    StaticFiles(directory=Path(__file__).parent / "static"),
+    name="static",
+)
+
 
 @app.get("/")
 async def serve_frontend():
     return FileResponse(Path(__file__).parent / "static" / "index.html")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def serve_favicon():
+    """Return the application logo for browsers requesting a favicon."""
+    return FileResponse(Path(__file__).parent / "static" / "andalusia.png")
 
 app.add_middleware(
     CORSMiddleware,
@@ -123,6 +161,11 @@ def save_feedback_log(entry: dict) -> None:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception as e:
         logger.warning("[Feedback] Failed to write feedback log: %s", e)
+
+
+@app.get("/models", summary="Selectable models per pipeline step (feeds the UI dropdowns)")
+async def list_models():
+    return registry_for_ui()
 
 
 @app.post("/feedback", summary="Submit doctor feedback (thumbs rating and/or free text)")
@@ -483,24 +526,27 @@ async def ws_transcribe(websocket: WebSocket):
 # which language the doctor spoke in.
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.post("/refine-field", summary="Refine one short spoken answer for a single clinical-note field")
+@router.post(
+    "/refine-field",
+    summary="Refine one short spoken answer for a single clinical-note field",
+)
 async def refine_field_answer(
-    text:      str               = Form(..., description="Raw transcript of the doctor's spoken answer for one field"),
-    language:  Language          = Form(Language.english, description="Language the answer was spoken in"),
-    specialty: Optional[Specialty] = Form(None, description="Medical specialty — same fuzzy-term correction as the main pipeline"),
+    runtime: LLMRuntime = Depends(get_llm_runtime),
+    text: str = Form(..., description="Raw transcript of the doctor's spoken answer for one field"),
+    language: Language = Form(Language.english, description="Language the answer was spoken in"),
+    specialty: Optional[str] = Form(None, description="Medical specialty"),
 ):
     if not text or not text.strip():
         raise HTTPException(status_code=400, detail="text must not be empty")
 
     specialty_value = specialty.value if specialty else None
     try:
-        refined_text = await asyncio.to_thread(
-            RefineText.refining_transcription,
-            raw_text=text,
-            language=language.value,
-            is_conversation=False,
-            specialty=specialty_value,
+        refine_fn = (
+            LLMService.refine_ar_transcription_async
+            if language == Language.arabic
+            else LLMService.refine_en_transcription_async
         )
+        refined_text = await refine_fn(text, runtime, is_conversation=False, specialty=specialty_value)
     except Exception as exc:
         logger.error("[RefineField] Failed to refine field answer: %s", exc)
         # Fall back to the raw (but specialty-corrected) transcript rather than
@@ -512,11 +558,8 @@ async def refine_field_answer(
     # pipeline does for the full transcript.
     if language == Language.arabic:
         try:
-            refined_text = await asyncio.to_thread(
-                LLMService.translate_to_eng,
-                refined_text,
-                Config.REFINE_API_KEY,
-                is_conversation=False,
+            refined_text = await LLMService.translate_to_eng_async(
+                refined_text, runtime, is_conversation=False
             )
         except Exception as exc:
             logger.error("[RefineField] Failed to translate field answer to English: %s", exc)
@@ -530,9 +573,13 @@ async def refine_field_answer(
 # POST /audio/analyze — post-transcription pipeline
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.post("/analyze", summary="Run refine → translate → extract → questions on a provided transcript")
+@router.post(
+    "/analyze",
+    summary="Run refine → translate → extract → questions on a provided transcript",
+)
 async def analyze_transcript(
     request:    Request,
+    runtime:    LLMRuntime = Depends(get_llm_runtime),
     text:       str        = Form(...,               description="Raw transcript from live transcription (may include user edits)"),
     language:   Language   = Form(Language.english,  description="Audio language"),
     mode:       Mode       = Form(Mode.doctor,        description="Doctor or Conversation mode"),
@@ -544,6 +591,8 @@ async def analyze_transcript(
     clinician_name: Optional[str] = Form(None,        description="Self-reported doctor name, from the Patient Info 'Dr' field — best-effort session attribution"),
     transcription_sec: Optional[float] = Form(None,   description="Client-measured duration of the transcription session (recording start to STT completion) — this endpoint doesn't do transcription itself, so it can only log what the browser measured"),
     session_id: Optional[str] = Form(None,            description="Client-generated ID for this record→analyze→feedback cycle, so a later feedback submission can be joined back to this exact session on the dashboard"),
+    extraction_model: Optional[str] = Form(None, description="Model id for clinical-note field extraction (see GET /models)"),
+    reasoning_model:  Optional[str] = Form(None, description="Model id for ICD-10 recommendation + reasoning (see GET /models)"),
 ):
     pipeline_start  = time.perf_counter()
     is_arabic       = language == Language.arabic
@@ -552,6 +601,12 @@ async def analyze_transcript(
     specialty_value = specialty.value if specialty else None
     department_value = department.value
 
+    try:
+        extraction_spec = get_model("extraction", extraction_model)
+        reasoning_spec  = get_model("reasoning",  reasoning_model)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    
     # Patient history lookup — only when the doctor opted in. Opting in without
     # both a patient code and a business unit is a client error (the frontend
     # blocks it too), since we can't know which database to query.
@@ -622,6 +677,12 @@ async def analyze_transcript(
             "translated_text":    None,
             "extracted_features": None,
             "questions":          None,
+            "extraction_model":   extraction_spec.id,
+            "reasoning_model":    reasoning_spec.id,
+            "diagnosis_sec":      None,
+            "diagnosis":          None,
+            "extraction_usage":   None,   # latency/tokens/cost of the LLM call
+            "diagnosis_usage":    None,
         }
         logger.info(
             "[Analyze] session start — clinician_name=%r sso_user=%r department=%s language=%s mode=%s",
@@ -645,9 +706,9 @@ async def analyze_transcript(
                 refined_parts: list[str] = []
                 try:
                     refine_stream = (
-                        LLMService.refine_ar_transcription_stream(text, Config.OPENROUTER_API_KEY, is_conversation=is_conversation, specialty=specialty_value)
+                        LLMService.refine_ar_transcription_stream_async(text, runtime, is_conversation=is_conversation, specialty=specialty_value)
                         if is_arabic else
-                        LLMService.refine_en_transcription_stream(text, Config.OPENROUTER_API_KEY, is_conversation=is_conversation, specialty=specialty_value)
+                        LLMService.refine_en_transcription_stream_async(text, runtime, is_conversation=is_conversation, specialty=specialty_value)
                     )
                     async for delta in refine_stream:
                         refined_parts.append(delta)
@@ -671,8 +732,8 @@ async def analyze_transcript(
                 t0 = time.perf_counter()
                 translated_parts: list[str] = []
                 try:
-                    async for delta in LLMService.translate_to_eng_stream(
-                        refined_text, Config.OPENROUTER_API_KEY, is_conversation=is_conversation
+                    async for delta in LLMService.translate_to_eng_stream_async(
+                        refined_text, runtime, is_conversation=is_conversation
                     ):
                         translated_parts.append(delta)
                         yield {"event": "translation_delta", "data": json.dumps({"delta": delta})}
@@ -698,97 +759,118 @@ async def analyze_transcript(
             # with no further LLM processing.
             patient_story = final_text
 
-            # ── 3. Extract ──────────────────────────────────────────────
-            t_extract = time.perf_counter()
+            # ── 3. Field extraction ‖ ICD-10 diagnosis — run in parallel ─────────
+            async def run_extraction():
+                meta: dict = {}
+                t0 = time.perf_counter()
+                extracted = await LLMService.extract_features_async(
+                    translated_text=final_text,
+                    runtime=runtime,
+                    department=department_value,
+                    is_conversation=is_conversation,
+                    model_id=extraction_spec.id,
+                    meta=meta,
+                )
+                features = extracted.get("json_data", {}) if extracted else {}
+                t_q = time.perf_counter()
+                # Questions derive deterministically from the extracted fields (see QuestionGenerator).
+                questions, _ = QuestionGenerator.generate(extracted_features=features, department=department_value)
+                return {
+                    "features": features, "questions": questions, "meta": meta,
+                    "extraction_sec": round(t_q - t0, 3),
+                    "question_generation_sec": round(time.perf_counter() - t_q, 3),
+                }
 
-            try:
-                extracted_features, _ = await asyncio.to_thread(
-                    ExtractFeature.extract,
-                    end_text=final_text,
+            async def run_diagnosis():
+                meta: dict = {}
+                t0 = time.perf_counter()
+                diagnosis_result = await LLMService.recommend_diagnosis_async(
+                    translated_text=final_text,
+                    runtime=runtime,
                     department=department_value,
                     patient_history_text=patient_history_text,
                     is_conversation=is_conversation,
+                    model_id=reasoning_spec.id,
+                    meta=meta,
                 )
-            except Exception as exc:
-                log["status"] = "error"
-                yield {"event": "error", "data": json.dumps({"step": "extraction", "detail": str(exc)})}
-                return
+                data = diagnosis_result.get("json_data", {}) if diagnosis_result else {}
+                return {"data": data, "meta": meta, "diagnosis_sec": round(time.perf_counter() - t0, 3)}
 
-            log["extracted_features"] = extracted_features
-            # Audit trail: did the model actually report using the history we
-            # gave it? (See ExtractFeature.extract's log warning for the case
-            # where it didn't even return the key.) Cross-checked against what
-            # actually shows up in icd10_codes/final_diagnosis (soft heuristic,
-            # see check_history_usage's docstring) and surfaced to the
-            # frontend, not just the server log.
+            ext_res, diag_res = await asyncio.gather(run_extraction(), run_diagnosis(), return_exceptions=True)
+
+            errors: dict = {}
+            extracted_features, raw_questions, diagnosis_data = {}, [], {}
+            extraction_sec = question_generation_sec = diagnosis_sec = None
+            ext_meta = diag_meta = None
+
+            if isinstance(ext_res, BaseException):
+                errors["extraction"] = str(ext_res)
+                logger.error("[Analyze] extraction failed: %s", ext_res)
+            else:
+                extracted_features, raw_questions = ext_res["features"], ext_res["questions"]
+                extraction_sec, question_generation_sec = ext_res["extraction_sec"], ext_res["question_generation_sec"]
+                ext_meta = ext_res["meta"]
+
+            if isinstance(diag_res, BaseException):
+                errors["diagnosis"] = str(diag_res)
+                logger.error("[Analyze] diagnosis failed: %s", diag_res)
+            else:
+                diagnosis_data, diagnosis_sec, diag_meta = diag_res["data"], diag_res["diagnosis_sec"], diag_res["meta"]
+
+            log["extracted_features"]       = extracted_features
+            log["questions"]                = raw_questions
+            log["diagnosis"]                = diagnosis_data
+            log["extraction_sec"]           = extraction_sec
+            log["question_generation_sec"]  = question_generation_sec
+            log["diagnosis_sec"]            = diagnosis_sec
+            log["extraction_usage"]         = ext_meta
+            log["diagnosis_usage"]          = diag_meta
+
+            if errors:
+                log["status"] = "error"
+                if len(errors) == 2:     # nothing to show — surface both failures and stop
+                    for step, detail in errors.items():
+                        yield {"event": "error", "data": json.dumps({"step": step, "detail": detail})}
+                    return
+
+            # History audit — history only ever feeds the diagnosis step now.
             history_check = None
-            if patient_history_text:
-                history_check = check_history_usage(patient_history_visits, extracted_features)
+            if patient_history_text and diagnosis_data:
+                history_check = check_history_usage(patient_history_visits, diagnosis_data)
                 if history_check["flag"] == "claims_used_no_overlap":
-                    logger.warning(
-                        f"[Analyze] patient_code={patient_id}: model reported history_considered=Yes "
-                        f"but no ICD-10 family overlap with the patient's history was found — "
-                        f"history_notes={extracted_features.get('history_notes')!r}"
-                    )
+                    logger.warning(f"[Analyze] patient_code={patient_id}: history_considered=Yes but no ICD-10 family overlap "
+                                   f"— history_notes={diagnosis_data.get('history_notes')!r}")
                 elif history_check["flag"] == "overlap_but_not_flagged":
-                    logger.warning(
-                        f"[Analyze] patient_code={patient_id}: ICD-10 family overlap with patient history "
-                        f"found ({history_check['overlap_families']}) but the model did not report "
-                        f"history_considered=Yes"
-                    )
+                    logger.warning(f"[Analyze] patient_code={patient_id}: ICD-10 family overlap {history_check['overlap_families']} "
+                                   f"but history_considered was not 'Yes'")
             log["history_check"] = history_check
 
-            # ── 4. Questions — derived directly from extracted_features, not a
-            #      second LLM pass, so it can never disagree with what the
-            #      extraction step already found (see QuestionGenerator).
-            #      Computed here, BEFORE the yield below, so extraction +
-            #      questions go out as ONE atomic SSE event rather than two
-            #      separate ones. They used to be sent as two events, and each
-            #      one, independently, has been observed to occasionally not
-            #      reach the browser at all (almost certainly an intermediary
-            #      — proxy/firewall — on this deployment mishandling one of
-            #      the larger frames in a long-lived streamed response, not a
-            #      backend bug: server-side computation and logs are correct
-            #      every time this has been reported). Splitting them into two
-            #      events just gave that failure mode two separate chances to
-            #      hit instead of one, and led to exactly the inconsistent
-            #      state seen in practice — features rendered, questions
-            #      silently empty (or vice versa) — because each was an
-            #      independent point of failure. Sending them together means
-            #      there's only one handoff left for this critical data: it
-            #      either fully arrives or fully doesn't, which is a much
-            #      easier failure to detect and retry than a half-rendered UI. ──
-            t_questions = time.perf_counter()
-            raw_questions, _ = QuestionGenerator.generate(
-                extracted_features=extracted_features,
-                department=department_value,
-            )
-            log["questions"] = raw_questions
-            total_sec        = round(time.perf_counter() - pipeline_start, 3)
-            extraction_sec           = round(time.perf_counter() - t_extract, 3)
-            question_generation_sec  = round(time.perf_counter() - t_questions, 3)
-            log["extraction_sec"]          = extraction_sec
-            log["question_generation_sec"] = question_generation_sec
-
-            extraction_payload = {
-                "extracted_features":      extracted_features,
-                "extraction_sec":          extraction_sec,
+            payload = {
                 "department":              department_value,
                 "patient_story":           patient_story,
+                # step 1
+                "extracted_features":      extracted_features,
+                "extraction_sec":          extraction_sec,
+                "questions":               raw_questions,
+                "question_generation_sec": question_generation_sec,
+                # step 2
+                "diagnosis":               diagnosis_data,
+                "diagnosis_sec":           diagnosis_sec,
                 "history_used":            bool(patient_history_text),
                 "history_visit_count":     len(patient_history_visits),
                 "history_check":           history_check,
                 "history_error":           history_error,
-                "questions":               raw_questions,
-                "question_generation_sec": question_generation_sec,
-                "total_sec":               total_sec,
+                # meta
+                "models":  {"extraction": extraction_spec.label, "reasoning": reasoning_spec.label},
+                "usage":   {"extraction": ext_meta, "diagnosis": diag_meta},
+                "errors":  errors,
+                "total_sec": round(time.perf_counter() - pipeline_start, 3),
             }
-            logger.info(
-                f"[Analyze] Emitting combined 'extraction' SSE event "
-                f"({len(extracted_features)} field(s), {len(raw_questions)} question(s), "
-                f"~{len(json.dumps(extraction_payload))} bytes)"
-            )
-            yield {"event": "extraction", "data": json.dumps(extraction_payload)}
+            logger.info("[Analyze] Emitting combined 'extraction' SSE event (extraction=%s, diagnosis=%s, %d question(s), ~%d bytes)",
+                        "ok" if "extraction" not in errors else "FAILED",
+                        "ok" if "diagnosis" not in errors else "FAILED",
+                        len(raw_questions), len(json.dumps(payload)))
+            yield {"event": "extraction", "data": json.dumps(payload)}
 
         finally:
             log["total_sec"] = round(time.perf_counter() - pipeline_start, 3)

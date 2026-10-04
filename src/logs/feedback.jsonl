@@ -5,3 +5,5 @@
 {"timestamp": "2026-09-19T19:57:22.144504+00:00", "ip": "102.44.95.136", "name": "Doha Mahmoud", "sso_user": null, "rating": "up", "text": "", "department": "opd", "language": "ar"}
 {"timestamp": "2026-09-20T06:47:15.021763+00:00", "session_id": "ee49921b-0885-4349-a090-fad3423f5993", "ip": "127.0.0.1", "name": "Doha Mahmoud", "sso_user": null, "rating": "up", "text": "Great.", "department": "opd", "language": "en"}
 {"timestamp": "2026-09-20T06:53:35.671424+00:00", "session_id": "ee49921b-0885-4349-a090-fad3423f5993", "ip": "127.0.0.1", "name": "Doha Mahmoud", "sso_user": null, "rating": "up", "text": "", "department": "opd", "language": "en"}
+{"timestamp": "2026-10-03T09:43:25.014221+00:00", "session_id": "4512c9d2-324f-4d0b-8712-cf9194b288f4", "ip": "31.167.149.199", "name": "dr shaikhoon", "sso_user": null, "rating": null, "text": "slow analyzation", "department": "opd", "language": "en"}
+{"timestamp": "2026-10-03T12:19:37.649553+00:00", "session_id": "0c52dbcc-6edb-4ac6-8940-c551a2e338ce", "ip": "31.167.149.199", "name": "Bahaa Shaikhoon", "sso_user": null, "rating": null, "text": "Analyze recording is not working", "department": "opd", "language": "en"}
