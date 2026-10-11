@@ -54,3 +54,5 @@ htmlcov/
 uploads/
 scratch/
 MedVoice_v3.4_6-Week_Tracker_v2_updated.xlsx
+# Local clinical history data
+src/data/Visit Level History.csv
