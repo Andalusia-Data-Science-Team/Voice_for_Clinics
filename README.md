@@ -12,15 +12,6 @@ A medical audio processing API that transcribes clinical recordings, extracts st
 - [Installation & Running](#installation--running)
 - [API Reference](#api-reference)
 - [SSE Event Reference](#sse-event-reference)
-- [Full Documentation](#full-documentation)
-
----
-
-> **Full documentation:** architecture, configuration, WebSocket protocol,
-> LLM concurrency runtime, load testing, and model evaluation live in
-> [`docs/PROJECT_DOCUMENTATION.md`](docs/PROJECT_DOCUMENTATION.md).
-> LLM runtime tuning is covered in
-> [`docs/llm_concurrency_README.md`](docs/llm_concurrency_README.md).
 
 ---
 

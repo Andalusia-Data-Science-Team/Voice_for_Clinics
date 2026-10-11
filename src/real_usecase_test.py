@@ -216,16 +216,6 @@ EXTRA_FIELDS = {
 # (see the SCHEMA-DRIFT WARNING printed at collection time).
 LABEL_ALIASES = {
     "Triage Classification": "Triage Priority",
-    "Plan of Care (short/long term)": "Plan of Care",
-}
-
-# Canonical report names for fields whose workbook labels vary by department.
-FIELD_DISPLAY_NAMES = {
-    "plan_of_care": "Plan of Care",
-    "icd10_codes": "ICD-10 Codes",
-    "final_diagnosis": "Final Diagnosis",
-    "triage_priority": "Triage Priority",
-    "differential_diagnoses": "Differential Diagnoses",
 }
 
 # Fields graded by ICD-10 code structure (parent/child match) instead of
@@ -435,11 +425,6 @@ class FieldScore:
     verdict: str
 
 
-def _display_field_name(key: str) -> str:
-    """Return one unified, human-readable field name for reports."""
-    return FIELD_DISPLAY_NAMES.get(key, key.replace("_", " ").title())
-
-
 @dataclass
 class GradeResult:
     score: float
@@ -456,12 +441,7 @@ def _flatten(value) -> str:
 
 # ── "blank / none / n/a"-equivalence ─────────────────────────────────────
 
-_EMPTY_TOKEN_RE = re.compile(
-    r"^(none|blank|n/a|na|empty|nil|not specified|not reported|"
-    r"not mentioned|not noted|not available|not documented|unknown|"
-    r"unavailable|no information|no data)$",
-    re.IGNORECASE,
-)
+_EMPTY_TOKEN_RE = re.compile(r"^(none|blank|n/a|na|empty|nil)$")
 _EMPTY_SPLIT_RE = re.compile(r"\s+/\s+|\s*,\s*|\s+or\s+", re.IGNORECASE)
 _PARENTHETICAL_RE = re.compile(r"\(.*?\)")
 
@@ -476,7 +456,6 @@ _PARENTHETICAL_RE = re.compile(r"\(.*?\)")
 _EMPTY_PHRASE_RE = re.compile(
     r"^(?:"
     r"not\s+(?:specified|applicable|mentioned|reported|noted|available|documented)"
-    r"|no\s+(?:information|data|finding|findings|abnormality|abnormalities)"
     r"|no\b.*\b(?:reported|noted|specified|found|identified|documented|observed|detected|mentioned)"
     r")$",
     re.IGNORECASE,
@@ -732,15 +711,7 @@ def score_scenario(scenario: Scenario, extracted_json: dict, client) -> list[Fie
         actual_val = _flatten(extracted_json.get(key))
         pre = _content_grade(key, spec.expected, actual_val)
         if pre is not None:
-            results.append(
-                FieldScore(
-                    _display_field_name(key),
-                    spec.expected,
-                    actual_val,
-                    pre.score,
-                    pre.verdict,
-                )
-            )
+            results.append(FieldScore(key, spec.expected, actual_val, pre.score, pre.verdict))
             continue
         to_judge.append({"id": key, "expected": spec.expected, "actual": actual_val})
 
@@ -750,15 +721,7 @@ def score_scenario(scenario: Scenario, extracted_json: dict, client) -> list[Fie
         obj = judged.get(key, {})
         score = float(obj.get("score", 50)) / 100.0
         verdict = obj.get("verdict", "no judge response — defaulted to 50%")
-        results.append(
-            FieldScore(
-                _display_field_name(key),
-                item["expected"],
-                item["actual"],
-                score,
-                verdict,
-            )
-        )
+        results.append(FieldScore(key, item["expected"], item["actual"], score, verdict))
 
     results.sort(key=lambda r: r.key)
     return results

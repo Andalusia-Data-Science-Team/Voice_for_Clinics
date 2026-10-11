@@ -30,3 +30,9 @@ starlette==0.45.3
 openai==2.32.0
 tenacity>=8.2
 pytest-asyncio>=0.24
+
+# ── Phase 0: Azure Key Vault + Managed Identity ────────────────────────────
+azure-identity>=1.17.0
+azure-keyvault-secrets>=4.9.0
+# Phase 2: OpenTelemetry-based App Insights (Azure-native, non-deprecated)
+azure-monitor-opentelemetry>=1.6.0

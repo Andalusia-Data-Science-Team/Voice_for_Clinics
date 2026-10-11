@@ -1,0 +1,40 @@
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  APIM Per-Operation Policy — POST /audio/analyze
+  ═══════════════════════════════════════════════════════════════════════════
+  Where to apply:
+    Azure Portal → API Management → APIs → MedVoice API
+    → POST /audio/analyze → Inbound processing → paste this.
+
+  Overrides the global 60/min limit with a stricter 10/min because:
+    - Each call triggers multi-step LLM pipeline (refine → translate → extract → diagnose)
+    - Average call cost: ~0.5–1.5 s GPU + ~5–15 s LLM
+    - 10/min = 1 call per 6 s, matches the actual throughput ceiling
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<policies>
+  <inbound>
+    <base />
+    <!--
+      Override global rate limit: 10 calls/min per user for the heavy pipeline.
+      increment-condition skips counting 429s so a ratelimited user's counter
+      doesn't keep climbing while they're already blocked.
+    -->
+    <rate-limit-by-key
+        calls="10"
+        renewal-period="60"
+        counter-key='@(context.Request.Headers.GetValueOrDefault("X-User-ID","anon"))'
+        remaining-calls-header-name="X-RateLimit-Remaining"
+        retry-after-header-name="X-RateLimit-Reset"
+        increment-condition="@(context.Response.StatusCode != 429)" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

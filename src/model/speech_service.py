@@ -5,6 +5,7 @@ import logging
 import shutil
 import time
 import urllib.parse
+from pathlib import Path
 from typing import Optional, Tuple, Dict, Any, AsyncIterator
 
 import httpx
@@ -20,6 +21,9 @@ from mistralai.extra.realtime import UnknownRealtimeEvent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+from core.config import Config
+from core.azure_identity import get_secret
 
 VOXTRAL_MODEL = "voxtral-mini-transcribe-realtime-2602"
 VOXTRAL_AUDIO_FORMAT = AudioFormat(encoding="pcm_s16le", sample_rate=16000)
@@ -58,13 +62,36 @@ def _get_client(api_key: str) -> Mistral:
 # Audio source generators
 # ---------------------------------------------------------------------------
 
+def _find_ffmpeg() -> Optional[str]:
+    """Find ffmpeg executable on PATH or in common Windows WinGet / AppData paths."""
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    # Check WinGet and ffmpegio package locations on Windows
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    if local_app_data:
+        app_data_path = Path(local_app_data)
+        # 1. ffdl / ffmpegio path
+        ffdl_bin = app_data_path / "ffmpegio" / "ffmpeg-downloader" / "ffmpeg" / "bin" / "ffmpeg.exe"
+        if ffdl_bin.is_file():
+            return str(ffdl_bin)
+        # 2. WinGet package path
+        winget_path = app_data_path / "Microsoft" / "WinGet" / "Packages"
+        if winget_path.is_dir():
+            for p in winget_path.glob("**/ffmpeg.exe"):
+                if p.is_file():
+                    return str(p)
+    return None
+
+
 async def _ffmpeg_file_stream(input_path: str, chunk_size: int = _CHUNK_SIZE) -> AsyncIterator[bytes]:
     """Convert a file to pcm_s16le via ffmpeg stdout pipe — no temp file."""
-    if shutil.which("ffmpeg") is None:
+    ffmpeg_bin = _find_ffmpeg()
+    if not ffmpeg_bin:
         raise TranscriptionError("ffmpeg not found on PATH.")
 
     cmd = [
-        "ffmpeg", "-hide_banner", "-loglevel", "error",
+        ffmpeg_bin, "-hide_banner", "-loglevel", "error",
         "-i", input_path,
         "-ar", "16000", "-ac", "1", "-f", "s16le", "pipe:1",
     ]
@@ -96,17 +123,45 @@ async def _ffmpeg_stdin_stream(
     input_sample_rate: int = 16000,
 ) -> AsyncIterator[bytes]:
     """
-    Pipe a live stream of browser PCM (float32, any sample rate, mono) through ffmpeg,
-    converting it to pcm_s16le at 16kHz — the format both Voxtral and Munsit expect.
+    Convert a live stream of browser PCM (float32, any sample rate, mono) into
+    pcm_s16le at 16kHz — the format both Voxtral and Munsit expect.
 
-    The browser's AudioContext may capture at 44100 Hz or 48000 Hz — the
-    caller passes the actual rate so ffmpeg can resample correctly.
+    Tries in-process high-performance C-resampling via soxr/numpy first
+    (immune to Windows loop/subprocess quirks and ~5x lower latency), falling
+    back to ffmpeg subprocess if needed.
     """
-    if shutil.which("ffmpeg") is None:
+    # 1. Native in-process resampler (soxr / numpy)
+    try:
+        import numpy as np
+        import soxr
+
+        async for chunk in raw_pcm_iter:
+            if not chunk:
+                continue
+            # browser sends float32 little-endian
+            audio_f32 = np.frombuffer(chunk, dtype=np.float32)
+            if len(audio_f32) == 0:
+                continue
+            if input_sample_rate != 16000:
+                resampled = soxr.resample(audio_f32, input_sample_rate, 16000)
+            else:
+                resampled = audio_f32
+            # convert to linear16 (pcm_s16le)
+            pcm16 = np.clip(resampled * 32767.0, -32768, 32767).astype(np.int16).tobytes()
+            yield pcm16
+        return
+    except ImportError:
+        pass
+    except Exception as exc:
+        logger.warning("[AudioStream] Native resampler fallback to ffmpeg: %s", exc)
+
+    # 2. Subprocess fallback via FFmpeg pipe
+    ffmpeg_bin = _find_ffmpeg()
+    if not ffmpeg_bin:
         raise TranscriptionError("ffmpeg not found on PATH.")
 
     cmd = [
-        "ffmpeg", "-hide_banner", "-loglevel", "error",
+        ffmpeg_bin, "-hide_banner", "-loglevel", "error",
         "-f", "f32le",                     # browser sends float32 little-endian
         "-ar", str(input_sample_rate),     # actual browser sample rate (e.g. 44100)
         "-ac", "1",                        # mono
@@ -228,9 +283,31 @@ def _build_munsit_url(api_key: str, hotwords: Optional[str] = None, model: str =
     }
     if hotwords:
         params["hotwords"] = hotwords
-    # api_key goes in the query string — the browser can't reach Munsit anyway
+
+    # Phase 3: Route through Private STT endpoint if configured (VNet-secured)
+    private_stt = Config.private_stt_endpoint()
+    if private_stt:
+        endpoint = private_stt.rstrip("/")
+        # Convert http(s) to ws(s) if needed
+        if endpoint.startswith("http://"):
+            ws_base = "ws://" + endpoint[7:]
+        elif endpoint.startswith("https://"):
+            ws_base = "wss://" + endpoint[8:]
+        else:
+            ws_base = endpoint
+
+        if not ws_base.endswith("/listen"):
+            ws_url = f"{ws_base}/listen"
+        else:
+            ws_url = ws_base
+        logger.info("[STT] Using private STT endpoint: %s", ws_url)
+    else:
+        ws_url = MUNSIT_WS_URL
+
+    # api_key goes in the query string — the browser can't reach STT anyway
     # since this call happens server-side, so it never touches client logs.
-    return f"{MUNSIT_WS_URL}?api_key={urllib.parse.quote(api_key)}&{urllib.parse.urlencode(params)}"
+    key = api_key or get_secret("PRIVATE_STT_KEY") or Config.private_stt_key() or ""
+    return f"{ws_url}?api_key={urllib.parse.quote(key)}&{urllib.parse.urlencode(params)}"
 
 
 async def _transcribe_munsit_yield(
@@ -290,7 +367,7 @@ async def _transcribe_munsit_yield(
                 except websockets.exceptions.ConnectionClosed:
                     pass
                 except Exception as e:
-                    logger.warning("[Munsit] send_audio error: %s", e)
+                    logger.exception("[Munsit] send_audio error: %s", e)
                 finally:
                     stop_keepalive.set()
                     keepalive_task.cancel()

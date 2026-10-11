@@ -37,6 +37,7 @@ from typing import Dict, List, Optional
 import pyodbc
 
 from core.config import Config
+from core.telemetry import track_db_call
 
 logger = logging.getLogger(__name__)
 
@@ -58,27 +59,46 @@ class PatientHistoryError(Exception):
     """
 
 
-def _connect(business_unit: BusinessUnit) -> pyodbc.Connection:
-    unit_cfg = getattr(Config, "BUSINESS_UNITS", {}).get(business_unit.value)
-    if not unit_cfg:
-        raise PatientHistoryError(f"No database configured for business unit {business_unit.value}")
+def _build_connection_string(bu_cfg: dict) -> str:
+    """Build ODBC connection string for HCMS database with Managed Identity or classic UID/PWD."""
+    driver = Config.PATIENT_DB_DRIVER
+    use_mi = Config.USE_MANAGED_IDENTITY_SQL
 
-    uid = getattr(Config, "PATIENT_DB_UID", None)
-    pwd = getattr(Config, "PATIENT_DB_PWD", None)
+    if use_mi:
+        # Managed Identity (Azure VM / App Service / Container Apps system-assigned identity)
+        logger.info("[PatientHistory] Connecting to %s using Managed Identity (ActiveDirectoryMsi)", bu_cfg.get("database"))
+        return (
+            f"DRIVER={driver};"
+            f"SERVER={bu_cfg['server']};"
+            f"DATABASE={bu_cfg['database']};"
+            "Authentication=ActiveDirectoryMsi;"
+            "Encrypt=yes;"
+            "TrustServerCertificate=no;"
+        )
+
+    # Classic UID / PWD
+    uid = Config.patient_db_uid()
+    pwd = Config.patient_db_pwd()
     if not uid or not pwd:
         raise PatientHistoryError("Patient history database credentials are not configured")
 
-    driver = getattr(Config, "PATIENT_DB_DRIVER", "{ODBC Driver 17 for SQL Server}")
-    pwd_escaped = pwd.replace("}", "}}")  # ODBC brace-escaping, so ; { } in a password can't break the string
-
-    conn_str = (
+    pwd_escaped = pwd.replace("}", "}}")  # ODBC brace-escaping
+    return (
         f"DRIVER={driver};"
-        f"SERVER={unit_cfg['server']};"
-        f"DATABASE={unit_cfg['database']};"
+        f"SERVER={bu_cfg['server']};"
+        f"DATABASE={bu_cfg['database']};"
         f"UID={uid};"
         f"PWD={{{pwd_escaped}}};"
         "TrustServerCertificate=yes;"
     )
+
+
+def _connect(business_unit: BusinessUnit) -> pyodbc.Connection:
+    unit_cfg = Config.BUSINESS_UNITS.get(business_unit.value)
+    if not unit_cfg:
+        raise PatientHistoryError(f"No database configured for business unit {business_unit.value}")
+
+    conn_str = _build_connection_string(unit_cfg)
     conn = pyodbc.connect(conn_str, timeout=10)  # login timeout (seconds)
     conn.timeout = 30                            # per-query timeout (seconds)
     return conn
@@ -110,14 +130,15 @@ def get_patient_visits(patient_code: str, business_unit: BusinessUnit) -> List[D
         return []
 
     try:
-        conn = _connect(business_unit)
-        try:
-            cursor = conn.cursor()
-            cursor.execute(_SQL, code)
-            columns = [c[0] for c in cursor.description]
-            rows = [dict(zip(columns, r)) for r in cursor.fetchall()]
-        finally:
-            conn.close()
+        with track_db_call(business_unit=business_unit.value):
+            conn = _connect(business_unit)
+            try:
+                cursor = conn.cursor()
+                cursor.execute(_SQL, code)
+                columns = [c[0] for c in cursor.description]
+                rows = [dict(zip(columns, r)) for r in cursor.fetchall()]
+            finally:
+                conn.close()
     except PatientHistoryError:
         raise
     except pyodbc.Error as e:

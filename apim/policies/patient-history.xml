@@ -1,0 +1,32 @@
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  APIM Per-Operation Policy — GET /patient/{patient_code}/history
+  ═══════════════════════════════════════════════════════════════════════════
+  Where to apply:
+    Azure Portal → API Management → APIs → MedVoice API
+    → GET /patient/{patient_code}/history → Inbound processing → paste this.
+
+  Rate: 30 calls/min — DB-bound, cheaper than LLM calls.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<policies>
+  <inbound>
+    <base />
+    <rate-limit-by-key
+        calls="30"
+        renewal-period="60"
+        counter-key='@(context.Request.Headers.GetValueOrDefault("X-User-ID","anon"))'
+        remaining-calls-header-name="X-RateLimit-Remaining"
+        retry-after-header-name="X-RateLimit-Reset"
+        increment-condition="@(context.Response.StatusCode != 429)" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>
