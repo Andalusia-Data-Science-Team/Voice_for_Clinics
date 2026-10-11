@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import email.utils
 import logging
+import random
 from datetime import datetime, timezone
 from typing import Awaitable, Callable, TypeVar
 
@@ -27,16 +28,32 @@ def status_code(exc: BaseException) -> int | None:
 
 
 def is_insufficient_quota(exc: BaseException) -> bool:
-    """Return whether an API error indicates exhausted billing or quota."""
-    text = str(exc).lower()
+    """Return whether an API error indicates exhausted billing or quota.
+
+    Detected strictly from error.code or error.type only.
+    """
     code = getattr(exc, "code", None)
+    err_type = getattr(exc, "type", None)
+    if code == "insufficient_quota" or err_type == "insufficient_quota":
+        return True
+
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error") if isinstance(body.get("error"), dict) else body
+        if err.get("code") == "insufficient_quota" or err.get("type") == "insufficient_quota":
+            return True
+
     response = getattr(exc, "response", None)
     if response is not None:
         try:
-            text += f" {response.json()}".lower()
+            data = response.json()
+            if isinstance(data, dict):
+                err = data.get("error") if isinstance(data.get("error"), dict) else data
+                if err.get("code") == "insufficient_quota" or err.get("type") == "insufficient_quota":
+                    return True
         except Exception:
             pass
-    return "insufficient_quota" in text or "billing" in text or code == "insufficient_quota"
+    return False
 
 
 def is_retryable(exc: BaseException) -> bool:
@@ -122,3 +139,14 @@ def _wait_with_retry_after(retry_state) -> float:
     if retry_state.outcome is not None:
         delay = max(delay, retry_after_seconds(retry_state.outcome.exception()) or 0.0)
     return delay
+
+
+def calculate_backoff_delay(attempt_number: int, exc: BaseException | None = None) -> float:
+    """Calculate full-jitter exponential backoff combined with Retry-After header."""
+    max_backoff = Config.LLM_BACKOFF_MAX_S
+    high = min(max_backoff, 1.0 * (2 ** max(0, attempt_number - 1)))
+    delay = random.uniform(0.0, high)
+    if exc is not None:
+        delay = max(delay, retry_after_seconds(exc) or 0.0)
+    return delay
+

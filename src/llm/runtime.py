@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -28,7 +29,13 @@ from starlette.requests import Request
 from core.config import Config
 from core.telemetry import track_llm_call
 from llm.limiter import ModelLimiter
-from llm.retry import is_insufficient_quota, is_retryable, retry_after_seconds, run_with_retries
+from llm.retry import (
+    calculate_backoff_delay,
+    is_insufficient_quota,
+    is_retryable,
+    retry_after_seconds,
+    run_with_retries,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +134,6 @@ class LLMRuntime:
             self.client, self._auth_method = _build_foundry_client(timeout, limits)
             self._provider = "foundry"
             self._primary_key = ""  # key managed externally or via token provider
-            self._keys = []
         else:
             # Default: OpenRouter — behavior identical to before
             key = Config.llm_api_key()
@@ -143,7 +149,6 @@ class LLMRuntime:
             self._provider = "openrouter"
             self._auth_method = "api_key"
             self._primary_key = key
-            self._keys = list(dict.fromkeys(Config.openrouter_api_keys() or [key]))
             logger.info("[LLM] Initialized OpenRouter backend: %s", Config.LLM_BASE_URL)
 
     @property
@@ -174,50 +179,18 @@ class LLMRuntime:
             finally:
                 await self.limiter.release(model)
 
-        async with track_llm_call(model=model, operation="complete") as ctx:
-            try:
+        async def _run() -> Any:
+            async with track_llm_call(model=model, operation="complete") as ctx:
                 res = await run_with_retries(attempt, model=model)
                 usage = getattr(res, "usage", None)
                 if usage:
                     ctx.tokens = getattr(usage, "total_tokens", None)
                 return res
-            except Exception as exc:
-                if is_insufficient_quota(exc):
-                    res = await self._complete_with_quota_rotation(
-                        model=model, create_kwargs=create_kwargs, failed_key=key,
-                    )
-                    usage = getattr(res, "usage", None)
-                    if usage:
-                        ctx.tokens = getattr(usage, "total_tokens", None)
-                    return res
-                raise
 
-    async def _complete_with_quota_rotation(
-        self,
-        *,
-        model: str,
-        create_kwargs: dict[str, Any],
-        failed_key: str | None,
-    ) -> Any:
-        """Try remaining configured keys only after an explicit quota failure."""
-        attempted = failed_key or Config.llm_api_key()
-        for key in self._keys:
-            if key == attempted:
-                continue
-            logger.warning("[LLM] quota rotation model=%s", model)
-
-            async def attempt() -> Any:
-                await self.limiter.acquire(model)
-                try:
-                    return await self.client.chat.completions.create(
-                        **create_kwargs,
-                        extra_headers=self._headers_for(key),
-                    )
-                finally:
-                    await self.limiter.release(model)
-
-            return await run_with_retries(attempt, model=model)
-        raise RuntimeError("All configured LLM keys exhausted after a quota failure")
+        total_timeout = Config.LLM_TOTAL_TIMEOUT_S
+        if total_timeout and total_timeout > 0:
+            return await asyncio.wait_for(_run(), timeout=total_timeout)
+        return await _run()
 
     async def stream(
         self,
@@ -228,48 +201,125 @@ class LLMRuntime:
     ) -> AsyncIterator[Any]:
         """Yield a completion stream without blocking the event loop.
 
-        A failed stream is retried only before the first chunk is yielded. The
-        model slot remains held for the complete attempt, including cleanup.
+        A failed stream is retried only before the first content chunk is yielded.
+        The slot is released before backoff sleep and re-acquired on retry.
+        Total timeout applies only until the first content chunk.
         """
         max_attempts = max(1, Config.LLM_MAX_ATTEMPTS)
+        total_timeout = Config.LLM_TOTAL_TIMEOUT_S
+        deadline = (time.monotonic() + total_timeout) if total_timeout and total_timeout > 0 else None
+
         async with track_llm_call(model=model, operation="stream"):
             for attempt_number in range(1, max_attempts + 1):
+                if deadline is not None and time.monotonic() >= deadline:
+                    raise asyncio.TimeoutError("LLM total timeout exceeded before first stream chunk")
+
                 stream = None
-                emitted = False
+                slot_held = False
                 headers = self._headers_for(key)
-                await self.limiter.acquire(model)
                 try:
-                    stream = await self.client.chat.completions.create(
+                    remaining = max(0.001, deadline - time.monotonic()) if deadline is not None else None
+                    if remaining is not None:
+                        await asyncio.wait_for(self.limiter.acquire(model), timeout=remaining)
+                    else:
+                        await self.limiter.acquire(model)
+                    slot_held = True
+
+                    create_coro = self.client.chat.completions.create(
                         **create_kwargs,
                         extra_headers=headers,
                         stream=True,
                     )
-                    async for chunk in stream:
+                    if remaining is not None:
+                        remaining = max(0.001, deadline - time.monotonic())
+                        stream = await asyncio.wait_for(create_coro, timeout=remaining)
+                    else:
+                        stream = await create_coro
+
+                    chunk_iter = stream.__aiter__()
+                    first_content = None
+                    while True:
+                        if remaining is not None:
+                            remaining = max(0.001, deadline - time.monotonic())
+                            chunk = await asyncio.wait_for(chunk_iter.__anext__(), timeout=remaining)
+                        else:
+                            chunk = await chunk_iter.__anext__()
                         choices = getattr(chunk, "choices", None) or []
                         if not choices:
                             continue
                         content = getattr(getattr(choices[0], "delta", None), "content", None)
-                        if content is None:
-                            continue
-                        emitted = True
-                        yield content
+                        if content is not None:
+                            first_content = content
+                            break
+
+                except StopAsyncIteration:
+                    try:
+                        if stream is not None:
+                            close = getattr(stream, "aclose", None)
+                            if close is not None:
+                                await close()
+                    finally:
+                        if slot_held:
+                            await self.limiter.release(model)
                     return
+
                 except asyncio.CancelledError:
+                    try:
+                        if stream is not None:
+                            close = getattr(stream, "aclose", None)
+                            if close is not None:
+                                await close()
+                    finally:
+                        if slot_held:
+                            await self.limiter.release(model)
                     raise
+
                 except Exception as exc:
-                    if emitted or attempt_number >= max_attempts or not is_retryable(exc):
+                    try:
+                        if stream is not None:
+                            close = getattr(stream, "aclose", None)
+                            if close is not None:
+                                await close()
+                    finally:
+                        if slot_held:
+                            await self.limiter.release(model)
+                            slot_held = False
+
+                    if attempt_number >= max_attempts or not is_retryable(exc):
                         raise
+
+                    delay = calculate_backoff_delay(attempt_number, exc)
                     logger.warning(
-                        "[LLM] stream retry model=%s attempt=%d status=%s",
-                        model, attempt_number, getattr(exc, "status_code", None),
+                        "[LLM] stream retry model=%s attempt=%d status=%s wait_sec=%.3f",
+                        model, attempt_number, getattr(exc, "status_code", None), delay,
                     )
-                    await asyncio.sleep(max(0.0, retry_after_seconds(exc) or 0.0))
+
+                    if deadline is not None and (time.monotonic() + delay) >= deadline:
+                        raise asyncio.TimeoutError("LLM total timeout exceeded during stream retry backoff")
+
+                    await asyncio.sleep(delay)
+                    continue
+
+                try:
+                    yield first_content
+                    async for chunk in chunk_iter:
+                        choices = getattr(chunk, "choices", None) or []
+                        if not choices:
+                            continue
+                        content = getattr(getattr(choices[0], "delta", None), "content", None)
+                        if content is not None:
+                            yield content
+                    return
                 finally:
-                    if stream is not None:
-                        close = getattr(stream, "aclose", None)
-                        if close is not None:
-                            await close()
-                    await self.limiter.release(model)
+                    try:
+                        if stream is not None:
+                            close = getattr(stream, "aclose", None)
+                            if close is not None:
+                                await close()
+                    finally:
+                        if slot_held:
+                            await self.limiter.release(model)
+                            slot_held = False
 
     def _headers_for(self, key: str | None) -> dict[str, str] | None:
         """Return a request-scoped authorization override without mutating the client."""

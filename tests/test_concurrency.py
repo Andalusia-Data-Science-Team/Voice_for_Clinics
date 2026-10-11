@@ -17,7 +17,12 @@ import llm.retry as retry_module
 import llm.runtime as runtime_module
 from core.config import Config
 from llm.limiter import ModelLimiter
-from llm.retry import is_retryable, run_with_retries
+from llm.retry import (
+    calculate_backoff_delay,
+    is_insufficient_quota,
+    is_retryable,
+    run_with_retries,
+)
 
 
 class StatusError(Exception):
@@ -254,7 +259,7 @@ def test_concurrency_retry_classification():
 
 @pytest.mark.asyncio
 async def test_concurrency_30_parallel_analyses(monkeypatch):
-    """Thirty real runtime completions recover from one 429 each."""
+    """Thirty real runtime completions recover from one 429 each while loop stays responsive."""
     attempts = defaultdict(int)
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -266,6 +271,27 @@ async def test_concurrency_30_parallel_analyses(monkeypatch):
         return httpx.Response(200, json=_completion(request_id, body["model"]))
 
     runtime = _patch_runtime_client(monkeypatch, handler)
+    # Warm the SDK/MockTransport path before measuring scheduling latency so
+    # import/validation setup is not mistaken for event-loop blocking.
+    await runtime.complete(
+        model="test-model",
+        create_kwargs={
+            "model": "test-model",
+            "messages": [{"role": "user", "content": "warmup"}],
+        },
+    )
+    attempts.clear()
+
+    loop_lags: list[float] = []
+    stop = asyncio.Event()
+
+    async def sampler():
+        while not stop.is_set():
+            scheduled = asyncio.get_running_loop().time() + 0.01
+            await asyncio.sleep(0.01)
+            loop_lags.append(max(0.0, asyncio.get_running_loop().time() - scheduled))
+
+    sampler_task = asyncio.create_task(sampler())
     try:
         async def call(index: int):
             request_id = f"request-{index}"
@@ -279,10 +305,16 @@ async def test_concurrency_30_parallel_analyses(monkeypatch):
             return result.choices[0].message.content
 
         results = await asyncio.gather(*(call(index) for index in range(30)))
+        stop.set()
+        await sampler_task
         assert results == [f"request-{index}" for index in range(30)]
         assert len(attempts) == 30
         assert all(1 <= count <= 4 for count in attempts.values())
+        assert max(loop_lags, default=0.0) < 0.05
     finally:
+        stop.set()
+        sampler_task.cancel()
+        await asyncio.gather(sampler_task, return_exceptions=True)
         await runtime.close()
 
 
@@ -464,14 +496,13 @@ async def test_concurrency_config_limits_override(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_concurrency_insufficient_quota_not_retried(monkeypatch):
-    """Quota failure skips retry and tries the next configured key once."""
-    attempts: list[str] = []
+    """Quota failure raises immediately and is not retried or rotated."""
+    attempts = 0
 
     async def handler(request: httpx.Request):
-        attempts.append(request.headers.get("authorization", "default"))
-        if len(attempts) == 1:
-            return httpx.Response(402, json={"error": {"code": "insufficient_quota"}})
-        return httpx.Response(200, json=_completion("rotated"))
+        nonlocal attempts
+        attempts += 1
+        return httpx.Response(402, json={"error": {"code": "insufficient_quota"}})
 
     runtime = _patch_runtime_client(
         monkeypatch,
@@ -479,12 +510,12 @@ async def test_concurrency_insufficient_quota_not_retried(monkeypatch):
         keys=["primary-key", "secondary-key"],
     )
     try:
-        result = await runtime.complete(
-            model="test-model", create_kwargs={"model": "test-model", "messages": []},
-        )
-        assert result.choices[0].message.content == "rotated"
-        assert len(attempts) == 2
-        assert attempts[0] != attempts[1]
+        with pytest.raises(Exception) as exc_info:
+            await runtime.complete(
+                model="test-model", create_kwargs={"model": "test-model", "messages": []},
+            )
+        assert attempts == 1
+        assert "insufficient_quota" in str(exc_info.value) or getattr(exc_info.value, "code", None) == "insufficient_quota"
     finally:
         await runtime.close()
 
@@ -541,3 +572,313 @@ async def test_concurrency_stream_cancel_releases_slot(monkeypatch):
     assert stats.in_flight == 0
     gate.set()
     await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrency_stream_slot_released_during_backoff(monkeypatch):
+    """The limiter slot is released during retry sleep before being re-acquired."""
+    slot_during_sleep: int | None = None
+    calls = 0
+
+    async def fake_sleep(duration: float):
+        nonlocal slot_during_sleep
+        if duration > 0:
+            stats = await runtime.limiter.stats("test-model")
+            slot_during_sleep = stats.in_flight
+
+    monkeypatch.setattr(runtime_module.asyncio, "sleep", fake_sleep)
+
+    async def handler(_: httpx.Request):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(429, json={"error": {"message": "rate limit"}})
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            stream=_SSEStream([_sse_chunk("hello")]),
+        )
+
+    runtime = _patch_runtime_client(monkeypatch, handler)
+    try:
+        chunks = []
+        async for chunk in runtime.stream(
+            model="test-model",
+            create_kwargs={"model": "test-model", "messages": []},
+        ):
+            chunks.append(chunk)
+        assert chunks == ["hello"]
+        assert calls == 2
+        assert slot_during_sleep == 0
+    finally:
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrency_total_timeout_complete(monkeypatch):
+    """Overall timeout wraps the completion retry loop."""
+    monkeypatch.setattr(runtime_module.Config, "LLM_TOTAL_TIMEOUT_S", 0.05)
+
+    async def handler(_: httpx.Request):
+        await asyncio.sleep(0.2)
+        return httpx.Response(200, json=_completion("done"))
+
+    runtime = _patch_runtime_client(monkeypatch, handler)
+    try:
+        with pytest.raises((asyncio.TimeoutError, TimeoutError)):
+            await runtime.complete(
+                model="test-model",
+                create_kwargs={"model": "test-model", "messages": []},
+            )
+    finally:
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrency_total_timeout_stream(monkeypatch):
+    """Overall timeout applies only until the first content chunk is yielded."""
+    monkeypatch.setattr(runtime_module.Config, "LLM_TOTAL_TIMEOUT_S", 0.05)
+
+    async def handler(_: httpx.Request):
+        await asyncio.sleep(0.2)
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            stream=_SSEStream([_sse_chunk("hello")]),
+        )
+
+    runtime = _patch_runtime_client(monkeypatch, handler)
+    try:
+        with pytest.raises((asyncio.TimeoutError, TimeoutError)):
+            async for _ in runtime.stream(
+                model="test-model",
+                create_kwargs={"model": "test-model", "messages": []},
+            ):
+                pass
+    finally:
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrency_stream_aclose_raises_slot_still_released(monkeypatch):
+    """When stream.aclose() raises an exception, the model semaphore slot is still released."""
+    async def handler(_: httpx.Request):
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            stream=_SSEStream([_sse_chunk("hello")]),
+        )
+
+    async def bad_aclose(self):
+        raise RuntimeError("simulated aclose crash")
+
+    monkeypatch.setattr(openai.AsyncStream, "aclose", bad_aclose, raising=False)
+
+    runtime = _patch_runtime_client(monkeypatch, handler)
+    try:
+        try:
+            async for chunk in runtime.stream(
+                model="test-model",
+                create_kwargs={"model": "test-model", "messages": []},
+            ):
+                assert chunk == "hello"
+        except RuntimeError as exc:
+            assert "simulated aclose crash" in str(exc)
+
+        stats = await runtime.limiter.stats("test-model")
+        assert stats.in_flight == 0
+    finally:
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrency_stream_persistent_errors_exactly_four_attempts(monkeypatch):
+    """Persistent retryable errors trigger exactly 4 attempts without counter reset and surface final error."""
+    attempts = 0
+    attempt_delays: list[float] = []
+
+    async def no_delay(duration: float):
+        if duration > 0:
+            attempt_delays.append(duration)
+
+    monkeypatch.setattr(runtime_module.asyncio, "sleep", no_delay)
+
+    async def handler(_: httpx.Request):
+        nonlocal attempts
+        attempts += 1
+        return httpx.Response(503, json={"error": {"message": f"service unavailable attempt {attempts}"}})
+
+    runtime = _patch_runtime_client(monkeypatch, handler)
+    try:
+        with pytest.raises(openai.InternalServerError) as exc_info:
+            async for _ in runtime.stream(
+                model="test-model",
+                create_kwargs={"model": "test-model", "messages": []},
+            ):
+                pass
+
+        # Exactly 4 attempts (1 initial try + 3 retries)
+        assert attempts == 4
+        # Sleep was called 3 times between the 4 attempts
+        assert len(attempt_delays) == 3
+        # Attempt counter was never reset
+        assert "attempt 4" in str(exc_info.value)
+        # Final error was surfaced and slot released
+        stats = await runtime.limiter.stats("test-model")
+        assert stats.in_flight == 0
+    finally:
+        await runtime.close()
+
+
+def test_concurrency_is_insufficient_quota_classification():
+    """Verify is_insufficient_quota strictly inspects code/type and ignores mere 'billing' text."""
+    # 1. Attribute error.code
+    exc1 = Exception("test")
+    exc1.code = "insufficient_quota"
+    assert is_insufficient_quota(exc1) is True
+
+    # 2. Attribute error.type
+    exc2 = Exception("test")
+    exc2.type = "insufficient_quota"
+    assert is_insufficient_quota(exc2) is True
+
+    # 3. exc.body with nested error code
+    exc3 = Exception("test")
+    exc3.body = {"error": {"code": "insufficient_quota"}}
+    assert is_insufficient_quota(exc3) is True
+
+    # 4. exc.body with nested error type
+    exc4 = Exception("test")
+    exc4.body = {"error": {"type": "insufficient_quota"}}
+    assert is_insufficient_quota(exc4) is True
+
+    # 5. exc.body flat code/type
+    exc5 = Exception("test")
+    exc5.body = {"code": "insufficient_quota"}
+    assert is_insufficient_quota(exc5) is True
+
+    # 6. Response JSON with code
+    req = httpx.Request("POST", "http://test")
+    resp_code = httpx.Response(402, json={"error": {"code": "insufficient_quota"}}, request=req)
+    exc6 = openai.APIStatusError(message="quota exceeded", response=resp_code, body=None)
+    assert is_insufficient_quota(exc6) is True
+
+    # 7. Response JSON with type
+    resp_type = httpx.Response(402, json={"error": {"type": "insufficient_quota"}}, request=req)
+    exc7 = openai.APIStatusError(message="quota exceeded", response=resp_type, body=None)
+    assert is_insufficient_quota(exc7) is True
+
+    # 8. False when only the word "billing" appears in message text
+    exc8 = Exception("Please check your billing details and update credit card")
+    assert is_insufficient_quota(exc8) is False
+
+    exc9 = openai.APIError(
+        message="Your billing account is undergoing routine review",
+        request=req,
+        body=None,
+    )
+    assert is_insufficient_quota(exc9) is False
+
+    resp_billing = httpx.Response(402, json={"error": {"message": "Billing problem encountered"}}, request=req)
+    exc10 = openai.APIStatusError(message="Billing problem", response=resp_billing, body=None)
+    assert is_insufficient_quota(exc10) is False
+
+
+@pytest.mark.asyncio
+async def test_concurrency_complete_persistent_429_exactly_four_calls(monkeypatch):
+    """complete() on persistent mocked 429 executes exactly 4 calls (1 try + 3 retries)."""
+    calls = 0
+
+    async def no_delay(duration: float):
+        pass
+
+    monkeypatch.setattr(asyncio, "sleep", no_delay)
+
+    async def handler(_: httpx.Request):
+        nonlocal calls
+        calls += 1
+        return httpx.Response(429, json={"error": {"message": f"rate limit attempt {calls}"}})
+
+    runtime = _patch_runtime_client(monkeypatch, handler)
+    try:
+        with pytest.raises(openai.RateLimitError) as exc_info:
+            await runtime.complete(
+                model="test-model",
+                create_kwargs={"model": "test-model", "messages": []},
+            )
+        assert calls == 4
+        assert "attempt 4" in str(exc_info.value)
+        stats = await runtime.limiter.stats("test-model")
+        assert stats.in_flight == 0
+    finally:
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrency_stream_backoff_bounds_and_retry_after(monkeypatch):
+    """stream backoff delay is within [0, LLM_BACKOFF_MAX_S] and honors a capped Retry-After."""
+    # 1. Pure calculation tests across attempt numbers
+    for attempt in range(1, 10):
+        for _ in range(25):
+            delay = calculate_backoff_delay(attempt)
+            assert 0.0 <= delay <= Config.LLM_BACKOFF_MAX_S
+
+    req = httpx.Request("POST", "http://test")
+    resp_capped = httpx.Response(429, headers={"Retry-After": "100"}, request=req)
+    exc_capped = openai.RateLimitError(message="throttled", response=resp_capped, body=None)
+    for _ in range(10):
+        delay = calculate_backoff_delay(1, exc_capped)
+        assert delay == Config.LLM_RETRY_AFTER_MAX_S
+
+    resp_valid = httpx.Response(429, headers={"Retry-After": "4.5"}, request=req)
+    exc_valid = openai.RateLimitError(message="throttled", response=resp_valid, body=None)
+    for _ in range(10):
+        delay = calculate_backoff_delay(1, exc_valid)
+        assert delay >= 4.5
+
+    # 2. Integration test with runtime.stream()
+    recorded_delays: list[float] = []
+
+    async def fake_sleep(duration: float):
+        if duration > 0:
+            recorded_delays.append(duration)
+
+    monkeypatch.setattr(runtime_module.asyncio, "sleep", fake_sleep)
+
+    calls = 0
+    async def handler(_: httpx.Request):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(429, json={"error": {"message": "rate limit no header"}})
+        if calls == 2:
+            return httpx.Response(429, headers={"Retry-After": "3.5"}, json={"error": {"message": "rate limit header"}})
+        if calls == 3:
+            return httpx.Response(429, headers={"Retry-After": "120"}, json={"error": {"message": "rate limit header big"}})
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            stream=_SSEStream([_sse_chunk("chunk")]),
+        )
+
+    runtime = _patch_runtime_client(monkeypatch, handler)
+    try:
+        chunks = []
+        async for chunk in runtime.stream(
+            model="test-model",
+            create_kwargs={"model": "test-model", "messages": []},
+        ):
+            chunks.append(chunk)
+
+        assert chunks == ["chunk"]
+        assert len(recorded_delays) == 3
+        # Attempt 1: within [0, LLM_BACKOFF_MAX_S]
+        assert 0.0 <= recorded_delays[0] <= Config.LLM_BACKOFF_MAX_S
+        # Attempt 2: honors Retry-After 3.5
+        assert recorded_delays[1] >= 3.5
+        # Attempt 3: capped at Config.LLM_RETRY_AFTER_MAX_S (30s)
+        assert recorded_delays[2] == Config.LLM_RETRY_AFTER_MAX_S
+    finally:
+        await runtime.close()
+
+

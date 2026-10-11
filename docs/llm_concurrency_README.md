@@ -15,6 +15,7 @@ Set these environment variables before starting the application:
 | `LLM_API_KEY` | `OPENROUTER_API_KEY` | Primary API key |
 | `LLM_TIMEOUT_S` | `45` | Overall SDK request timeout |
 | `LLM_CONNECT_TIMEOUT_S` | `5` | Connection timeout |
+| `LLM_TOTAL_TIMEOUT_S` | `300` | Overall timeout deadline wrapping retry loops (stream deadline until first chunk) |
 | `LLM_MAX_ATTEMPTS` | `4` | Total attempts, including the first request |
 | `LLM_BACKOFF_MAX_S` | `8` | Maximum exponential-jitter backoff |
 | `LLM_RETRY_AFTER_MAX_S` | `30` | Maximum accepted provider Retry-After delay |
@@ -40,16 +41,19 @@ The retry policy uses bounded exponential jitter and retries only:
 - OpenAI timeout/connection errors; and
 - HTTPX timeout errors.
 
-HTTP 400, 401, 403, 404, 422, malformed model output, and
-`insufficient_quota` are not retried. A provider `Retry-After` value in seconds
-or HTTP-date form is honored up to `LLM_RETRY_AFTER_MAX_S`. HTTP 429 never
-rotates keys. Quota/billing rotation is a separate explicit path and never
-mutates the shared client's key.
+HTTP 400, 401, 403, 404, 422, malformed model output, and `insufficient_quota`
+are not retried. `insufficient_quota` is detected strictly from `error.code` or
+`error.type` and raises immediately. Key rotation has been entirely eliminated
+from the runtime. A provider `Retry-After` value in seconds or HTTP-date form is
+honored up to `LLM_RETRY_AFTER_MAX_S`.
 
-Streaming holds its model slot until the stream is exhausted or cancelled. A
-stream can be retried only before the first content chunk is yielded; after
-output is emitted, the error is surfaced to avoid duplicated text. Logs include
-model, attempt, status, wait, and in-flight metrics only. Prompts, response
+Streaming acquires a model slot for active requests. If a retryable failure occurs
+before the first content chunk is yielded, the model slot is explicitly released
+before the full-jitter backoff sleep and re-acquired on the next attempt (up to 4
+attempts total). The slot is released in an isolated `finally` block even if
+stream `aclose()` raises. `LLM_TOTAL_TIMEOUT_S` enforces a deadline wrapping the
+retry loop in `complete()` and until the first content chunk in `stream()`. Logs
+include model, attempt, status, wait, and in-flight metrics only. Prompts, response
 bodies, API keys, and PHI are not logged by the runtime.
 
 ## Verification
@@ -74,10 +78,10 @@ Run the requested suite with:
 
 | Required case | Test name | Status |
 | --- | --- | --- |
-| 30 parallel analyses; 429 then 200 | `test_concurrency_30_parallel_analyses` | passing |
+| 30 parallel analyses; 429 then 200 (event loop lag < 50ms) | `test_concurrency_30_parallel_analyses` | passing |
 | Retry-After honored and capped | `test_concurrency_retry_after_honoured` | passing |
 | Non-retryable 400/401/404/422 | `test_concurrency_no_retry_on_4xx` | passing |
-| Insufficient quota; rotation only | `test_concurrency_insufficient_quota_not_retried` | passing |
+| Insufficient quota; immediate failure | `test_concurrency_insufficient_quota_not_retried` | passing |
 | Four-attempt maximum | `test_concurrency_max_attempts_is_four` | passing |
 | 5xx and timeout retry | `test_concurrency_5xx_and_timeout_retried` | passing |
 | Semaphore cap | `test_concurrency_semaphore_cap` | passing |
@@ -85,6 +89,14 @@ Run the requested suite with:
 | Release after error and cancellation | `test_concurrency_semaphore_released_on_error_and_cancel` | passing |
 | Ten async streams do not block the loop | `test_concurrency_stream_no_event_loop_block` | passing |
 | Stream retry only before first chunk | `test_concurrency_stream_retry_only_before_first_chunk` | passing |
+| Stream slot released during backoff sleep | `test_concurrency_stream_slot_released_during_backoff` | passing |
+| Total timeout wrapping completion | `test_concurrency_total_timeout_complete` | passing |
+| Total timeout wrapping stream until first chunk | `test_concurrency_total_timeout_stream` | passing |
+| Stream slot released on aclose() exception | `test_concurrency_stream_aclose_raises_slot_still_released` | passing |
+| Stream persistent 503 exactly 4 attempts | `test_concurrency_stream_persistent_errors_exactly_four_attempts` | passing |
+| Quota detection strictly code/type, not "billing" | `test_concurrency_is_insufficient_quota_classification` | passing |
+| complete() persistent 429 exactly 4 calls | `test_concurrency_complete_persistent_429_exactly_four_calls` | passing |
+| Stream backoff bounds and Retry-After capping | `test_concurrency_stream_backoff_bounds_and_retry_after` | passing |
 | One shared client construction | `test_concurrency_single_client_instance` | passing |
 | Model-specific environment override | `test_concurrency_config_limits_override` | passing |
 
