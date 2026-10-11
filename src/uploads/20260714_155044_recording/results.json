@@ -1,0 +1,98 @@
+{
+  "filename": "recording.webm",
+  "language": "ar",
+  "mode": "doctor",
+  "session_dir": "/home/ai/Workspace/Doha/MedVoice/src/uploads/20260714_155044_recording",
+  "transcription": {
+    "raw_transcript": "المريض يعاني من كسور في الشريان التاجي.",
+    "refined_text": "يعاني المريض من تمزق في الشريان التاجي.",
+    "final_text": "The patient is suffering from a coronary artery tear.",
+    "transcription_sec": 1.403,
+    "refinement_sec": 5.763,
+    "translation_sec": 3.286
+  },
+  "extraction": {
+    "extracted_features": {
+      "chief_complaint": "Coronary artery tear",
+      "icd10_codes": [
+        "I25.10 - Atherosclerotic heart disease of native coronary artery without angina pectoris",
+        "I21.9 - Acute myocardial infarction, unspecified",
+        "I74.9 - Embolism and thrombosis of unspecified artery"
+      ],
+      "history_of_illness": "",
+      "current_medication": "",
+      "imaging_results": "",
+      "plan": "",
+      "assessment": "Coronary artery tear",
+      "follow_up": ""
+    },
+    "extraction_sec": 4.751
+  },
+  "questions": {
+    "questions": [
+      {
+        "question": "What is the patient's chief complaint?",
+        "answer": "Coronary artery tear",
+        "needs_asking": false,
+        "category": "chief_complaint"
+      },
+      {
+        "question": "Does the patient have any known drug allergies?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "allergies"
+      },
+      {
+        "question": "What is the patient's current blood pressure?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "vital_signs"
+      },
+      {
+        "question": "What medications is the patient currently taking?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "medications"
+      },
+      {
+        "question": "Does the patient have any history of heart disease or related conditions?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "history"
+      },
+      {
+        "question": "Has the patient experienced any recent surgeries or procedures?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "history"
+      },
+      {
+        "question": "What are the patient's vital signs, including heart rate and respiratory rate?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "vital_signs"
+      },
+      {
+        "question": "What findings were noted during the physical examination?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "physical_exam"
+      },
+      {
+        "question": "What is the clinical assessment or diagnosis based on the current condition?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "assessment"
+      },
+      {
+        "question": "What is the proposed treatment plan for the coronary artery tear?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "plan"
+      }
+    ],
+    "question_generation_sec": 7.213,
+    "total_sec": 22.422
+  },
+  "total_sec": 22.422
+}

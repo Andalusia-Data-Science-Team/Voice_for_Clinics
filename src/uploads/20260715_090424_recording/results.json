@@ -1,0 +1,86 @@
+{
+  "filename": "recording.webm",
+  "language": "en",
+  "mode": "doctor",
+  "session_dir": "/home/ai/Workspace/Doha/MedVoice/src/uploads/20260715_090424_recording",
+  "transcription": {
+    "raw_transcript": "The patient has been complaining from bilateral knee pain since five years ago.",
+    "refined_text": "The patient has complained of bilateral knee pain for the past five years.",
+    "final_text": "The patient has complained of bilateral knee pain for the past five years.",
+    "transcription_sec": 2.036,
+    "refinement_sec": 4.908,
+    "translation_sec": null
+  },
+  "extraction": {
+    "extracted_features": {
+      "chief_complaint": "Bilateral knee pain",
+      "icd10_codes": [
+        "M17.0 - Bilateral primary osteoarthritis of the knee",
+        "M25.561 - Pain in right knee",
+        "M25.562 - Pain in left knee"
+      ],
+      "history_of_illness": "Patient has experienced bilateral knee pain for the past five years.",
+      "current_medication": "",
+      "imaging_results": "",
+      "plan": "",
+      "assessment": "",
+      "follow_up": ""
+    },
+    "extraction_sec": 3.458
+  },
+  "questions": {
+    "questions": [
+      {
+        "question": "What is the patient's chief complaint?",
+        "answer": "Bilateral knee pain for the past five years.",
+        "needs_asking": false,
+        "category": "chief_complaint"
+      },
+      {
+        "question": "Does the patient have any known drug allergies?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "allergies"
+      },
+      {
+        "question": "What medications is the patient currently taking?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "medications"
+      },
+      {
+        "question": "Does the patient have any past medical history related to joint issues?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "history"
+      },
+      {
+        "question": "What is the patient's current blood pressure?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "vital_signs"
+      },
+      {
+        "question": "What were the findings during the physical examination of the knees?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "physical_exam"
+      },
+      {
+        "question": "What is the assessment or diagnosis regarding the knee pain?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "assessment"
+      },
+      {
+        "question": "What is the proposed plan for managing the knee pain?",
+        "answer": null,
+        "needs_asking": true,
+        "category": "plan"
+      }
+    ],
+    "question_generation_sec": 4.744,
+    "total_sec": 15.158
+  },
+  "total_sec": 15.158
+}

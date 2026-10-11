@@ -1,0 +1,9 @@
+openai>=1.14.0
+python-dotenv
+pyyaml
+aiohttp
+rapidfuzz
+fastapi
+uvicorn
+websockets
+mistralai

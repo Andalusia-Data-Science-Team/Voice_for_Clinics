@@ -32,7 +32,7 @@ class Translate:
             
             translated_text = LLMService.translate_to_eng(
                 refined_text,
-                Config.TRANSLATE_API_KEY,
+                Config.openrouter_api_key(),
                 is_conversation=is_conversation
             )
 

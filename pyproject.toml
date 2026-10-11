@@ -38,6 +38,9 @@ dependencies = [
     "python-multipart==0.0.20",
     "passlib==1.7.4",
     "bcrypt==3.2.0",
+    "openai==2.32.0",
+    "httpx>=0.27",
+    "tenacity>=8.2",
 ]
 
 [project.optional-dependencies]
@@ -52,13 +55,16 @@ dev = [
     "tox==4.23.2",
     "black==24.10.0",
     "pytest-mock==3.14.0",
+    "pytest-asyncio>=0.24",
     "pytest-watcher==0.4.3",
 ]
 
 [tool.pytest.ini_options]
-addopts = "--cov=voiceRecognition"
-testpaths = [
-    "test",
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "llm: live provider-backed model evaluation",
 ]
 
 [tool.mypy]

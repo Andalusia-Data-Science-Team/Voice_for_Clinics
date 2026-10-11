@@ -1,0 +1,24 @@
+thresholds:
+  active_problems: 3
+  comorbidities: 2
+  medications: 5
+
+high_risk_diagnoses:
+  - diabetes
+  - heart failure
+  - ckd
+  - cancer
+  - hypertension
+  - stroke
+  - myocardial infarction
+  - sepsis
+
+red_flags:
+  - chest pain
+  - stroke signs
+  - sepsis
+  - anaphylaxis
+  - suicidal ideation
+  - loss of consciousness
+  - severe bleeding
+  - difficulty breathing
