@@ -1,26 +1,28 @@
 """
 Application configuration.
-===========================
-All secrets are read lazily via classmethods — never at class-body
-evaluation time.  This means ``bootstrap()`` from ``core.azure_identity``
-can safely be called BEFORE this module is imported, injecting Key Vault
-values into ``os.environ``; but it also means that if ``Config.*`` is
-accessed *after* ``bootstrap()``, the values are always fresh regardless
-of import order.
 
-Non-secret infrastructure coordinates (timeouts, limits, folder paths)
-remain as class-level attributes because they are safe to bake in at
-import time and are never stored in Key Vault.
+Secrets are accessed lazily through classmethods rather than being captured
+at class-definition/import time. This allows core.azure_identity.bootstrap()
+to populate os.environ from Azure Key Vault before secrets are accessed.
+
+Non-secret infrastructure settings are loaded at import time.
 """
 
 import os
 import re
 from pathlib import Path
+
 from dotenv import load_dotenv
 
-# Load .env from src/.env or root .env
-_src_env = Path(__file__).resolve().parent.parent / ".env"
-_root_env = Path(__file__).resolve().parent.parent.parent / ".env"
+
+# ---------------------------------------------------------------------------
+# Environment loading
+# ---------------------------------------------------------------------------
+
+_config_dir = Path(__file__).resolve().parent
+_src_env = _config_dir.parent / ".env"
+_root_env = _config_dir.parent.parent / ".env"
+
 if _src_env.is_file():
     load_dotenv(_src_env)
 elif _root_env.is_file():
@@ -32,65 +34,129 @@ else:
 class Config:
     """Base application configuration."""
 
-    # ── Non-secret infrastructure ─────────────────────────────────────────
-    MAX_CONTENT_LENGTH          = 16 * 1024 * 1024   # 16 MB max upload
-    ALLOWED_EXTENSIONS          = {"mp3", "wav", "ogg"}
-    DEBUG                       = True
-    TESTING                     = False
-    PORT                        = 8586
-    UPLOAD_FOLDER               = os.getenv("UPLOAD_FOLDER", "uploads")
-    DATABASE_PATH               = "app_data.db"
+    # -----------------------------------------------------------------------
+    # General application settings
+    # -----------------------------------------------------------------------
+
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB
+    ALLOWED_EXTENSIONS = {"mp3", "wav", "ogg"}
+    DEBUG = True
+    TESTING = False
+    PORT = 8586
+
+    UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "uploads")
+    DATABASE_PATH = "app_data.db"
 
     PATIENT_HISTORY_CSV_PATH = os.getenv(
         "PATIENT_HISTORY_CSV_PATH",
         "/home/ai/Workspace/Doha/MedVoice/src/data/Visit Level History.csv",
     )
+
     XLSX_PATH = os.getenv(
         "XLSX_PATH",
         "/home/ai/Workspace/Doha/MedVoice/src/data/"
         "Medical_Voice_Assistant_Expected_Fields_Expanded.xlsx",
     )
 
-    # ── LLM runtime tuning (not secrets) ─────────────────────────────────
-    LLM_BASE_URL                  = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")
-    LLM_TIMEOUT_S                 = float(os.getenv("LLM_TIMEOUT_S", "45"))
-    LLM_CONNECT_TIMEOUT_S         = float(os.getenv("LLM_CONNECT_TIMEOUT_S", "5"))
-    LLM_MAX_ATTEMPTS              = int(os.getenv("LLM_MAX_ATTEMPTS", "4"))
-    LLM_BACKOFF_MAX_S             = float(os.getenv("LLM_BACKOFF_MAX_S", "8"))
-    LLM_RETRY_AFTER_MAX_S         = float(os.getenv("LLM_RETRY_AFTER_MAX_S", "30"))
-    LLM_LIMIT_DEFAULT             = int(os.getenv("LLM_LIMIT_DEFAULT", "8"))
-    LLM_MAX_CONNECTIONS           = int(os.getenv("LLM_MAX_CONNECTIONS", "100"))
-    LLM_MAX_KEEPALIVE_CONNECTIONS = int(os.getenv("LLM_MAX_KEEPALIVE_CONNECTIONS", "20"))
+    # -----------------------------------------------------------------------
+    # LLM runtime configuration (non-secret settings)
+    # -----------------------------------------------------------------------
 
-    # ── Database config (non-credential parts) ────────────────────────────
-    PATIENT_DB_DRIVER = os.getenv("PATIENT_DB_DRIVER", "{ODBC Driver 17 for SQL Server}")
+    LLM_BASE_URL = os.getenv(
+        "LLM_BASE_URL",
+        "https://openrouter.ai/api/v1",
+    )
+
+    LLM_TIMEOUT_S = float(os.getenv("LLM_TIMEOUT_S", "45"))
+    LLM_TOTAL_TIMEOUT_S = float(os.getenv("LLM_TOTAL_TIMEOUT_S", "300"))
+    LLM_CONNECT_TIMEOUT_S = float(os.getenv("LLM_CONNECT_TIMEOUT_S", "5"))
+
+    LLM_MAX_ATTEMPTS = int(os.getenv("LLM_MAX_ATTEMPTS", "4"))
+    LLM_BACKOFF_MAX_S = float(os.getenv("LLM_BACKOFF_MAX_S", "8"))
+    LLM_RETRY_AFTER_MAX_S = float(os.getenv("LLM_RETRY_AFTER_MAX_S", "30"))
+
+    LLM_LIMIT_DEFAULT = int(os.getenv("LLM_LIMIT_DEFAULT", "8"))
+
+    LLM_MAX_CONNECTIONS = int(
+        os.getenv("LLM_MAX_CONNECTIONS", "100")
+    )
+    LLM_MAX_KEEPALIVE_CONNECTIONS = int(
+        os.getenv("LLM_MAX_KEEPALIVE_CONNECTIONS", "20")
+    )
+
+    # -----------------------------------------------------------------------
+    # Database configuration (non-credential settings)
+    # -----------------------------------------------------------------------
+
+    PATIENT_DB_DRIVER = os.getenv(
+        "PATIENT_DB_DRIVER",
+        "{ODBC Driver 17 for SQL Server}",
+    )
+
     BUSINESS_UNITS = {
-        "AHJ": {"server": "10.111.111.169", "database": "AHJ.Env.HCMS"},
-        "AMH": {"server": "172.31.44.169",  "database": "AMH.Env.HCMS"},
-        "ANC": {"server": "172.31.44.169",  "database": "ANC.Env.HCMS"},
+        "AHJ": {
+            "server": "10.111.111.169",
+            "database": "AHJ.Env.HCMS",
+        },
+        "AMH": {
+            "server": "172.31.44.169",
+            "database": "AMH.Env.HCMS",
+        },
+        "ANC": {
+            "server": "172.31.44.169",
+            "database": "ANC.Env.HCMS",
+        },
     }
 
-    # ── Phase 3: AI Foundry & Private STT Infrastructure Coordinates ───────
-    AI_FOUNDRY_API_VERSION    = os.getenv("AI_FOUNDRY_API_VERSION", "2024-06-01")
-    AI_FOUNDRY_DEPLOYMENT     = os.getenv("AI_FOUNDRY_DEPLOYMENT", "gpt-4o-mini")
-    USE_MANAGED_IDENTITY_SQL  = os.getenv("USE_MANAGED_IDENTITY_SQL", "false").lower() == "true"
+    # -----------------------------------------------------------------------
+    # Azure AI Foundry and private STT infrastructure settings
+    # -----------------------------------------------------------------------
 
-    # ── Celery (non-credential parts) ─────────────────────────────────────
-    CELERY_TASK_SERIALIZER   = os.getenv("CELERY_TASK_SERIALIZER", "json")
-    CELERY_TASK_TIME_LIMIT   = int(os.getenv("CELERY_TASK_TIME_LIMIT", "600"))
-    CELERY_TASK_ACKS_LATE    = os.getenv("CELERY_TASK_ACKS_LATE", "False").lower() == "true"
-    CELERY_WORKER_CONCURRENCY = int(os.getenv("CELERY_WORKER_CONCURRENCY", "2"))
+    AI_FOUNDRY_API_VERSION = os.getenv(
+        "AI_FOUNDRY_API_VERSION",
+        "2024-06-01",
+    )
 
-    # Ensure upload folder exists at config load time (safe, not a secret)
-    if not os.path.exists(UPLOAD_FOLDER):
-        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    AI_FOUNDRY_DEPLOYMENT = os.getenv(
+        "AI_FOUNDRY_DEPLOYMENT",
+        "gpt-4o-mini",
+    )
 
-    # =========================================================================
-    # SECRET ACCESSORS — always read from os.environ at call time.
-    # bootstrap() in core.azure_identity populates os.environ from Key Vault
-    # before these are ever called, so they always return the vault value in
-    # production and the .env value in dev.
-    # =========================================================================
+    USE_MANAGED_IDENTITY_SQL = (
+        os.getenv("USE_MANAGED_IDENTITY_SQL", "false").lower() == "true"
+    )
+
+    # -----------------------------------------------------------------------
+    # Celery runtime settings (non-secret settings)
+    # -----------------------------------------------------------------------
+
+    CELERY_TASK_SERIALIZER = os.getenv(
+        "CELERY_TASK_SERIALIZER",
+        "json",
+    )
+
+    CELERY_TASK_TIME_LIMIT = int(
+        os.getenv("CELERY_TASK_TIME_LIMIT", "600")
+    )
+
+    CELERY_TASK_ACKS_LATE = (
+        os.getenv("CELERY_TASK_ACKS_LATE", "False").lower() == "true"
+    )
+
+    CELERY_WORKER_CONCURRENCY = int(
+        os.getenv("CELERY_WORKER_CONCURRENCY", "2")
+    )
+
+    # -----------------------------------------------------------------------
+    # Upload directory
+    # -----------------------------------------------------------------------
+
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+    # -----------------------------------------------------------------------
+    # API keys
+    # Read environment variables at call time to support Key Vault bootstrap.
+    # -----------------------------------------------------------------------
 
     @classmethod
     def groq_api_key(cls) -> str | None:
@@ -114,18 +180,42 @@ class Config:
 
     @classmethod
     def llm_api_key(cls) -> str | None:
+        """Return the preferred LLM key, falling back to OpenRouter."""
         return os.getenv("LLM_API_KEY") or cls.openrouter_api_key()
 
     @classmethod
     def openrouter_api_keys(cls) -> list[str]:
-        raw = os.getenv("OPENROUTER_API_KEYS", "")
-        keys = [k.strip() for k in raw.split(",") if k.strip()]
-        primary = cls.llm_api_key()
-        if primary and primary not in keys:
-            keys.insert(0, primary)
-        return keys
+        """
+        Return the primary LLM key followed by configured fallback keys.
 
-    # Per-service API key aliases (speech/refine/translation/extraction/questions)
+        Supports:
+          LLM_API_KEY
+          OPENROUTER_API_KEY
+          OPENROUTER_API_KEYS=key1,key2,key3
+        """
+        raw_keys = os.getenv("OPENROUTER_API_KEYS", "")
+
+        configured_keys = [
+            key.strip()
+            for key in raw_keys.split(",")
+            if key.strip()
+        ]
+
+        primary = cls.llm_api_key()
+
+        keys = []
+        if primary:
+            keys.append(primary)
+
+        keys.extend(configured_keys)
+
+        # Preserve order while removing duplicates.
+        return list(dict.fromkeys(keys))
+
+    # -----------------------------------------------------------------------
+    # Per-service API key aliases
+    # -----------------------------------------------------------------------
+
     @classmethod
     def speech_api_key(cls) -> str | None:
         return os.getenv("speech")
@@ -146,17 +236,23 @@ class Config:
     def questions_api_key(cls) -> str | None:
         return os.getenv("questions")
 
-    # Dashboard auth — replaced by Entra roles in Phase 1; kept for backward
-    # compatibility with dev environments that still use basic auth.
+    # -----------------------------------------------------------------------
+    # Dashboard authentication
+    # No hardcoded credentials or default passwords.
+    # -----------------------------------------------------------------------
+
     @classmethod
     def dashboard_username(cls) -> str | None:
-        return os.getenv("DASHBOARD_USERNAME")   # default removed — explicit required
+        return os.getenv("DASHBOARD_USERNAME")
 
     @classmethod
     def dashboard_password(cls) -> str | None:
-        return os.getenv("DASHBOARD_PASSWORD")   # default removed — explicit required
+        return os.getenv("DASHBOARD_PASSWORD")
 
+    # -----------------------------------------------------------------------
     # Database credentials
+    # -----------------------------------------------------------------------
+
     @classmethod
     def patient_db_uid(cls) -> str | None:
         return os.getenv("PATIENT_DB_UID")
@@ -165,7 +261,10 @@ class Config:
     def patient_db_pwd(cls) -> str | None:
         return os.getenv("PATIENT_DB_PWD")
 
+    # -----------------------------------------------------------------------
     # Celery credentials
+    # -----------------------------------------------------------------------
+
     @classmethod
     def celery_broker_url(cls) -> str | None:
         return os.getenv("CELERY_BROKER_URL")
@@ -178,7 +277,10 @@ class Config:
     def celery_flower_password(cls) -> str | None:
         return os.getenv("CELERY_FLOWER_PASSWORD")
 
-    # Phase 3: AI Foundry and Private STT
+    # -----------------------------------------------------------------------
+    # Azure AI Foundry and private STT credentials
+    # -----------------------------------------------------------------------
+
     @classmethod
     def ai_foundry_endpoint(cls) -> str | None:
         return os.getenv("AI_FOUNDRY_ENDPOINT")
@@ -195,13 +297,32 @@ class Config:
     def private_stt_key(cls) -> str | None:
         return os.getenv("PRIVATE_STT_KEY")
 
-    # ── Per-model concurrency limit ───────────────────────────────────────
+    # -----------------------------------------------------------------------
+    # Per-model LLM concurrency limits
+    # -----------------------------------------------------------------------
+
     @classmethod
     def llm_model_limit(cls, model: str) -> int:
-        """Return the configured semaphore size for an OpenRouter model slug."""
-        env_name = "LLM_LIMIT__" + re.sub(r"[^A-Za-z0-9]", "_", model).upper()
+        """
+        Return the semaphore limit for an OpenRouter model slug.
+
+        Example:
+            Model: openai/gpt-oss-20b
+            Environment variable: LLM_LIMIT__OPENAI_GPT_OSS_20B
+        """
+        env_name = (
+            "LLM_LIMIT__"
+            + re.sub(r"[^A-Za-z0-9]", "_", model).upper()
+        )
+
         raw_limit = os.getenv(env_name)
-        limit = int(raw_limit) if raw_limit is not None else cls.LLM_LIMIT_DEFAULT
+        limit = (
+            int(raw_limit)
+            if raw_limit is not None
+            else cls.LLM_LIMIT_DEFAULT
+        )
+
         if limit < 1:
             raise ValueError(f"{env_name} must be at least 1")
+
         return limit

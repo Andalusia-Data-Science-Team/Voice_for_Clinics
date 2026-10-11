@@ -1076,4 +1076,4 @@ app.include_router(router)
 app.include_router(patient_router)
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=7777)
+    uvicorn.run("app:app", host="0.0.0.0", port=9999)
