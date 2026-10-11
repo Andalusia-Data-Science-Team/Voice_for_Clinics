@@ -77,7 +77,7 @@ REASONING_MODELS: Dict[str, ModelSpec] = {m.id: m for m in [
     ),
 ]}
 
-DEFAULT_EXTRACTION_MODEL = "gpt-4o-mini"
+DEFAULT_EXTRACTION_MODEL = "gpt-5.6-luna"
 DEFAULT_REASONING_MODEL = "gpt-5.6-luna"
 
 # Reasoning effort sent to OpenRouter for reasoning-capable models in step 2.
@@ -130,9 +130,7 @@ def registry_for_ui() -> dict:
     def dump(reg, default):
         return {
             "default": default,
-            "models": [
-                {"id": m.id, "label": m.label} for m in reg.values()
-            ],
+            "models": [{"id": default, "label": reg[default].label}],
         }
     return {
         "extraction": dump(EXTRACTION_MODELS, DEFAULT_EXTRACTION_MODEL),

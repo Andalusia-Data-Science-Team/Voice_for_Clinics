@@ -163,7 +163,7 @@ def save_feedback_log(entry: dict) -> None:
         logger.warning("[Feedback] Failed to write feedback log: %s", e)
 
 
-@app.get("/models", summary="Selectable models per pipeline step (feeds the UI dropdowns)")
+@app.get("/models", summary="Fixed model per pipeline step")
 async def list_models():
     return registry_for_ui()
 
@@ -686,6 +686,7 @@ async def analyze_transcript(
             "[Analyze] session start — clinician_name=%r sso_user=%r department=%s language=%s mode=%s",
             log["clinician_name"], log["sso_user"], department_value, language.value, mode.value,
         )
+        parallel_tasks = []
 
         try:
             # ── 1. Refine ─────────────────────────────────────────────────
@@ -794,26 +795,93 @@ async def analyze_transcript(
                 data = diagnosis_result.get("json_data", {}) if diagnosis_result else {}
                 return {"data": data, "meta": meta, "diagnosis_sec": round(time.perf_counter() - t0, 3)}
 
-            ext_res, diag_res = await asyncio.gather(run_extraction(), run_diagnosis(), return_exceptions=True)
-
             errors: dict = {}
             extracted_features, raw_questions, diagnosis_data = {}, [], {}
             extraction_sec = question_generation_sec = diagnosis_sec = None
             ext_meta = diag_meta = None
+            history_check = None
 
-            if isinstance(ext_res, BaseException):
-                errors["extraction"] = str(ext_res)
-                logger.error("[Analyze] extraction failed: %s", ext_res)
-            else:
-                extracted_features, raw_questions = ext_res["features"], ext_res["questions"]
-                extraction_sec, question_generation_sec = ext_res["extraction_sec"], ext_res["question_generation_sec"]
-                ext_meta = ext_res["meta"]
+            async def capture_step(step: str, operation):
+                try:
+                    return step, await operation(), None
+                except Exception as exc:
+                    return step, None, exc
 
-            if isinstance(diag_res, BaseException):
-                errors["diagnosis"] = str(diag_res)
-                logger.error("[Analyze] diagnosis failed: %s", diag_res)
-            else:
-                diagnosis_data, diagnosis_sec, diag_meta = diag_res["data"], diag_res["diagnosis_sec"], diag_res["meta"]
+            parallel_tasks = [
+                asyncio.create_task(capture_step("extraction", run_extraction)),
+                asyncio.create_task(capture_step("diagnosis", run_diagnosis)),
+            ]
+
+            # Send each step as soon as it finishes; the slower parallel step
+            # continues running while the browser renders the completed one.
+            for completed in asyncio.as_completed(parallel_tasks):
+                step, result, error = await completed
+                if step == "extraction":
+                    if error:
+                        errors[step] = str(error)
+                        logger.error("[Analyze] extraction failed: %s", error)
+                        event_data = {
+                            "department": department_value,
+                            "model": extraction_spec.label,
+                            "error": str(error),
+                        }
+                    else:
+                        extracted_features = result["features"]
+                        raw_questions = result["questions"]
+                        extraction_sec = result["extraction_sec"]
+                        question_generation_sec = result["question_generation_sec"]
+                        ext_meta = result["meta"]
+                        event_data = {
+                            "department": department_value,
+                            "patient_story": patient_story,
+                            "extracted_features": extracted_features,
+                            "extraction_sec": extraction_sec,
+                            "questions": raw_questions,
+                            "question_generation_sec": question_generation_sec,
+                            "model": extraction_spec.label,
+                            "usage": ext_meta,
+                        }
+                    yield {"event": "extraction", "data": json.dumps(event_data)}
+                else:
+                    if error:
+                        errors[step] = str(error)
+                        logger.error("[Analyze] diagnosis failed: %s", error)
+                        event_data = {
+                            "department": department_value,
+                            "model": reasoning_spec.label,
+                            "error": str(error),
+                            "history_used": bool(patient_history_text),
+                            "history_visit_count": len(patient_history_visits),
+                            "history_error": history_error,
+                        }
+                    else:
+                        diagnosis_data = result["data"]
+                        diagnosis_sec = result["diagnosis_sec"]
+                        diag_meta = result["meta"]
+                        if patient_history_text and diagnosis_data:
+                            history_check = check_history_usage(patient_history_visits, diagnosis_data)
+                            if history_check["flag"] == "claims_used_no_overlap":
+                                logger.warning(
+                                    "[Analyze] patient_code=%s: history_considered=Yes but no ICD-10 family overlap — history_notes=%r",
+                                    patient_id, diagnosis_data.get("history_notes"),
+                                )
+                            elif history_check["flag"] == "overlap_but_not_flagged":
+                                logger.warning(
+                                    "[Analyze] patient_code=%s: ICD-10 family overlap %s but history_considered was not 'Yes'",
+                                    patient_id, history_check["overlap_families"],
+                                )
+                        event_data = {
+                            "department": department_value,
+                            "diagnosis": diagnosis_data,
+                            "diagnosis_sec": diagnosis_sec,
+                            "model": reasoning_spec.label,
+                            "usage": diag_meta,
+                            "history_used": bool(patient_history_text),
+                            "history_visit_count": len(patient_history_visits),
+                            "history_check": history_check,
+                            "history_error": history_error,
+                        }
+                    yield {"event": "diagnosis", "data": json.dumps(event_data)}
 
             log["extracted_features"]       = extracted_features
             log["questions"]                = raw_questions
@@ -823,54 +891,16 @@ async def analyze_transcript(
             log["diagnosis_sec"]            = diagnosis_sec
             log["extraction_usage"]         = ext_meta
             log["diagnosis_usage"]          = diag_meta
-
+            log["history_check"]            = history_check
             if errors:
                 log["status"] = "error"
-                if len(errors) == 2:     # nothing to show — surface both failures and stop
-                    for step, detail in errors.items():
-                        yield {"event": "error", "data": json.dumps({"step": step, "detail": detail})}
-                    return
-
-            # History audit — history only ever feeds the diagnosis step now.
-            history_check = None
-            if patient_history_text and diagnosis_data:
-                history_check = check_history_usage(patient_history_visits, diagnosis_data)
-                if history_check["flag"] == "claims_used_no_overlap":
-                    logger.warning(f"[Analyze] patient_code={patient_id}: history_considered=Yes but no ICD-10 family overlap "
-                                   f"— history_notes={diagnosis_data.get('history_notes')!r}")
-                elif history_check["flag"] == "overlap_but_not_flagged":
-                    logger.warning(f"[Analyze] patient_code={patient_id}: ICD-10 family overlap {history_check['overlap_families']} "
-                                   f"but history_considered was not 'Yes'")
-            log["history_check"] = history_check
-
-            payload = {
-                "department":              department_value,
-                "patient_story":           patient_story,
-                # step 1
-                "extracted_features":      extracted_features,
-                "extraction_sec":          extraction_sec,
-                "questions":               raw_questions,
-                "question_generation_sec": question_generation_sec,
-                # step 2
-                "diagnosis":               diagnosis_data,
-                "diagnosis_sec":           diagnosis_sec,
-                "history_used":            bool(patient_history_text),
-                "history_visit_count":     len(patient_history_visits),
-                "history_check":           history_check,
-                "history_error":           history_error,
-                # meta
-                "models":  {"extraction": extraction_spec.label, "reasoning": reasoning_spec.label},
-                "usage":   {"extraction": ext_meta, "diagnosis": diag_meta},
-                "errors":  errors,
-                "total_sec": round(time.perf_counter() - pipeline_start, 3),
-            }
-            logger.info("[Analyze] Emitting combined 'extraction' SSE event (extraction=%s, diagnosis=%s, %d question(s), ~%d bytes)",
-                        "ok" if "extraction" not in errors else "FAILED",
-                        "ok" if "diagnosis" not in errors else "FAILED",
-                        len(raw_questions), len(json.dumps(payload)))
-            yield {"event": "extraction", "data": json.dumps(payload)}
 
         finally:
+            for task in parallel_tasks:
+                if not task.done():
+                    task.cancel()
+            if parallel_tasks:
+                await asyncio.gather(*parallel_tasks, return_exceptions=True)
             log["total_sec"] = round(time.perf_counter() - pipeline_start, 3)
             await asyncio.to_thread(save_usage_log, log)
 

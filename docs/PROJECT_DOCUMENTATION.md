@@ -55,8 +55,9 @@ Key design points:
   their own clients.
 - **Streaming everywhere**: transcription streams over WebSocket, analysis
   streams over SSE, so the doctor sees results as each step finishes.
-- **Extraction and diagnosis run in parallel** with `asyncio.gather`, halving
-  the tail latency of the analysis step.
+- **Extraction and diagnosis run in parallel**. Separate SSE events are sent
+  as each step finishes, so the browser can display the first result without
+  waiting for the slower step.
 
 ---
 
@@ -82,10 +83,11 @@ sequenceDiagram
     end
     par Extraction
         S->>S: Extract clinical fields
+        S-->>U: SSE extraction event (fields + questions)
     and Diagnosis
         S->>S: ICD-10 + reasoning
+        S-->>U: SSE diagnosis event
     end
-    S-->>U: SSE extraction event (fields, questions, diagnosis)
 ```
 
 Stages:
@@ -310,11 +312,14 @@ alive through pauses by an 8-second KeepAlive loop on the server side.
 | `refinement_done` | Refinement complete | `refined_text`, `refinement_sec` |
 | `translation_delta` | Arabic only | partial English text |
 | `translation_done` | Translation complete | `final_text`, `translation_sec` |
-| `extraction` | Final combined result | fields, questions, diagnosis, usage |
-| `error` | Any step failed | `step`, `detail` |
+| `extraction` | Extraction and question generation finish | fields, questions, model, usage; `error` on failure |
+| `diagnosis` | Diagnosis finishes | diagnosis, history audit, model, usage; `error` on failure |
+| `error` | Refinement or translation failed | `step`, `detail` |
 
-The `extraction` event is emitted after extraction **and** diagnosis finish
-(they run in parallel) and contains the complete clinical note payload.
+Extraction and diagnosis run concurrently. Each result event is emitted as
+soon as its corresponding step finishes; event arrival order depends on which
+step completes first. An extraction or diagnosis failure is included as an
+`error` field in that step's event, so it does not delay the other result.
 
 ---
 
@@ -323,13 +328,15 @@ The `extraction` event is emitted after extraction **and** diagnosis finish
 `src/core/model_registry.py` is the single source of truth for model ids,
 labels, and OpenRouter slugs.
 
-**Extraction models:** `gpt-4o-mini`, `gpt-5.6-luna`, `glm-5.3-flash`,
-`claude-sonnet-5.5`.
+**Extraction evaluation candidates:** `gpt-4o-mini`, `gpt-5.6-luna`,
+`glm-5.3-flash`, `claude-sonnet-5.5`.
 
-**Reasoning models:** `gpt-4o-mini`, `gemini-3.7-flash`,
-`claude-sonnet-5.5`, `claude-opus-5`.
+**Reasoning evaluation candidates:** `gpt-4o-mini`, `gemini-3.7-flash`,
+`claude-sonnet-5.5`, `gpt-5.6-luna`.
 
-Defaults for both steps: `gpt-4o-mini`.
+Defaults for both steps: `gpt-5.6-luna` (`openai/gpt-5.6-luna`). The UI registry
+exposes only this fixed model for each step; the additional candidates are
+retained for evaluation runs.
 
 **Judges** (used by the evaluation suite, cross-family by design):
 
