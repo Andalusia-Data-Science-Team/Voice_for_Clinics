@@ -1,6 +1,5 @@
 import time
 import logging
-from typing import Optional
 from model.llm_service import LLMService
 from core.config import Config
 
@@ -9,56 +8,50 @@ logger = logging.getLogger(__name__)
 
 
 class ExtractFeature:
-    """Step 1 — clinical-note FIELD extraction (no diagnoses, no patient history)."""
-
+    """Module for extracting structured features from text using LLMService."""
     @staticmethod
     def extract(
         end_text: str,
-        department: str = "opd",
         is_conversation: bool = False,
-        model: Optional[str] = None,
-        meta: Optional[dict] = None,
     ) -> tuple[dict, str]:
         """
-        Args:
-            end_text: translated/final text to process.
-            department: "er", "opd" or "dental" (unknown -> "opd").
-            is_conversation: doctor-patient conversation format.
-            model: id from core.model_registry.EXTRACTION_MODELS (None -> default).
-            meta: optional dict that receives latency / tokens / cost of the LLM call.
+        Extract features from final translated text using LLM.
+        Features are defined in the prompt template, not passed by the caller.
 
-        Returns: (json_data, reasoning_summary)
+        Args:
+            end_text (str): The translated text to process.
+            is_conversation (bool): If True, extracts from doctor-patient conversation format.
+
+        Returns:
+            tuple: (json_data: dict, reasoning: str)
         """
         if not end_text or not isinstance(end_text, str):
             raise ValueError("Input end_text must be a non-empty string")
 
-        start = time.time()
+        extraction_start = time.time()
         try:
-            logger.info(f"[ExtractFeature] {department} extraction, model={model or 'default'}, conversation={is_conversation}")
-            out = LLMService.extract_features(
+            mode_label = "conversation" if is_conversation else "single-speaker"
+            logger.info(f"[ExtractFeature] Starting {mode_label} feature extraction")
+
+            features_output = LLMService.extract_features(
                 translated_text=end_text,
-                api_key=Config.openrouter_api_key(),
-                department=department,
+                api_key=Config.OPENROUTER_API_KEY,
                 is_conversation=is_conversation,
-                model_id=model,
-                meta=meta,
             )
-            json_data = out.get("json_data", {}) if out else {}
-            summary = out.get("summary", "") if out else ""
 
-            # Phase 2 (M3.2): Strict Pydantic output schema validation
-            from validation.schemas import SchemaValidator
-            validated_model, rejection = SchemaValidator.validate_extraction(json_data, department=department)
-            if validated_model:
-                # Use clean, normalized dictionary representation from Pydantic model
-                json_data = validated_model.model_dump()
-            elif rejection:
-                # In case of rejection, attach structured schema rejection metadata
-                logger.warning(f"[ExtractFeature] Schema validation warning: {rejection.reason}")
-                json_data["_schema_rejection"] = rejection.to_dict()
+            json_data = features_output.get("json_data", {})
+            reasoning = features_output.get("reasoning", "")
 
-            logger.info(f"[ExtractFeature] {department} extraction completed in {time.time() - start:.2f}s")
-            return json_data, summary
+            extraction_time = time.time() - extraction_start
+            logger.info(f"[ExtractFeature] {mode_label.capitalize()} extraction completed in {extraction_time:.2f}s")
+            logger.debug(f"[ExtractFeature] Extracted features: {json_data}")
+            logger.debug(f"[ExtractFeature] Reasoning: {reasoning[:200]}...")
+
+            if is_conversation and "conversation_summary" in json_data:
+                logger.info(f"[ExtractFeature] Conversation summary extracted: {len(json_data['conversation_summary'])} chars")
+
+            return json_data, reasoning
+
         except Exception as e:
-            logger.error(f"[ExtractFeature] Extraction failed: {e}")
+            logger.error(f"[ExtractFeature] Extraction failed: {str(e)}")
             raise
