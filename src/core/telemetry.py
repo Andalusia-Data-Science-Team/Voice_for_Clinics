@@ -107,6 +107,15 @@ def init_telemetry() -> None:
         return
 
     try:
+        # Azure Core logs full telemetry request/response details at INFO.
+        # Keep warnings and errors visible without flooding container logs.
+        logging.getLogger(
+            "azure.core.pipeline.policies.http_logging_policy"
+        ).setLevel(logging.WARNING)
+        logging.getLogger(
+            "azure.monitor.opentelemetry.exporter.export._base"
+        ).setLevel(logging.WARNING)
+
         # ── 1. Auto-instrumentation: HTTP requests, exceptions, Python logs ─
         from azure.monitor.opentelemetry import configure_azure_monitor
         from opentelemetry.sdk.resources import Resource, SERVICE_NAME

@@ -8,6 +8,8 @@ to populate os.environ from Azure Key Vault before secrets are accessed.
 Non-secret infrastructure settings are loaded at import time.
 """
 
+from __future__ import annotations
+
 import os
 import re
 from pathlib import Path
@@ -112,14 +114,22 @@ class Config:
     # Azure AI Foundry and private STT infrastructure settings
     # -----------------------------------------------------------------------
 
+    # LLM provider selection: "openrouter" (default) or "foundry".
+    # Changing this variable is the only action needed to switch providers.
+    LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter").lower()
+
     AI_FOUNDRY_API_VERSION = os.getenv(
         "AI_FOUNDRY_API_VERSION",
-        "2024-06-01",
+        "2025-01-01-preview",
     )
 
+    # Foundry deployment names are configured per-model in core/model_registry.py
+    # via FOUNDRY_DEPLOYMENT_LUNA etc. This top-level setting is kept for
+    # backward-compat with APIM test_m1_verification.py but is no longer
+    # used as a default model name in the inference path.
     AI_FOUNDRY_DEPLOYMENT = os.getenv(
         "AI_FOUNDRY_DEPLOYMENT",
-        "gpt-4o-mini",
+        "",
     )
 
     USE_MANAGED_IDENTITY_SQL = (
@@ -288,6 +298,10 @@ class Config:
     @classmethod
     def ai_foundry_key(cls) -> str | None:
         return os.getenv("AI_FOUNDRY_KEY") or os.getenv("AZURE_API_KEY")
+
+    @classmethod
+    def ai_foundry_api_version(cls) -> str:
+        return os.getenv("AI_FOUNDRY_API_VERSION", cls.AI_FOUNDRY_API_VERSION)
 
     @classmethod
     def private_stt_endpoint(cls) -> str | None:
