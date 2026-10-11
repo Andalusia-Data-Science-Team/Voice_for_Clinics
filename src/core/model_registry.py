@@ -1,9 +1,9 @@
 """
-Central registry of the OpenRouter models selectable per pipeline step.
+Central registry of the OpenRouter models used per pipeline step.
 
 Single source of truth for:
-  * the /models endpoint (feeds the two dropdowns in the UI),
-  * LLMService (resolves an id from the UI -> OpenRouter slug),
+  * the /models endpoint (reports the fixed pipeline models),
+  * LLMService (resolves a model id -> OpenRouter slug),
   * the pytest evaluation suite (which models to benchmark + which judge to use).
 
 !! VERIFY THE SLUGS !!  Model names move fast. Every slug below can be
@@ -19,8 +19,8 @@ from typing import Dict, Optional
 
 @dataclass(frozen=True)
 class ModelSpec:
-    id: str                          # stable id sent by the UI / used in logs
-    label: str                       # what the dropdown shows
+    id: str                          # stable id used in logs and API responses
+    label: str                       # display label for model metadata
     slug: str                        # OpenRouter model slug
     supports_reasoning: bool = False  # accepts OpenRouter's `reasoning` param
 
@@ -44,13 +44,14 @@ EXTRACTION_MODELS: Dict[str, ModelSpec] = {m.id: m for m in [
 # ── Step 2: ICD-10 diagnosis recommendation (uses reasoning) ───────────────
 REASONING_MODELS: Dict[str, ModelSpec] = {m.id: m for m in [
     ModelSpec("gpt-4o-mini",       "GPT 4o mini",       _slug("MODEL_SLUG_GPT_4O_MINI",  "openai/gpt-4o-mini"), supports_reasoning=False),
+    ModelSpec("gpt-5.6-luna",      "GPT 5.6 Luna",      _slug("MODEL_SLUG_GPT_56_LUNA",  "openai/gpt-5.6-luna")),
     ModelSpec("gemini-3.7-flash",  "Gemini 3.7 Flash",  _slug("MODEL_SLUG_GEMINI_37_FLASH", "google/gemini-3.7-flash"), supports_reasoning=True),
     ModelSpec("claude-sonnet-5.5", "Claude Sonnet 5.5", _slug("MODEL_SLUG_SONNET_55",    "anthropic/claude-sonnet-5.5"), supports_reasoning=True),
     ModelSpec("claude-opus-5",     "Claude Opus 5",     _slug("MODEL_SLUG_OPUS_5",       "anthropic/claude-opus-5"), supports_reasoning=True),
 ]}
 
-DEFAULT_EXTRACTION_MODEL = "gpt-4o-mini"
-DEFAULT_REASONING_MODEL = "gpt-4o-mini"
+DEFAULT_EXTRACTION_MODEL = "gpt-5.6-luna"
+DEFAULT_REASONING_MODEL = "gpt-5.6-luna"
 
 # Reasoning effort sent to OpenRouter for reasoning-capable models in step 2.
 REASONING_EFFORT = os.environ.get("REASONING_EFFORT", "medium")
@@ -83,7 +84,8 @@ def get_model(step: str, model_id: Optional[str]) -> ModelSpec:
 
 def registry_for_ui() -> dict:
     def dump(reg, default):
-        return {"default": default, "models": [{"id": m.id, "label": m.label} for m in reg.values()]}
+        model = reg[default]
+        return {"default": default, "models": [{"id": model.id, "label": model.label}]}
     return {
         "extraction": dump(EXTRACTION_MODELS, DEFAULT_EXTRACTION_MODEL),
         "reasoning": dump(REASONING_MODELS, DEFAULT_REASONING_MODEL),

@@ -84,7 +84,11 @@ class _SSEStream(httpx.AsyncByteStream):
         yield b"data: [DONE]\n\n"
 
 
-def _patch_runtime_client(monkeypatch: pytest.MonkeyPatch, handler):
+def _patch_runtime_client(
+    monkeypatch: pytest.MonkeyPatch,
+    handler,
+    keys: list[str] | None = None,
+):
     """Construct one real AsyncOpenAI client over an in-memory transport."""
     transport = httpx.MockTransport(handler)
     original = RealAsyncOpenAI
@@ -94,8 +98,11 @@ def _patch_runtime_client(monkeypatch: pytest.MonkeyPatch, handler):
         return original(*args, **kwargs)
 
     monkeypatch.setattr(runtime_module, "AsyncOpenAI", factory)
-    monkeypatch.setattr(Config, "LLM_API_KEY", "primary-key")
-    monkeypatch.setattr(Config, "OPENROUTER_API_KEYS", ["primary-key"])
+    monkeypatch.setenv("LLM_API_KEY", "primary-key")
+    monkeypatch.setenv(
+        "OPENROUTER_API_KEYS",
+        ",".join(keys or ["primary-key"]),
+    )
     return runtime_module.LLMRuntime()
 
 
@@ -413,7 +420,7 @@ async def test_concurrency_single_client_instance(monkeypatch):
         return original(*args, **kwargs)
 
     monkeypatch.setattr(runtime_module, "AsyncOpenAI", factory)
-    monkeypatch.setattr(Config, "LLM_API_KEY", "primary-key")
+    monkeypatch.setenv("LLM_API_KEY", "primary-key")
     runtime = runtime_module.LLMRuntime()
     try:
         await asyncio.gather(*(
@@ -466,9 +473,11 @@ async def test_concurrency_insufficient_quota_not_retried(monkeypatch):
             return httpx.Response(402, json={"error": {"code": "insufficient_quota"}})
         return httpx.Response(200, json=_completion("rotated"))
 
-    runtime = _patch_runtime_client(monkeypatch, handler)
-    monkeypatch.setattr(Config, "OPENROUTER_API_KEYS", ["primary-key", "secondary-key"])
-    runtime._keys = ["primary-key", "secondary-key"]
+    runtime = _patch_runtime_client(
+        monkeypatch,
+        handler,
+        keys=["primary-key", "secondary-key"],
+    )
     try:
         result = await runtime.complete(
             model="test-model", create_kwargs={"model": "test-model", "messages": []},

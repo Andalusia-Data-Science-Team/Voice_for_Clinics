@@ -22,8 +22,6 @@ Useful environment variables::
                                       Used when LOCUST_MODE is unset
     LOCUST_DEPARTMENT=er|opd|dental   Default: opd
     LOCUST_SPECIALTY=                 Optional specialty value
-    LOCUST_EXTRACTION_MODEL=          Optional model id
-    LOCUST_REASONING_MODEL=           Optional model id
     LOCUST_ANALYZE_TIMEOUT=300        Streaming request timeout in seconds
     LOCUST_WAIT_MIN=1                 Minimum wait between tasks per user
     LOCUST_WAIT_MAX=3                 Maximum wait between tasks per user
@@ -322,8 +320,6 @@ class MedVoiceAnalyzeUser(HttpUser):
             "LOCUST_DEPARTMENT", "opd", {"er", "opd", "dental"}
         )
         self.specialty = os.getenv("LOCUST_SPECIALTY", "").strip()
-        self.extraction_model = os.getenv("LOCUST_EXTRACTION_MODEL", "").strip()
-        self.reasoning_model = os.getenv("LOCUST_REASONING_MODEL", "").strip()
 
     @task
     def analyze_transcript(self) -> None:
@@ -350,10 +346,6 @@ class MedVoiceAnalyzeUser(HttpUser):
         }
         if self.specialty:
             data["specialty"] = self.specialty
-        if self.extraction_model:
-            data["extraction_model"] = self.extraction_model
-        if self.reasoning_model:
-            data["reasoning_model"] = self.reasoning_model
 
         started = time.perf_counter()
         with self.client.post(

@@ -234,7 +234,7 @@ Interactive docs are served by FastAPI at `/docs`.
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/` | Web UI |
-| GET | `/models` | Selectable models per pipeline step |
+| GET | `/models` | Fixed extraction and reasoning models |
 | POST | `/audio/analyze` | Full analysis pipeline (SSE) |
 | POST | `/audio/refine-field` | Refine one spoken field answer |
 | GET | `/audio/tts-disclaimer` | Recording-consent WAV (Munsit TTS) |
@@ -259,8 +259,6 @@ Interactive docs are served by FastAPI at `/docs`.
 | `use_history` | | `false` | Include patient history in diagnosis |
 | `patient_id` | | — | Required when `use_history=true` |
 | `business_unit` | | — | `AHJ`, `AMH`, or `ANC`; required with history |
-| `extraction_model` | | default | Model id from `GET /models` |
-| `reasoning_model` | | default | Model id from `GET /models` |
 | `session_id` | | — | Joins feedback to this analysis |
 
 Example:
@@ -323,13 +321,8 @@ The `extraction` event is emitted after extraction **and** diagnosis finish
 `src/core/model_registry.py` is the single source of truth for model ids,
 labels, and OpenRouter slugs.
 
-**Extraction models:** `gpt-4o-mini`, `gpt-5.6-luna`, `glm-5.3-flash`,
-`claude-sonnet-5.5`.
-
-**Reasoning models:** `gpt-4o-mini`, `gemini-3.7-flash`,
-`claude-sonnet-5.5`, `claude-opus-5`.
-
-Defaults for both steps: `gpt-4o-mini`.
+The UI does not offer model selection. Both clinical-note extraction and
+diagnosis reasoning use `gpt-5.6-luna` (`openai/gpt-5.6-luna`).
 
 **Judges** (used by the evaluation suite, cross-family by design):
 
