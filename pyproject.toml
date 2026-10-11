@@ -1,0 +1,82 @@
+[build-system]
+requires= ["setuptools>=42.0", "wheel"]
+build-backend= "setuptools.build_meta"
+
+[project]
+name = "src"
+version = "0.0.1"
+description = "Medical Voice Assistant"
+readme = "README.md"
+authors = [
+    {name = "Muhammed Amr", email = "muhammedamr57@gmail.com"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+]
+keywords = ["machine learning", "python", "AI", "data science"]
+requires-python = ">=3.11"
+
+dependencies = [
+    "pandas==2.2.3",
+    "Flask==3.1.2",
+    "flask-cors==6.0.1",
+    "fireworks-ai==0.15.12",
+    "langgraph==0.6.6",
+    "python-dotenv==1.0.0",
+    "beautifulsoup4==4.12.2",
+    "uuid==1.30",
+    "sqlalchemy==2.0.38",
+    "psycopg2-binary==2.9.10",
+    "pyarrow==19.0.1",
+    "pydub==0.25.1",
+    "librosa==0.11.0",
+    "uvicorn==0.34.3",
+    "python-multipart==0.0.20",
+    "passlib==1.7.4",
+    "bcrypt==3.2.0",
+    "openai==2.32.0",
+    "httpx>=0.27",
+    "tenacity>=8.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "Sphinx==8.1.3",
+    "sphinx-rtd-theme==3.0.2",
+    "sphinx-autodoc-typehints==2.5.0",
+    "pytest-cov==6.0.0",
+    "mypy==1.13.0",
+    "flake8==7.1.1",
+    "tox==4.23.2",
+    "black==24.10.0",
+    "pytest-mock==3.14.0",
+    "pytest-asyncio>=0.24",
+    "pytest-watcher==0.4.3",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "llm: live provider-backed model evaluation",
+]
+
+[tool.mypy]
+mypy_path = "src"
+check_untyped_defs = true
+disallow_any_generics = true
+ignore_missing_imports = true
+no_implicit_optional = true
+show_error_codes = true
+strict_equality = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
+warn_unused_configs = true
+no_implicit_reexport = true

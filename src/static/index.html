@@ -1,0 +1,2550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MedVoice – Clinical AI</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:           #f7f3eb;
+    --surface:      #fffcf7;
+    --surface-2:    #fcf8f2;
+    --surface-3:    #f2ede5;
+    --border:       #e2d8cd;
+    --border-mid:   #cdbfae;
+    --text-1:       #2b2118;
+    --text-2:       #5c4d3e;
+    --text-3:       #8b765c;
+    --accent:       #8b5a2b;
+    --accent-2:     #b87c4a;
+    --accent-light: #f9efe6;
+    --red:          #b1624b;
+    --red-light:    #faece7;
+    --green:        #5f7b5c;
+    --green-light:  #eff1ea;
+    --amber:        #b27d40;
+    --amber-light:  #fdf5e8;
+    --blue:         #6f7d8c;
+    --blue-light:   #eff2f5;
+    --purple:       #8f7a6b;
+    --purple-light: #f4efea;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --r-sm: 6px;
+    --r-md: 10px;
+    --r-lg: 14px;
+    --r-xl: 18px;
+    --shadow-sm: 0 1px 3px rgba(43,33,24,0.06), 0 1px 2px rgba(43,33,24,0.04);
+    --shadow-md: 0 4px 12px rgba(43,33,24,0.08), 0 2px 4px rgba(43,33,24,0.04);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text-1); min-height: 100vh; font-size: 14px; line-height: 1.6; }
+
+  /* ── Layout ── */
+  .shell { display: grid; grid-template-columns: 272px 1fr; grid-template-rows: 58px 1fr; min-height: 100vh; }
+
+  /* ── Topbar ── */
+  .topbar {
+    grid-column: 1/-1;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    box-shadow: var(--shadow-sm);
+  }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .app-name { font-size: 16px; font-weight: 600; letter-spacing: -0.03em; color: var(--text-1); }
+  .app-name span { color: var(--accent); }
+  .app-tag { font-size: 11px; color: var(--text-3); font-weight: 400; margin-left: 6px; }
+  .topbar-right { display: flex; align-items: center; }
+  .logo-img { height: 36px; width: auto; display: block; object-fit: contain; }
+
+  /* ── Sidebar ── */
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 22px 18px; display: flex; flex-direction: column; gap: 26px; overflow-y: auto; }
+  .sec-label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); margin-bottom: 10px; }
+
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field + .field { margin-top: 10px; }
+  .field label { font-size: 11px; font-weight: 500; color: var(--text-2); }
+  .field input, .field select { font-family: var(--sans); font-size: 13px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); color: var(--text-1); outline: none; transition: border-color 0.15s, box-shadow 0.15s; }
+  .field input:focus, .field select:focus { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(184,124,74,0.12); }
+  .field-hint { font-size: 10.5px; color: var(--text-3); line-height: 1.4; }
+
+  /* ── Waveform ── */
+  .record-area { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .waveform { display: flex; align-items: center; gap: 3px; height: 28px; justify-content: center; }
+  .waveform .bar { width: 3px; background: var(--accent-2); border-radius: 2px; height: 4px; opacity: 0.5; }
+  .waveform.active .bar { animation: wave 0.9s infinite ease-in-out; opacity: 1; }
+  .waveform.active .bar:nth-child(1){animation-delay:0s}
+  .waveform.active .bar:nth-child(2){animation-delay:.1s}
+  .waveform.active .bar:nth-child(3){animation-delay:.2s}
+  .waveform.active .bar:nth-child(4){animation-delay:.05s}
+  .waveform.active .bar:nth-child(5){animation-delay:.15s}
+  .waveform.active .bar:nth-child(6){animation-delay:.25s}
+  .waveform.active .bar:nth-child(7){animation-delay:.08s}
+  @keyframes wave { 0%,100%{height:4px} 50%{height:22px} }
+
+  .btn-record { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--border-mid); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; outline: none; box-shadow: var(--shadow-sm); }
+  .btn-record:hover { border-color: var(--accent-2); box-shadow: var(--shadow-md); transform: scale(1.04); }
+  .btn-record:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: var(--shadow-sm); }
+  .btn-record.recording { border-color: var(--red); box-shadow: 0 0 0 0 rgba(177,98,75,0.3); animation: rec-pulse 1.6s infinite; }
+  @keyframes rec-pulse { 0%{box-shadow:0 0 0 0 rgba(177,98,75,0.3)} 70%{box-shadow:0 0 0 12px rgba(177,98,75,0)} 100%{box-shadow:0 0 0 0 rgba(177,98,75,0)} }
+  .btn-record.recording.is-paused { animation: none; box-shadow: var(--shadow-sm); }
+  .btn-record.processing { border-color: var(--amber); opacity: 0.6; cursor: not-allowed; animation: none; }
+  .mic-icon { width: 26px; height: 26px; color: var(--text-3); transition: color 0.2s; }
+  .btn-record.recording .mic-icon { color: var(--red); }
+
+  /* Stop square icon shown while recording */
+  .stop-icon { display: none; width: 18px; height: 18px; background: var(--red); border-radius: 3px; }
+  .btn-record.recording .mic-icon  { display: none; }
+  .btn-record.recording .stop-icon { display: block; }
+
+  .rec-timer { font-family: var(--mono); font-size: 22px; font-weight: 500; color: var(--text-1); letter-spacing: 0.06em; min-height: 30px; text-align: center; }
+  .rec-timer.on { color: var(--red); }
+
+  /* Live transcription status badge */
+  .live-badge {
+    display: none;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--red);
+    background: var(--red-light);
+    border: 1px solid #e8c8c0;
+    border-radius: 99px;
+    padding: 3px 10px;
+  }
+  .live-badge.show { display: flex; }
+  .live-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--red);
+    animation: livepulse 1s infinite;
+  }
+  @keyframes livepulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .rec-label { font-size: 12px; color: var(--text-3); text-align: center; }
+
+  /* Pause / Resume pill — only shown once a recording session is active */
+  .btn-pause {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 15px;
+    border: 1px solid var(--border-mid);
+    border-radius: 99px;
+    background: var(--surface);
+    color: var(--text-2);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .btn-pause.show { display: inline-flex; }
+  .btn-pause:hover { background: var(--surface-3); }
+  .btn-pause.is-paused { border-color: var(--amber); color: var(--amber); background: var(--amber-light); }
+  .btn-pause .p-icon { font-size: 11px; line-height: 1; }
+
+  .btn-primary { width: 100%; font-family: var(--sans); font-size: 13px; font-weight: 500; padding: 9px; border: none; border-radius: var(--r-md); background: linear-gradient(135deg, #7a4b27, #a06e40); color: #fff; cursor: pointer; transition: opacity 0.15s, box-shadow 0.15s; box-shadow: 0 2px 8px rgba(122,75,39,0.25); letter-spacing: 0.01em; }
+  .btn-primary:hover:not(:disabled) { opacity: 0.9; box-shadow: 0 4px 12px rgba(122,75,39,0.35); }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
+  .btn-secondary { width: 100%; font-family: var(--sans); font-size: 13px; font-weight: 500; padding: 9px; border: 1px solid var(--border-mid); border-radius: var(--r-md); background: var(--surface); color: var(--accent); cursor: pointer; transition: background 0.15s, opacity 0.15s; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .btn-secondary:hover:not(:disabled) { background: var(--accent-light); }
+  .btn-secondary:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-ghost { width: 100%; font-family: var(--sans); font-size: 12px; padding: 7px; border: 1px solid var(--border); border-radius: var(--r-md); background: transparent; color: var(--text-2); cursor: pointer; transition: background 0.15s; margin-top: 6px; }
+  .btn-ghost:hover { background: var(--surface-3); }
+
+  /* ── Main ── */
+  .main { padding: 28px 28px 40px; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; }
+
+  /* ── Phase cards ── */
+  .phase-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-xl); overflow: hidden; box-shadow: var(--shadow-sm); transition: border-color 0.25s, box-shadow 0.25s; }
+  .phase-card.active { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(139,90,43,0.1), var(--shadow-sm); }
+  .phase-card.done   { border-color: var(--border); }
+  .phase-card.error  { border-color: var(--red); box-shadow: 0 0 0 3px rgba(177,98,75,0.08); }
+  .phase-card.skip   { border-color: var(--border); opacity: 0.85; }
+  .phase-card.hidden { display: none; }
+
+  .phase-hd { display: flex; align-items: center; padding: 13px 18px; border-bottom: 1px solid var(--border); gap: 11px; background: var(--surface-2); }
+  .step-num { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--border-mid); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--text-3); flex-shrink: 0; transition: all 0.3s; }
+  .phase-card.active .step-num { border-color: var(--accent-2); color: var(--accent); background: var(--accent-light); }
+  .phase-card.done   .step-num { border-color: var(--green); color: #fff; background: var(--green); }
+  .phase-card.error  .step-num { border-color: var(--red); color: #fff; background: var(--red); }
+  .phase-card.skip   .step-num { border-color: var(--border-mid); color: var(--text-3); background: var(--surface-3); }
+
+  .phase-title { font-size: 13px; font-weight: 500; color: var(--text-1); flex: 1; }
+  .phase-subtitle { font-size: 11px; color: var(--text-3); font-weight: 400; margin-left: 6px; }
+
+  .phase-badge { font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 99px; letter-spacing: 0.05em; text-transform: uppercase; }
+  .b-idle   { background: var(--surface-3); color: var(--text-3); }
+  .b-active { background: var(--accent-light); color: var(--accent); }
+  .b-done   { background: var(--green-light); color: var(--green); }
+  .b-error  { background: var(--red-light); color: var(--red); }
+  .b-skip   { background: var(--surface-3); color: var(--text-3); font-style: italic; }
+
+  /* Live badge inside phase card header */
+  .phase-live {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--red);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .phase-card.live .phase-live { display: flex; }
+  .phase-card.live .phase-badge { display: none; }
+  .phase-live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--red); animation: livepulse 1s infinite; }
+
+  .phase-time { font-size: 11px; color: var(--text-3); font-family: var(--mono); min-width: 44px; text-align: right; }
+  .phase-body { padding: 18px; min-height: 64px; }
+
+  /* ── Transcript ── */
+  .transcript { font-size: 14px; line-height: 1.8; color: var(--text-1); }
+  .c-blink::after { content: '|'; animation: cur 0.8s infinite; color: var(--accent-2); }
+  @keyframes cur { 0%,100%{opacity:1} 50%{opacity:0} }
+  .ph { font-size: 13px; color: var(--text-3); font-style: italic; }
+  /* Provisional (interim) text — Munsit only, may still be revised */
+  .interim { color: var(--text-3); opacity: 0.75; }
+  /* Marks where a pause/resume happened, inline in the live transcript */
+  .pause-mark { color: var(--text-3); font-size: 11px; font-style: italic; opacity: 0.7; }
+
+  /* Editable transcript / feature fields */
+  [contenteditable="true"] { outline: none; }
+  #tl-final { border-radius: var(--r-sm); padding: 2px 4px; margin: -2px -4px; transition: background 0.15s, box-shadow 0.15s; cursor: text; }
+  #tl-final:focus { background: var(--surface-2); box-shadow: 0 0 0 2px rgba(184,124,74,0.15); }
+  .edit-hint { font-size: 11px; color: var(--text-3); margin-top: 8px; }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  .tab { font-size: 12px; font-weight: 500; padding: 7px 16px; cursor: pointer; color: var(--text-3); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s; }
+  .tab.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-pane { display: none; }
+  .tab-pane.on { display: block; }
+
+  /* ── Translation pill ── */
+  .xlat-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: var(--amber); background: var(--amber-light); border: 1px solid #e8c98a; border-radius: 99px; padding: 3px 12px; margin-bottom: 12px; }
+
+  /* ── Patient info card ── */
+  .pi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 10px; }
+  .pi-field { display: flex; flex-direction: column; gap: 4px; }
+  .pi-field label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-3); }
+  .pi-field input, .pi-field select { font-family: var(--sans); font-size: 13px; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); color: var(--text-1); outline: none; }
+  .pi-field input:focus, .pi-field select:focus { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(184,124,74,0.12); }
+
+  /* ── Patient history button + panel ── */
+  .pi-history-row { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .btn-history { font-family: var(--sans); font-size: 12px; font-weight: 500; padding: 8px 14px; border: 1px solid var(--border-mid); border-radius: var(--r-md); background: var(--surface-2); color: var(--accent); cursor: pointer; transition: background 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-history:hover { background: var(--accent-light); }
+  #history-panel { display: none; margin-top: 14px; }
+  #history-panel.show { display: block; }
+  .history-summary { display: flex; flex-wrap: wrap; gap: 4px 20px; font-size: 12px; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 14px; margin-bottom: 10px; }
+  .history-summary b { color: var(--text-1); font-weight: 600; }
+  .history-toggle-header { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; color: var(--text-2); cursor: pointer; user-select: none; padding: 4px 2px; margin-bottom: 6px; border-radius: var(--r-sm); }
+  .history-toggle-header:hover { color: var(--accent); }
+  .history-toggle-icon { font-size: 10px; color: var(--text-3); display: inline-block; width: 10px; }
+  .history-body.collapsed { display: none; }
+  .history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .history-table th { text-align: left; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); padding: 6px 10px; border-bottom: 1px solid var(--border-mid); }
+  .history-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text-1); vertical-align: top; }
+  .history-table tr:last-child td { border-bottom: none; }
+  .history-dx-pill { display: inline-block; font-family: var(--mono); font-size: 11px; color: var(--accent); background: var(--accent-light); border: 1px solid #e1cfbc; border-radius: var(--r-sm); padding: 1px 6px; margin: 1px 3px 1px 0; }
+
+  /* ── Feature extraction (department-driven) ── */
+  .feat-layout { display: flex; flex-direction: column; gap: 16px; }
+  .feat-highlights { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .feat-highlight { padding: 14px 16px; border-radius: var(--r-lg); border: 1px solid; }
+  .feat-highlight.complaint { background: var(--blue-light); border-color: #d1cfc5; }
+  .feat-highlight.assessment { background: var(--purple-light); border-color: #dfd7cf; }
+  .feat-highlight-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 5px; }
+  .feat-highlight.complaint  .feat-highlight-label { color: var(--blue); }
+  .feat-highlight.assessment .feat-highlight-label { color: var(--purple); }
+  .feat-highlight-val { font-size: 14px; font-weight: 500; line-height: 1.5; color: var(--text-1); border-radius: var(--r-sm); padding: 2px 4px; margin: -2px -4px; transition: background 0.15s, box-shadow 0.15s; }
+  .feat-highlight-val[contenteditable="true"]:hover { background: rgba(255,255,255,0.4); }
+  .feat-highlight-val[contenteditable="true"]:focus { background: rgba(255,255,255,0.7); box-shadow: 0 0 0 2px rgba(184,124,74,0.15); }
+  .feat-highlight-val[contenteditable="true"]:empty::before { content: attr(data-placeholder); color: var(--text-3); font-style: italic; font-weight: 400; }
+
+  .icd-row { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+  .icd-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-3); margin-right: 4px; }
+  .icd-pill { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 12px; color: var(--accent); background: var(--accent-light); border: 1px solid #e1cfbc; border-radius: var(--r-md); padding: 4px 10px; font-weight: 500; }
+  .icd-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .icd-pill-text { outline: none; min-width: 8px; user-select: text; }
+  .icd-pill-remove { cursor: pointer; color: var(--text-3); font-weight: 700; line-height: 1; padding: 0 2px; border-radius: 3px; }
+  .icd-pill-remove:hover { color: var(--red); background: rgba(177,98,75,0.1); }
+  
+  .icd-search-wrap { position: relative; display: inline-flex; align-items: center; margin-left: 4px; }
+  .icd-search-input {
+    font-family: var(--sans); font-size: 12px; padding: 5px 10px;
+    border: 1px solid var(--border-mid); border-radius: var(--r-md);
+    background: var(--surface); color: var(--text-1);
+    width: 250px; outline: none; transition: all 0.15s ease;
+  }
+  .icd-search-input:focus {
+    border-color: var(--accent-2);
+    box-shadow: 0 0 0 3px rgba(184,124,74,0.12);
+    width: 310px;
+  }
+  .icd-search-spinner {
+    position: absolute; right: 9px; width: 12px; height: 12px;
+    border: 2px solid rgba(184,124,74,0.25); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.6s linear infinite; display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .icd-dropdown {
+    position: absolute; top: calc(100% + 4px); left: 0; width: 380px; max-width: 90vw;
+    max-height: 280px; overflow-y: auto; z-index: 1000;
+    background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px);
+    border: 1px solid var(--border-mid); border-radius: var(--r-md);
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.06);
+    display: none; padding: 4px 0;
+  }
+  .icd-dropdown.show { display: block; }
+  .icd-dropdown-item {
+    padding: 7px 11px; cursor: pointer; display: flex; flex-direction: column; gap: 2px;
+    border-bottom: 1px solid rgba(0,0,0,0.03); transition: background 0.12s;
+  }
+  .icd-dropdown-item:last-child { border-bottom: none; }
+  .icd-dropdown-item:hover, .icd-dropdown-item.active {
+    background: var(--accent-light);
+  }
+  .icd-dropdown-code {
+    font-family: var(--mono); font-weight: 700; font-size: 11.5px; color: var(--accent);
+  }
+  .icd-dropdown-desc {
+    font-size: 11.5px; color: var(--text-2); line-height: 1.35;
+  }
+  .icd-dropdown-empty {
+    padding: 12px 14px; font-size: 12px; color: var(--text-3); text-align: center; font-style: italic;
+  }
+
+  .icd-unmatched-card {
+    background: #fff8f5; border: 1px solid #f4c7be; border-radius: var(--r-md);
+    padding: 10px 14px; margin-top: 10px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .icd-unmatched-title {
+    font-size: 12px; font-weight: 600; color: var(--red); display: flex; align-items: center; gap: 6px;
+  }
+  .icd-unmatched-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: rgba(255,255,255,0.7); border: 1px solid #f2d4ce; border-radius: var(--r-sm);
+    padding: 5px 10px; font-size: 11.5px;
+  }
+  .icd-unmatched-label {
+    font-family: var(--mono); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .btn-replace-icd {
+    font-family: var(--sans); font-size: 11px; font-weight: 500;
+    padding: 3px 9px; border: 1px solid var(--accent-2); border-radius: var(--r-sm);
+    background: var(--surface); color: var(--accent); cursor: pointer; flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .btn-replace-icd:hover {
+    background: var(--accent-light);
+  }
+
+  .feat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 10px; }
+  .feat-cell { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; }
+  .feat-cell-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-3); margin-bottom: 5px; display: flex; align-items: center; gap: 5px; }
+  .feat-cell-icon { font-size: 12px; }
+  .feat-cell-val { font-size: 13px; color: var(--text-1); line-height: 1.55; white-space: pre-line; border-radius: var(--r-sm); padding: 2px 4px; margin: -2px -4px; transition: background 0.15s, box-shadow 0.15s; }
+  .feat-cell-val[contenteditable="true"]:hover { background: rgba(255,255,255,0.5); }
+  .feat-cell-val[contenteditable="true"]:focus { background: var(--surface); box-shadow: 0 0 0 2px rgba(184,124,74,0.15); }
+  .feat-cell-val[contenteditable="true"]:empty::before { content: attr(data-placeholder); color: var(--text-3); font-style: italic; }
+  .feat-cell.feat-missing { border-style: dashed; opacity: 0.9; }
+
+  /* ── Field-level "answer by voice" mic buttons ──
+     Shown next to a field's label (Clinical note fields grid) or inline in a
+     "Questions for the doctor" item. Small so it never competes with the
+     field label; state communicated purely by icon + color, matching the
+     main record button's visual language. */
+  .field-mic-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; padding: 0; margin-left: auto;
+    border: 1px solid var(--border-mid); border-radius: 50%;
+    background: var(--surface); color: var(--text-3);
+    cursor: pointer; flex-shrink: 0; transition: all 0.15s;
+  }
+  .field-mic-btn:hover { border-color: var(--accent-2); color: var(--accent); background: var(--accent-light); }
+  .field-mic-btn svg { width: 11px; height: 11px; }
+  .field-mic-btn.rec { border-color: var(--red); color: var(--red); background: var(--red-light); animation: rec-pulse 1.6s infinite; }
+  .field-mic-btn.busy { opacity: 0.5; cursor: not-allowed; animation: none; }
+  .feat-cell-label { justify-content: space-between; }
+  .feat-highlight-label { display: flex; align-items: center; justify-content: space-between; }
+
+  .q-item.answered { opacity: 0.6; }
+  .q-item.answered .q-question { text-decoration: line-through; }
+  .q-item-mic-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .q-answered-tag { font-size: 11px; font-weight: 600; color: var(--green); }
+  .q-mic-hint { font-size: 10.5px; color: var(--text-3); }
+
+  /* ── Printable summary (free text) ── */
+  .summary-toolbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+  .btn-copy {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--sans); font-size: 12px; font-weight: 500;
+    padding: 6px 13px; border: 1px solid var(--border-mid); border-radius: 99px;
+    background: var(--surface-2); color: var(--accent); cursor: pointer; transition: all 0.15s;
+  }
+  .btn-copy:hover { background: var(--accent-light); }
+  .btn-copy.copied { border-color: var(--green); color: var(--green); background: var(--green-light); }
+  .btn-copy svg { width: 13px; height: 13px; }
+  .summary-text {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.7; color: var(--text-1);
+    white-space: pre-wrap; word-break: break-word;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md);
+    padding: 14px 16px; max-height: 420px; overflow-y: auto;
+  }
+
+  /* ── Doctor feedback card — sits outside the recording pipeline, so it's
+     not step-numbered and never shows up on print (the whole .shell is
+     hidden in @media print, this card included). ── */
+  .feedback-card {
+    margin-top: 22px; padding: 18px 20px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg, var(--r-md));
+    box-shadow: var(--shadow-sm);
+  }
+  .feedback-title { font-family: var(--serif, var(--sans)); font-size: 15px; font-weight: 600; color: var(--text-1); }
+  .feedback-subtitle { font-size: 12px; color: var(--text-3); margin-top: 2px; margin-bottom: 12px; }
+  .feedback-body textarea {
+    width: 100%; font-family: var(--sans); font-size: 13px; color: var(--text-1);
+    border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2);
+    padding: 10px 12px; resize: vertical; min-height: 64px; outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .feedback-body textarea:focus { border-color: var(--accent-2); box-shadow: 0 0 0 3px var(--accent-light); }
+  .feedback-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+  .feedback-name-input {
+    flex: 1 1 160px; min-width: 120px; font-family: var(--sans); font-size: 12.5px; color: var(--text-1);
+    border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2);
+    padding: 8px 10px; outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .feedback-name-input:focus { border-color: var(--accent-2); box-shadow: 0 0 0 3px var(--accent-light); }
+  .feedback-thumbs { display: flex; gap: 8px; }
+  .thumb-btn {
+    width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; border: 1px solid var(--border-mid); border-radius: 50%;
+    background: var(--surface-2); cursor: pointer; transition: all 0.15s;
+  }
+  .thumb-btn:hover { background: var(--accent-light); border-color: var(--accent-2); }
+  .thumb-btn.selected[data-rating="up"]   { background: var(--green-light); border-color: var(--green); }
+  .thumb-btn.selected[data-rating="down"] { background: var(--red-light);   border-color: var(--red); }
+  .btn-feedback-submit {
+    font-family: var(--sans); font-size: 12.5px; font-weight: 600;
+    padding: 9px 18px; border: none; border-radius: 99px;
+    background: var(--accent); color: #fff; cursor: pointer; transition: opacity 0.15s;
+  }
+  .btn-feedback-submit:hover { opacity: 0.9; }
+  .btn-feedback-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+  .feedback-status { font-size: 11.5px; margin-top: 8px; min-height: 14px; }
+  .feedback-status.ok  { color: var(--green); }
+  .feedback-status.err { color: var(--red); }
+  .feat-wide { grid-column: 1 / -1; }
+  .feat-plan { background: var(--green-light); border-color: #d4dfcd; }
+  .feat-plan .feat-cell-label { color: var(--green); }
+  .feat-triage { background: var(--red-light); border-color: #e6cfc5; }
+  .feat-triage .feat-cell-label { color: var(--red); }
+  .feat-followup { background: var(--amber-light); border-color: #e8d9c5; }
+  .feat-followup .feat-cell-label { color: var(--amber); }
+  .feat-story { background: var(--surface-3); border-color: var(--border-mid); }
+  .feat-story .feat-cell-label { color: var(--text-2); }
+  .feat-history-used { background: var(--blue-light); border-color: #c9d3db; }
+  .feat-history-used .feat-cell-label { color: var(--blue); }
+  .feat-history-notused { background: var(--surface-3); border-color: var(--border-mid); opacity: 0.85; }
+  .feat-history-caution { margin-top: 8px; padding: 7px 10px; background: var(--amber-light); border: 1px solid #e8d9c5; border-radius: var(--r-sm); font-size: 11.5px; color: var(--amber); line-height: 1.5; }
+  .feat-history-error { background: var(--amber-light); border-color: #e8d9c5; }
+  .feat-history-error .feat-cell-label { color: var(--amber); }
+
+  /* Questions */
+  .q-summary { display: flex; gap: 12px; margin-bottom: 18px; }
+  .q-summary-card { flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--r-lg); border: 1px solid; }
+  .q-summary-card.ask  { background: var(--red-light);   border-color: #e6cfc5; }
+  .q-summary-card.skip { background: var(--green-light); border-color: #d4dfcd; }
+  .q-summary-num { font-size: 26px; font-weight: 600; line-height: 1; }
+  .q-summary-card.ask  .q-summary-num { color: var(--red); }
+  .q-summary-card.skip .q-summary-num { color: var(--green); }
+  .q-summary-meta { display: flex; flex-direction: column; }
+  .q-summary-title { font-size: 12px; font-weight: 500; color: var(--text-1); }
+  .q-summary-sub   { font-size: 11px; color: var(--text-3); }
+
+  .q-section-hd { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-3); margin: 18px 0 8px; display: flex; align-items: center; gap: 7px; }
+  .q-section-hd:first-child { margin-top: 0; }
+  .q-section-line { flex: 1; height: 1px; background: var(--border); }
+
+  .q-cat-group { margin-bottom: 14px; }
+  .q-cat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); background: var(--surface-3); border: 1px solid var(--border); border-radius: 99px; padding: 2px 10px; display: inline-block; margin-bottom: 7px; }
+
+  .q-item { display: flex; gap: 11px; padding: 11px 14px; border-radius: var(--r-md); border: 1px solid; margin-bottom: 6px; transition: box-shadow 0.15s; }
+  .q-item:last-child { margin-bottom: 0; }
+  .q-item:hover { box-shadow: var(--shadow-sm); }
+  .q-item.ask  { background: #fef8f6; border-color: #e6cfc5; }
+  .q-item.skip { background: #fafdf8; border-color: #d4dfcd; }
+
+  .q-indicator { width: 4px; border-radius: 2px; flex-shrink: 0; align-self: stretch; min-height: 20px; }
+  .q-item.ask  .q-indicator { background: var(--red); }
+  .q-item.skip .q-indicator { background: var(--green); }
+
+  .q-body { flex: 1; }
+  .q-question { font-size: 13px; font-weight: 500; color: var(--text-1); line-height: 1.5; }
+  .q-answer-box { margin-top: 6px; padding: 6px 10px; background: var(--surface); border-left: 3px solid var(--accent-2); border-radius: 0 var(--r-sm) var(--r-sm) 0; font-size: 12px; color: var(--text-2); line-height: 1.5; }
+  .q-answer-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--accent-2); margin-bottom: 2px; }
+
+  .err-box { background: var(--red-light); border: 1px solid #e8b4ae; border-radius: var(--r-md); padding: 11px 14px; font-size: 13px; color: var(--red); }
+
+  /* ── Print sheet — hidden on screen, only surfaced in @media print ── */
+  #print-sheet { display: none; }
+  #print-sheet h1 { font-size: 16px; margin-bottom: 10px; }
+  #print-sheet h2 { font-size: 14px; margin: 14px 0 8px; border-bottom: 1px solid #333; padding-bottom: 4px; }
+  .ps-header { display: flex; flex-wrap: wrap; gap: 4px 22px; font-size: 12px; margin-bottom: 4px; }
+  .ps-header div { min-width: 140px; }
+  .pf-row { font-size: 12px; margin-bottom: 7px; }
+  .pf-label { font-weight: 600; display: inline; }
+  .pf-val { display: inline; }
+
+  @media print {
+    /* Hiding the app UI with display:none (not visibility:hidden) removes it
+       from layout entirely, so the page height used for pagination is based
+       only on print-sheet's actual content — previously the whole app
+       (sidebar, every phase card, etc.) stayed invisible-but-still-occupying-
+       space, so the browser paginated as if printing that entire tall layout,
+       producing a stack of blank pages after the one real page of content. */
+    .shell { display: none; }
+    #print-sheet {
+      display: block;
+      padding: 24px;
+      color: #000;
+      font-family: Arial, sans-serif;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="app-name">Med<span>Voice</span><span class="app-tag">Clinical AI</span></div>
+    </div>
+    <div class="topbar-right">
+      <img class="logo-img" id="logo-img" src="/static/andalusia.png" alt="MedVoice Logo"
+           onerror="this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20120%2036%22%3E%3Ctext%20x%3D%220%22%20y%3D%2224%22%20fill%3D%22%238b5a2b%22%20font-size%3D%2220%22%20font-family%3D%22DM%20Sans%22%3EMedVoice%3C%2Ftext%3E%3C%2Fsvg%3E'" />
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div>
+      <div class="sec-label">Configuration</div>
+      <div class="field">
+        <label>Department</label>
+        <select id="sel-department">
+          <option value="opd" selected>OPD</option>
+          <option value="er">ER</option>
+          <option value="dental">Dental</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Language</label>
+        <select id="sel-lang">
+          <option value="en">English</option>
+          <option value="ar" selected>Arabic (العربية)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Mode</label>
+        <select id="sel-mode">
+          <option value="doctor" selected>Doctor</option>
+          <option value="conversation">Conversation</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Specialty</label>
+        <select id="sel-specialty">
+          <option value="" selected>General / Not specified</option>
+          <option value="Dentistry">Dentistry</option>
+          <option value="Pediatric">Pediatric</option>
+          <option value="Internal Medicine">Internal Medicine</option>
+          <option value="Dermatology">Dermatology</option>
+          <option value="Ophthalmology">Ophthalmology</option>
+          <option value="General Surgery">General Surgery</option>
+          <option value="Pain Management">Pain Management</option>
+          <option value="OB & GYN">OB &amp; GYN</option>
+          <option value="Pulmonary">Pulmonary</option>
+          <option value="Neurology">Neurology</option>
+          <option value="Neurosurgery">Neurosurgery</option>
+          <option value="Emergency">Emergency</option>
+          <option value="ENT">ENT</option>
+          <option value="Rheumatology">Rheumatology</option>
+          <option value="Urology">Urology</option>
+          <option value="Cardiology">Cardiology</option>
+          <option value="Orthopedics">Orthopedics</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Use patient history?</label>
+        <select id="sel-use-history">
+          <option value="no" selected>No</option>
+          <option value="yes">Yes — factor into ICD-10 / diagnosis</option>
+        </select>
+        <span class="field-hint" id="use-history-hint">Uses the Patient Code and Business Unit entered in the Patient info card to look up last year's visits.</span>
+      </div>
+      <div class="field">
+        <label>Extraction model</label>
+        <select id="sel-extraction-model"></select>
+        <span class="field-hint">Fills the clinical note fields.</span>
+      </div>
+      <div class="field">
+        <label>Reasoning model</label>
+        <select id="sel-reasoning-model"></select>
+        <span class="field-hint">Recommends ICD-10 codes (ER: also differentials + triage).</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-label">Recording</div>
+      <div class="record-area">
+        <div class="waveform" id="waveform">
+          <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+          <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+          <div class="bar"></div>
+        </div>
+        <button class="btn-record" id="btn-record">
+          <!-- Mic icon (default) -->
+          <svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="2" width="6" height="12" rx="3"/>
+            <path d="M5 10a7 7 0 0 0 14 0"/>
+            <line x1="12" y1="19" x2="12" y2="22"/>
+            <line x1="8" y1="22" x2="16" y2="22"/>
+          </svg>
+          <!-- Stop square (shown while recording) -->
+          <div class="stop-icon"></div>
+        </button>
+
+        <!-- Pause / Resume — only visible once a recording session is active -->
+        <button class="btn-pause" id="btn-pause" type="button">
+          <span class="p-icon" id="pause-icon">⏸</span><span id="pause-label">Pause</span>
+        </button>
+
+        <div class="rec-timer" id="rec-timer">—</div>
+        <!-- Live transcription indicator -->
+        <div class="live-badge" id="live-badge">
+          <div class="live-dot"></div>
+          Live
+        </div>
+        <div class="rec-label" id="rec-label">Click to record</div>
+      </div>
+    </div>
+
+    <div>
+      <button class="btn-primary" id="btn-submit" disabled>Analyse recording</button>
+      <button class="btn-secondary" id="btn-print" disabled>🖨 Print clinical note</button>
+      <button class="btn-ghost" id="btn-reset">Clear</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- 0. Patient info — always visible, filled in manually alongside the note -->
+    <div class="phase-card" id="card-patient">
+      <div class="phase-hd">
+        <div class="phase-title">Patient info</div>
+        <span class="phase-subtitle">Printed on the clinical note header</span>
+      </div>
+      <div class="phase-body">
+        <div class="pi-grid">
+          <div class="pi-field"><label>Patient Name</label><input id="pi-name" type="text" /></div>
+          <div class="pi-field"><label>DOB</label><input id="pi-dob" type="text" placeholder="DD/MM/YYYY" /></div>
+          <div class="pi-field"><label>Gender</label><input id="pi-gender" type="text" /></div>
+          <div class="pi-field"><label>Nationality</label><input id="pi-nationality" type="text" /></div>
+          <div class="pi-field"><label>Code</label><input id="pi-code" type="text" /></div>
+          <div class="pi-field">
+            <label>Business Unit</label>
+            <select id="pi-bu">
+              <option value="" selected>Select…</option>
+              <option value="AHJ">AHJ</option>
+              <option value="AMH">AMH</option>
+              <option value="ANC">ANC</option>
+            </select>
+          </div>
+          <div class="pi-field"><label>Phone</label><input id="pi-phone" type="text" /></div>
+          <div class="pi-field"><label>Blood Group</label><input id="pi-blood" type="text" /></div>
+          <div class="pi-field"><label>Visit</label><input id="pi-visit" type="text" /></div>
+          <div class="pi-field"><label>Financial Type</label><input id="pi-financial" type="text" /></div>
+          <div class="pi-field"><label>Speciality</label><input id="pi-speciality" type="text" /></div>
+          <div class="pi-field"><label>Dr</label><input id="pi-dr" type="text" /></div>
+        </div>
+        <div class="pi-history-row">
+          <button class="btn-history" id="btn-show-history" type="button">🕘 Show Patient Previous Visits Over the Last Year</button>
+          <div id="history-panel"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1. Transcription -->
+    <div class="phase-card" id="card-trans">
+      <div class="phase-hd">
+        <div class="step-num">1</div>
+        <div class="phase-title">
+          Transcription
+          <span class="phase-subtitle" id="trans-subtitle"></span>
+        </div>
+        <!-- Live pulse shown while recording -->
+        <div class="phase-live">
+          <div class="phase-live-dot"></div>
+          Live
+        </div>
+        <span class="phase-badge b-idle" id="badge-trans">Waiting</span>
+        <span class="phase-time" id="time-trans"></span>
+      </div>
+      <div class="phase-body" id="body-trans"><div class="ph">Transcription will appear here as you speak</div></div>
+    </div>
+
+    <!-- 2. Refinement (hidden entirely in Doctor mode — see updateStepNumbers()) -->
+    <div class="phase-card hidden" id="card-refine">
+      <div class="phase-hd">
+        <div class="step-num" id="num-refine">2</div>
+        <div class="phase-title">Refinement</div>
+        <span class="phase-badge b-idle" id="badge-refine">Waiting</span>
+        <span class="phase-time" id="time-refine"></span>
+      </div>
+      <div class="phase-body" id="body-refine"><div class="ph">Refined transcript will appear here</div></div>
+    </div>
+
+    <!-- 3. Translation (hidden for English) -->
+    <div class="phase-card hidden" id="card-translate">
+      <div class="phase-hd">
+        <div class="step-num" id="num-translate">3</div>
+        <div class="phase-title">Translation <span class="phase-subtitle">(Arabic → English)</span></div>
+        <span class="phase-badge b-idle" id="badge-translate">Waiting</span>
+        <span class="phase-time" id="time-translate"></span>
+      </div>
+      <div class="phase-body" id="body-translate"><div class="ph">English translation will appear here</div></div>
+    </div>
+
+    <!-- 4. Feature extraction — content shape depends on selected Department -->
+    <div class="phase-card" id="card-extract">
+      <div class="phase-hd">
+        <div class="step-num" id="num-extract">3</div>
+        <div class="phase-title">Clinical note fields <span class="phase-subtitle" id="extract-subtitle">(OPD)</span></div>
+        <span class="phase-badge b-idle" id="badge-extract">Waiting</span>
+        <span class="phase-time" id="time-extract"></span>
+      </div>
+      <div class="phase-body" id="body-extract"><div class="ph">Medical features will appear here</div></div>
+    </div>
+
+    <!-- 4b. ICD-10 diagnosis recommendation — runs in parallel with field extraction -->
+    <div class="phase-card" id="card-diagnosis">
+      <div class="phase-hd">
+        <div class="step-num" id="num-diagnosis">4</div>
+        <div class="phase-title">Diagnosis recommendation <span class="phase-subtitle" id="diagnosis-subtitle">(ICD-10 · reasoning)</span></div>
+        <span class="phase-badge b-idle" id="badge-diagnosis">Waiting</span>
+        <span class="phase-time" id="time-diagnosis"></span>
+      </div>
+      <div class="phase-body" id="body-diagnosis"><div class="ph">ICD-10 recommendations will appear here</div></div>
+    </div>
+
+    <!-- 5. Follow-up questions -->
+    <div class="phase-card" id="card-questions">
+      <div class="phase-hd">
+        <div class="step-num" id="num-questions">5</div>
+        <div class="phase-title">Questions for the doctor <span class="phase-subtitle">(missing fields only)</span></div>
+        <span class="phase-badge b-idle" id="badge-questions">Waiting</span>
+        <span class="phase-time" id="time-questions"></span>
+      </div>
+      <div class="phase-body" id="body-questions"><div class="ph">Questions about any unmentioned fields will appear here</div></div>
+    </div>
+
+    <!-- 6. Summary — everything that will print, as copyable free text -->
+    <div class="phase-card" id="card-summary">
+      <div class="phase-hd">
+        <div class="step-num" id="num-summary">6</div>
+        <div class="phase-title">Summary <span class="phase-subtitle">(what will be printed)</span></div>
+        <span class="phase-badge b-idle" id="badge-summary">Waiting</span>
+      </div>
+      <div class="phase-body" id="body-summary">
+        <div class="ph">A copyable summary of the clinical note will appear here once fields are extracted</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Doctor feedback — free-text + thumbs, outside the recording pipeline
+       so it's always available regardless of pipeline state, and hidden
+       from print automatically (whole .shell is hidden in @media print). -->
+  <section class="feedback-card">
+    <div class="feedback-title">Feedback</div>
+    <div class="feedback-subtitle">Found a bug, have a complaint, or an idea to make this better? Let us know.</div>
+    <div class="feedback-body">
+      <textarea id="feedback-text" rows="3" placeholder="Feedback, complaint, or suggestion…"></textarea>
+      <div class="feedback-row">
+        <input type="text" id="feedback-name" class="feedback-name-input" placeholder="Your name (optional)">
+        <div class="feedback-thumbs">
+          <button type="button" class="thumb-btn" id="thumb-up"   data-rating="up"   title="Thumbs up">👍</button>
+          <button type="button" class="thumb-btn" id="thumb-down" data-rating="down" title="Thumbs down">👎</button>
+        </div>
+        <button type="button" class="btn-feedback-submit" id="btn-feedback-submit">Send Feedback</button>
+      </div>
+      <div class="feedback-status" id="feedback-status"></div>
+    </div>
+  </section>
+</div>
+
+<!-- Printable clinical note — populated by buildPrintHTML(), only visible via @media print -->
+<div id="print-sheet"></div>
+
+<script>
+/* ─────────────────────────────────────────────────────────────────────────────
+   State
+───────────────────────────────────────────────────────────────────────────── */
+let recording    = false;
+let paused       = false;   // true while mic capture is paused but the WS session stays open
+let timerSec     = 0;
+let timerInterval = null;
+
+// Measured transcription-session duration (recording start to STT "done"),
+// captured for the usage log — /audio/analyze doesn't do transcription
+// itself so it has no way to know this unless the browser tells it.
+let lastTranscriptionSec = null;
+
+// Identifies one record→analyze→feedback cycle, so feedback submitted about
+// "this" session can be joined back to its usage-log entry on the dashboard.
+// Freshly generated each time a new recording starts (see startRecording()).
+let sessionId = null;
+
+// Session-level "have we already played the recording-consent line" gate —
+// true from the moment it starts playing until the session fully stops
+// (stopRecording / resetAll). Never replayed across a pause/resume.
+let announcementPlayed  = false;
+let announcementPlaying = false;
+
+// Live transcription
+let ws               = null;   // WebSocket
+let audioContext     = null;
+let sourceNode       = null;
+let scriptProcessor  = null;
+let mediaStream      = null;
+let liveTranscript   = '';     // accumulated COMMITTED text (both engines)
+let interimText      = '';     // provisional text not yet committed (Munsit only)
+let transcriptReady  = false;  // true after WS "done" received
+let transcriptStartMs = 0;     // for elapsed timer on transcription card
+
+// Editable pill lists shown in the Diagnosis card (kept in sync with the DOM):
+// ICD-10 recommendations, and (ER only) differential diagnoses.
+let pillLists = { icd10: [], differential: [] };
+
+// The exact text that fed the extraction step — becomes the template's
+// "Patient Story" field verbatim. Set from the server's "extraction" event.
+let patientStoryText = '';
+
+// Whether patient history was actually sent for the last analysis, and
+// what the model reported doing with it (see history_considered/history_notes
+// in the diagnosis result) — used to render the audit cell + print view.
+let lastHistoryUsed = false;
+let lastHistoryVisitCount = 0;
+let lastHistoryCheck = null;
+
+// Set when the doctor asked for history but the lookup itself failed
+// server-side (DB unreachable etc.) — the recommendation was generated WITHOUT
+// history, and the UI says so instead of looking like "patient has no history".
+let lastHistoryError = null;
+
+const $        = id => document.getElementById(id);
+const btnRecord  = $('btn-record');
+const btnPause   = $('btn-pause');
+const btnSubmit  = $('btn-submit');
+const btnPrint   = $('btn-print');
+const btnReset   = $('btn-reset');
+const btnShowHistory = $('btn-show-history');
+const recTimer   = $('rec-timer');
+const recLabel   = $('rec-label');
+const liveBadge  = $('live-badge');
+const waveform   = $('waveform');
+
+const API_BASE = '';
+
+function fmtTime(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* Small mic glyph reused by every "answer by voice" button — grid cells and
+   Questions-for-the-doctor items alike. Swapped for a stop-square via CSS
+   (.field-mic-btn.rec) is unnecessary here since color + pulse already
+   communicate recording state at this size. */
+function micButtonHTML(key, title) {
+  return `<button type="button" class="field-mic-btn" data-key="${esc(key)}" title="${esc(title || 'Click to answer by voice')}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="2" width="6" height="12" rx="3"/>
+      <path d="M5 10a7 7 0 0 0 14 0"/>
+      <line x1="12" y1="19" x2="12" y2="22"/>
+      <line x1="8" y1="22" x2="16" y2="22"/>
+    </svg>
+  </button>`;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Department field schema — one entry per template field, in template order.
+   `key` must match the JSON key the department's extraction prompt returns
+   (see utils/clinical_prompts.py). ICD-10 codes, differential diagnoses,
+   triage priority and reasoning come from the separate diagnosis step and are
+   rendered in the Diagnosis card; Patient Story is appended to the field grid.
+───────────────────────────────────────────────────────────────────────────── */
+const DEPARTMENT_LABELS = { er: 'ER', opd: 'OPD', dental: 'Dental' };
+
+// Which phase-card a given SSE event belongs to — used so a parse or render
+// failure for that event can surface an error on the RIGHT card instead of
+// silently vanishing (see the /audio/analyze SSE reading loop).
+const SSE_EVENT_TO_CARD = {
+  refinement_skipped: 'refine',
+  refinement_delta:   'refine',
+  refinement_done:    'refine',
+  translation_delta:  'translate',
+  translation_done:   'translate',
+  extraction:          'extract',
+};
+
+const DEPARTMENT_FIELDS = {
+  er: [
+    { key: 'chief_complaint',        label: 'Chief Complaint (C/O)', icon: '🗣️', highlight: 'complaint' },
+    { key: 'onset',                  label: 'Onset',                 icon: '⏱️' },
+    { key: 'course',                 label: 'Course',                icon: '📈' },
+    { key: 'duration',               label: 'Duration',              icon: '⏳' },
+    { key: 'past_medical_history',   label: 'Past Medical History',  icon: '📋' },
+    { key: 'past_surgical_history',  label: 'Past Surgical History', icon: '🔪' },
+    { key: 'medication_history',     label: 'Medication History',    icon: '💊' },
+    { key: 'allergy_status',         label: 'Allergy Status',        icon: '⚠️' },
+    { key: 'family_history',         label: 'Family History',        icon: '👪' },
+    { key: 'social_history',         label: 'Social History',        icon: '🚬' },
+    { key: 'airway',                 label: 'A – Airway',            icon: '🫁' },
+    { key: 'breathing',              label: 'B – Breathing',         icon: '🫁' },
+    { key: 'circulation',            label: 'C – Circulation',       icon: '❤️' },
+    { key: 'disability',             label: 'D – Disability',        icon: '🧠' },
+    { key: 'exposure',               label: 'E – Exposure',          icon: '🩹' },
+    { key: 'examination',            label: 'Examination',           icon: '🔍' },
+    { key: 'investigations',         label: 'Investigations',        icon: '🧪', wide: true },
+    { key: 'plan_of_care',           label: 'Plan of Care',          icon: '📝', wide: true, theme: 'plan' },
+    { key: 'requested_consultation', label: 'Requested Consultation',icon: '↗️' },
+    { key: 'discharge_instructions', label: 'Discharge Instructions',icon: '🏠', wide: true },
+    { key: 'patient_disposition',    label: 'Patient Disposition',   icon: '🚪' },
+    { key: 'sick_leave',             label: 'Sick Leave',            icon: '📅' },
+  ],
+  opd: [
+    { key: 'allergy_status',          label: 'Allergy Status',                icon: '⚠️' },
+    { key: 'chief_complaint',         label: 'Chief Complaint (C/O)',         icon: '🗣️', highlight: 'complaint' },
+    { key: 'onset',                   label: 'Onset',                         icon: '⏱️' },
+    { key: 'course',                  label: 'Course',                        icon: '📈' },
+    { key: 'duration',                label: 'Duration',                      icon: '⏳' },
+    { key: 'comorbidities',           label: 'Comorbidities',                 icon: '🩺' },
+    { key: 'medication_history',      label: 'Medication History',            icon: '💊' },
+    { key: 'past_medical_history',    label: 'Past Medical History',          icon: '📋' },
+    { key: 'past_surgical_history',   label: 'Past Surgical History',         icon: '🔪' },
+    { key: 'social_family_history',   label: 'Social / Marital / Family Hx',  icon: '👪' },
+    { key: 'examination_finding',     label: 'Examination Finding',           icon: '🔍' },
+    { key: 'plan_of_care',            label: 'Plan of Care (short/long term)',icon: '📝', wide: true, theme: 'plan' },
+    { key: 'procedures_planned',      label: 'Procedures Planned',            icon: '🛠️' },
+    { key: 'referrals',               label: 'Referrals',                     icon: '↗️' },
+    { key: 'follow_up_timing',        label: 'Follow-up Timing',              icon: '📅' },
+    { key: 'patient_instructions',    label: 'Patient Instructions',          icon: '🏠', wide: true, theme: 'followup' },
+    { key: 'outcome_progress_status', label: 'Outcome / Progress Status',     icon: '📊', wide: true },
+  ],
+  dental: [
+    { key: 'chief_complaint',           label: 'Chief Complaint (C/O)',      icon: '🗣️', highlight: 'complaint' },
+    { key: 'onset',                     label: 'Onset',                      icon: '⏱️' },
+    { key: 'course',                    label: 'Course',                     icon: '📈' },
+    { key: 'duration',                  label: 'Duration',                   icon: '⏳' },
+    { key: 'past_medical_history',      label: 'Past Medical History',       icon: '📋' },
+    { key: 'consent_obtained',          label: 'Consent Obtained',          icon: '✅' },
+    { key: 'treatment_plan_status',     label: 'Treatment Plan Status',     icon: '📌' },
+    { key: 'charge_category',           label: 'Charge Category',           icon: '💳' },
+    { key: 'patient_education_given',   label: 'Patient Education Given',   icon: '📖' },
+    { key: 'radiographs_taken',         label: 'Radiographs Taken',         icon: '🩻' },
+    { key: 'tooth_number',              label: 'Tooth Number',              icon: '🦷' },
+    { key: 'subspecialty_focus',        label: 'SubSpecialty Focus',        icon: '🎯' },
+    { key: 'procedure_executed',        label: 'Procedure Executed',        icon: '🛠️', wide: true },
+    { key: 'materials_inventory',       label: 'Materials Inventory',       icon: '🧰', wide: true },
+    { key: 're_make',                   label: 'Re-Make',                   icon: '♻️' },
+    { key: 'complication_if_present',   label: 'Complication if Present',   icon: '⚠️' },
+    { key: 'internal_referral',         label: 'Internal Referral',         icon: '↗️' },
+    { key: 'service_leakage_alert',     label: 'Service Leakage Alert',     icon: '📉' },
+    { key: 'next_visit_tooth_number',   label: 'Next Visit Tooth Number',   icon: '🦷' },
+    { key: 'next_visit_treatment',      label: 'Next Visit Treatment',      icon: '📝', theme: 'plan' },
+    { key: 'retention_priority',        label: 'Retention Priority',        icon: '🎯' },
+    { key: 'followup_timeline',         label: 'Follow-Up Timeline',        icon: '📅', theme: 'followup' },
+  ],
+};
+
+function currentDepartment() { return $('sel-department').value; }
+
+/* ── Card helpers ── */
+function setCard(id, state) {
+  const card = $('card-' + id), badge = $('badge-' + id);
+  if (!card || !badge) return;
+  const hidden = card.classList.contains('hidden');
+  card.className = 'phase-card' + (state !== 'idle' ? ' ' + state : '') + (hidden ? ' hidden' : '');
+  const lm = { idle:'Waiting', active:'Processing', done:'Done', error:'Error', skip:'N/A', live:'Live' };
+  const cm = { idle:'b-idle', active:'b-active', done:'b-done', error:'b-error', skip:'b-skip', live:'b-active' };
+  badge.textContent = lm[state] || state;
+  badge.className   = 'phase-badge ' + (cm[state] || 'b-idle');
+}
+function setTime(id, sec) { const el = $('time-' + id); if (el && sec != null) el.textContent = Number(sec).toFixed(2) + 's'; }
+function setBody(id, html) { const el = $('body-' + id); if (el) el.innerHTML = html; }
+function showCard(id) { $('card-' + id)?.classList.remove('hidden'); }
+function hideCard(id) { $('card-' + id)?.classList.add('hidden'); }
+
+/* Field extraction and diagnosis recommendation run in parallel server-side,
+   so both cards go "processing" together. */
+function markAnalysisActive() {
+  setCard('extract', 'active');   setBody('extract',   '<div class="ph">Extracting clinical note fields…</div>');
+  setCard('diagnosis', 'active'); setBody('diagnosis', '<div class="ph">Recommending ICD-10 diagnoses…</div>');
+}
+
+/* ── Department / Language / Mode selectors ──
+   Refinement is skipped entirely in Doctor mode (see app.py), so its card is
+   hidden from the frontend altogether when Doctor mode is selected — it never
+   appears, not even as a "skipped" placeholder. Step numbers on the remaining
+   cards are recalculated to stay contiguous (1, 2, 3, ...) regardless of which
+   cards are visible. */
+function updateStepNumbers() {
+  const isDoctor = $('sel-mode').value === 'doctor';
+  const isAr     = $('sel-lang').value === 'ar';
+
+  isDoctor ? hideCard('refine') : showCard('refine');
+  isAr     ? showCard('translate') : hideCard('translate');
+
+  let n = 2; // step 1 is always Transcription
+  if (!isDoctor) { $('num-refine').textContent = n; n++; }
+  if (isAr)      { $('num-translate').textContent = n; n++; }
+  $('num-extract').textContent   = n; n++;
+  $('num-diagnosis').textContent = n; n++;
+  $('num-questions').textContent = n; n++;
+  $('num-summary').textContent   = n;
+}
+function updateDepartmentSubtitle() {
+  $('extract-subtitle').textContent = '(' + (DEPARTMENT_LABELS[currentDepartment()] || currentDepartment()) + ')';
+}
+$('sel-lang').addEventListener('change', updateStepNumbers);
+$('sel-mode').addEventListener('change', updateStepNumbers);
+$('sel-department').addEventListener('change', updateDepartmentSubtitle);
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Model selection — the dropdown contents come from GET /models so the UI and
+   backend registry (core/model_registry.py) can never drift apart.
+───────────────────────────────────────────────────────────────────────────── */
+async function loadModelOptions() {
+  try {
+    const cfg = await (await fetch(API_BASE + '/models')).json();
+    [['extraction', 'sel-extraction-model'], ['reasoning', 'sel-reasoning-model']].forEach(([step, id]) => {
+      const sel = $(id);
+      sel.innerHTML = cfg[step].models.map(m => `<option value="${esc(m.id)}">${esc(m.label)}</option>`).join('');
+      sel.value = cfg[step].default;
+    });
+  } catch (e) { console.warn('[Models] could not load model list', e); }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Patient history — "Show Patient Previous Visits Over the Last Year" button.
+   Sends the Patient Code (pi-code) and Business Unit (pi-bu) to
+   GET /patient/{code}/history?business_unit=AHJ|AMH|ANC, which queries that
+   business unit's HCMS database live.
+───────────────────────────────────────────────────────────────────────────── */
+function renderPatientHistory(data) {
+  const panel = $('history-panel');
+  const code        = $('pi-code').value.trim() || '—';
+  const unit        = data.business_unit || $('pi-bu').value || '—';
+  const nationality  = $('pi-nationality').value.trim() || '—';
+  const speciality   = $('pi-speciality').value.trim() || '—';
+  const gender       = $('pi-gender').value.trim() || '—';
+  const count = data.visit_count || 0;
+
+  let tableHtml;
+  if (!data.visits || data.visits.length === 0) {
+    tableHtml = '<div class="ph">No prior visits on file for this patient code in ' + esc(unit) + '.</div>';
+  } else {
+    tableHtml = `<table class="history-table"><thead><tr>
+      <th>Date</th><th>Specialty</th><th>Department</th><th>Visit Type</th><th>Diagnoses (ICD-10)</th><th>Prior Visits</th>
+    </tr></thead><tbody>`;
+    data.visits.forEach(v => {
+      const dxHtml = (v.icd10_diagnoses && v.icd10_diagnoses.length)
+        ? v.icd10_diagnoses.map(d => `<span class="history-dx-pill">${esc(d)}</span>`).join('')
+        : '<span class="ph" style="font-size:11px;">None recorded</span>';
+      tableHtml += `<tr>
+        <td>${esc(v.visit_date)}</td>
+        <td>${esc(v.specialty)}</td>
+        <td>${esc(v.department)}</td>
+        <td>${esc(v.visit_type)}</td>
+        <td>${dxHtml}</td>
+        <td>${esc(v.previous_visit_count)}</td>
+      </tr>`;
+    });
+    tableHtml += '</tbody></table>';
+  }
+
+  const html = `
+    <div class="history-summary">
+      <div><b>Code:</b> ${esc(code)}</div>
+      <div><b>Business Unit:</b> ${esc(unit)}</div>
+      <div><b>Nationality:</b> ${esc(nationality)}</div>
+      <div><b>Speciality:</b> ${esc(speciality)}</div>
+      <div><b>Gender:</b> ${esc(gender)}</div>
+      <div><b>Visits found:</b> ${count}</div>
+    </div>
+    <div class="history-toggle-header" id="history-toggle-header" role="button" tabindex="0">
+      <span class="history-toggle-icon" id="history-toggle-icon">▾</span>
+      <span>Visit History — Last Year (${count} visit${count === 1 ? '' : 's'})</span>
+    </div>
+    <div class="history-body" id="history-body">${tableHtml}</div>
+  `;
+  panel.innerHTML = html;
+  panel.classList.add('show');
+
+  const toggleHeader = document.getElementById('history-toggle-header');
+  const toggle = () => {
+    const body = document.getElementById('history-body');
+    const icon = document.getElementById('history-toggle-icon');
+    const collapsed = body.classList.toggle('collapsed');
+    icon.textContent = collapsed ? '▸' : '▾';
+    icon.setAttribute('aria-expanded', String(!collapsed));
+  };
+  toggleHeader?.addEventListener('click', toggle);
+  toggleHeader?.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+  });
+}
+
+btnShowHistory.addEventListener('click', async () => {
+  const code = $('pi-code').value.trim();
+  const businessUnit = $('pi-bu').value;
+  const panel = $('history-panel');
+  if (!code || !businessUnit) {
+    panel.innerHTML = '<div class="err-box">Enter the patient Code and select the Business Unit above first.</div>';
+    panel.classList.add('show');
+    return;
+  }
+  panel.innerHTML = '<div class="ph">Loading visit history…</div>';
+  panel.classList.add('show');
+  btnShowHistory.disabled = true;
+  try {
+    const resp = await fetch(
+      API_BASE + '/patient/' + encodeURIComponent(code) + '/history?business_unit=' + encodeURIComponent(businessUnit)
+    );
+    if (!resp.ok) {
+      // 503 = the lookup itself failed (DB unreachable etc.) — show the server's message,
+      // which is deliberately different from "no prior visits on file".
+      let detail = 'HTTP ' + resp.status;
+      try {
+        const j = await resp.json();
+        if (j && typeof j.detail === 'string') detail = j.detail;
+      } catch (_) {}
+      panel.innerHTML = `<div class="err-box">Could not load history: ${esc(detail)}</div>`;
+      return;
+    }
+    const data = await resp.json();
+    renderPatientHistory(data);
+  } catch (e) {
+    panel.innerHTML = `<div class="err-box">${esc(e.message)}</div>`;
+  } finally {
+    btnShowHistory.disabled = false;
+  }
+});
+
+/* ── Reset ── */
+function resetAll() {
+  // Stop any active recording
+  if (recording) stopRecording();
+  if (ws) { try { ws.close(); } catch(_) {} ws = null; }
+  if (fieldRec) cancelFieldRecording();
+  liveTranscript  = '';
+  interimText     = '';
+  transcriptReady = false;
+  recording       = false;
+  paused          = false;
+  announcementPlayed  = false;
+  announcementPlaying = false;
+  timerSec        = 0;
+  lastTranscriptionSec = null;
+  clearInterval(timerInterval);
+  pillLists = { icd10: [], differential: [] };
+  patientStoryText = '';
+  lastHistoryUsed = false;
+  lastHistoryVisitCount = 0;
+  lastHistoryCheck = null;
+  lastHistoryError = null;
+
+  btnSubmit.disabled  = true;
+  btnPrint.disabled   = true;
+  btnRecord.disabled  = false;
+  btnRecord.classList.remove('recording', 'processing', 'is-paused');
+  btnPause.classList.remove('show', 'is-paused');
+  setPauseButtonLabel(false);
+  recTimer.textContent = '—';
+  recTimer.className   = 'rec-timer';
+  recLabel.textContent = 'Click to record';
+  liveBadge.classList.remove('show');
+  waveform.classList.remove('active');
+
+  ['trans','refine','translate','extract','diagnosis','questions','summary'].forEach(id => {
+    setCard(id, 'idle');
+    const t = $('time-' + id); if (t) t.textContent = '';
+  });
+  setBody('trans',    '<div class="ph">Transcription will appear here as you speak</div>');
+  if ($('sel-mode').value !== 'doctor') setBody('refine', '<div class="ph">Refined transcript will appear here</div>');
+  setBody('translate','<div class="ph">English translation will appear here</div>');
+  setBody('extract',  '<div class="ph">Medical features will appear here</div>');
+  setBody('diagnosis','<div class="ph">ICD-10 recommendations will appear here</div>');
+  setBody('questions','<div class="ph">Generated questions will appear here</div>');
+  setBody('summary',  '<div class="ph">A copyable summary of the clinical note will appear here once fields are extracted</div>');
+  updateStepNumbers();
+  updateDepartmentSubtitle();
+  $('diagnosis-subtitle').textContent = '(ICD-10 · reasoning)';
+}
+btnReset.addEventListener('click', resetAll);
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Recording-consent disclaimer — Munsit TTS (Lina, Fusha)
+   Played once at the start of a session, never replayed on pause/resume.
+
+   Fetched ahead of time (prefetchDisclaimer, kicked off on page load) so
+   there's no network latency when Start is pressed. Playback then starts
+   instantly and recording begins ~1s later, in parallel with the message
+   still finishing — total delay before the mic goes live stays ~1s
+   regardless of how long the clip itself runs.
+───────────────────────────────────────────────────────────────────────────── */
+const DISCLAIMER_START_DELAY_MS = 1000;
+
+let disclaimerBlobUrl     = null;
+let disclaimerReadyPromise = null;
+
+function prefetchDisclaimer() {
+  if (disclaimerReadyPromise) return disclaimerReadyPromise;
+  disclaimerReadyPromise = fetch(API_BASE + '/audio/tts-disclaimer')
+    .then(resp => { if (!resp.ok) throw new Error('HTTP ' + resp.status); return resp.blob(); })
+    .then(blob => { disclaimerBlobUrl = URL.createObjectURL(blob); return disclaimerBlobUrl; })
+    .catch(e => { console.warn('[Disclaimer] Prefetch failed:', e); disclaimerReadyPromise = null; throw e; });
+  return disclaimerReadyPromise;
+}
+prefetchDisclaimer(); // warm the cache as soon as the page loads
+
+// Starts the consent line playing (fire-and-forget) and resolves after a
+// fixed short delay — NOT when the audio finishes. Recording starts right
+// after this resolves, overlapping the tail of the message.
+async function startSessionDisclaimer() {
+  try {
+    const url = await prefetchDisclaimer();
+    const audio = new Audio(url);
+    audio.play().catch(e => console.warn('[Disclaimer] Playback failed:', e));
+  } catch (e) {
+    console.warn('[Disclaimer] Could not play consent notice, continuing without it:', e);
+  }
+  await new Promise(r => setTimeout(r, DISCLAIMER_START_DELAY_MS));
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Live transcription via WebSocket
+   English → Voxtral (additive "delta" chunks only)
+   Arabic  → Munsit  ("interim" provisional preview + "delta" committed segments)
+───────────────────────────────────────────────────────────────────────────── */
+
+// Render committed text + a dimmed provisional tail (Munsit interim, if any).
+// Used only WHILE recording — once stopped, the transcript switches to an
+// editable contenteditable block (see ws.onmessage 'done' handler below).
+function renderLiveTranscript() {
+  let el = document.getElementById('tl');
+  if (!el) {
+    setBody('trans', '<div class="transcript" id="tl"></div>');
+    el = document.getElementById('tl');
+  }
+  if (!el) return;
+  const committedHtml = esc(liveTranscript);
+  const interimHtml   = interimText ? '<span class="interim c-blink">' + esc(interimText) + '</span>' : '<span class="c-blink"></span>';
+  el.innerHTML = committedHtml + interimHtml;
+}
+
+function setPauseButtonLabel(isPaused) {
+  $('pause-icon').textContent  = isPaused ? '▶' : '⏸';
+  $('pause-label').textContent = isPaused ? 'Resume' : 'Pause';
+}
+
+async function startRecording() {
+  liveTranscript  = '';
+  interimText     = '';
+  transcriptReady = false;
+  paused          = false;
+
+  // A fresh ID for this record→analyze→feedback cycle, so a later feedback
+  // submission can be joined back to the exact session it's about (see the
+  // dashboard's session_id column on both the Sessions and Feedback tables).
+  sessionId = (crypto.randomUUID ? crypto.randomUUID() : ('sess-' + Date.now() + '-' + Math.random().toString(36).slice(2)));
+
+  const lang = $('sel-lang').value; // 'en' | 'ar' — decides which STT engine the server uses
+
+  // Show transcription card as "live"
+  const card = $('card-trans');
+  card.className = 'phase-card live';
+  setBody('trans', '<div class="transcript c-blink" id="tl"></div>');
+
+  // ── Step 1: AudioContext first (sync) so we have sampleRate before any await ──
+  // AudioContext is safe to create here — we're inside a user-gesture handler.
+  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const sampleRate = audioContext.sampleRate;
+
+  // ── Step 2: open WebSocket and assign ALL handlers synchronously (no await) ──
+  // If we awaited getUserMedia first, the WS could connect and fire 'open' while
+  // we're suspended, and we'd miss the event (onopen not yet assigned → init
+  // message never sent → server gets binary as first message → KeyError 'text').
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws/transcribe`);
+  ws.binaryType = 'arraybuffer';
+
+  // Promise that resolves once the handshake is confirmed.
+  // We await this before connecting audio nodes so no PCM frames are sent before
+  // the server has received the init message.
+  let resolveWsOpen, rejectWsOpen;
+  const wsOpen = new Promise((res, rej) => { resolveWsOpen = res; rejectWsOpen = rej; });
+
+  ws.onopen = () => {
+    // language tells the server which STT engine to route to (Voxtral vs Munsit)
+    ws.send(JSON.stringify({ sampleRate, language: lang }));
+    resolveWsOpen();
+  };
+
+  ws.onmessage = e => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch(_) { return; }
+
+    if (msg.type === 'delta') {
+      // Committed text — append and clear any provisional preview it supersedes.
+      liveTranscript += msg.text;
+      interimText = '';
+      renderLiveTranscript();
+
+    } else if (msg.type === 'interim') {
+      // Provisional text (Munsit only) — replaces the tail, may still be revised.
+      interimText = msg.text;
+      renderLiveTranscript();
+
+    } else if (msg.type === 'done') {
+      const elapsedSec = ((Date.now() - transcriptStartMs) / 1000).toFixed(2);
+      lastTranscriptionSec = elapsedSec;
+      const c = $('card-trans');
+      c.className = 'phase-card done';
+      const badge = $('badge-trans');
+      badge.textContent = 'Done'; badge.className = 'phase-badge b-done';
+      setTime('trans', elapsedSec);
+      interimText = ''; // drop any stray unfinished preview
+
+      // Transcript becomes editable — the user can correct STT mistakes before
+      // the transcript is sent to the analysis pipeline.
+      setBody('trans',
+        `<div class="transcript" id="tl-final" contenteditable="true" spellcheck="false">${esc(liveTranscript)}</div>
+         <div class="edit-hint">Click the text above to correct it before analysing</div>`);
+      transcriptReady = true;
+      btnSubmit.disabled = false;
+      recLabel.textContent = 'Transcript ready — click Analyse';
+
+    } else if (msg.type === 'error') {
+      setCard('trans', 'error');
+      setBody('trans', '<div class="err-box">' + esc(msg.detail || 'Transcription error') + '</div>');
+      recLabel.textContent = 'Transcription failed';
+    }
+  };
+
+  ws.onerror = () => {
+    rejectWsOpen(new Error('WebSocket error'));
+    setCard('trans', 'error');
+    setBody('trans', '<div class="err-box">WebSocket connection failed. Is the server running?</div>');
+    recLabel.textContent = 'Connection error';
+    resetRecordingUI();
+  };
+
+  ws.onclose = () => { cleanupAudio(); };
+
+  // ── Step 3: get microphone (now safe to await — WS handlers already attached) ──
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch (e) {
+    recLabel.textContent = 'Mic error: ' + e.message;
+    try { ws.close(); } catch(_) {}
+    ws = null;
+    resetRecordingUI();
+    return;
+  }
+
+  // ── Step 4: wait for WS handshake to complete before sending any PCM ──
+  try {
+    await wsOpen;
+  } catch (e) {
+    // onerror already updated the UI
+    cleanupAudio();
+    return;
+  }
+
+  // ── Step 5: connect audio nodes and start streaming ──
+  sourceNode = audioContext.createMediaStreamSource(mediaStream);
+  // ScriptProcessorNode is retained as a compatibility fallback for browsers
+  // where the AudioWorklet path is unavailable. Modern browsers should use
+  // AudioWorkletNode so microphone processing does not run on the main thread.
+  scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+  scriptProcessor.onaudioprocess = event => {
+    // While paused we keep the mic and WS alive but simply stop sending frames —
+    // Munsit's server-side KeepAlive loop keeps the session from timing out
+    // during the gap, so resuming continues the same transcript in place.
+    if (ws && ws.readyState === WebSocket.OPEN && !paused) {
+      const channelData = event.inputBuffer.getChannelData(0);
+      const copy = new Float32Array(channelData.length);
+      copy.set(channelData);
+      ws.send(copy.buffer);
+    }
+  };
+  sourceNode.connect(scriptProcessor);
+  // Route through a silent gain node — avoids mic echo through speakers while
+  // still satisfying the ScriptProcessorNode's requirement to be connected.
+  const silentGain = audioContext.createGain();
+  silentGain.gain.value = 0;
+  scriptProcessor.connect(silentGain);
+  silentGain.connect(audioContext.destination);
+
+  // UI
+  recording = true;
+  transcriptStartMs = Date.now();
+  timerSec = 0;
+  recTimer.textContent = '0:00';
+  recTimer.className   = 'rec-timer on';
+  recLabel.textContent = 'Recording — click to stop';
+  btnRecord.classList.add('recording');
+  btnRecord.classList.remove('is-paused');
+  waveform.classList.add('active');
+  liveBadge.classList.add('show');
+  btnPause.classList.add('show');
+  btnPause.classList.remove('is-paused');
+  setPauseButtonLabel(false);
+  timerInterval = setInterval(() => { timerSec++; recTimer.textContent = fmtTime(timerSec); }, 1000);
+}
+
+function togglePause() {
+  if (!recording) return;
+  paused = !paused;
+
+  if (paused) {
+    clearInterval(timerInterval);
+    recTimer.className = 'rec-timer';
+    waveform.classList.remove('active');
+    liveBadge.classList.remove('show');
+    recLabel.textContent = 'Paused — click Resume to continue';
+    btnRecord.classList.add('is-paused');
+    btnPause.classList.add('is-paused');
+    setPauseButtonLabel(true);
+    // Mark the pause point inline so it's visible on review, without breaking the flow of text.
+    interimText = '';
+    renderLiveTranscript();
+  } else {
+    recTimer.className = 'rec-timer on';
+    waveform.classList.add('active');
+    liveBadge.classList.add('show');
+    recLabel.textContent = 'Recording — click to stop';
+    btnRecord.classList.remove('is-paused');
+    btnPause.classList.remove('is-paused');
+    setPauseButtonLabel(false);
+    timerInterval = setInterval(() => { timerSec++; recTimer.textContent = fmtTime(timerSec); }, 1000);
+  }
+}
+btnPause.addEventListener('click', togglePause);
+
+function stopRecording() {
+  if (!recording) return;
+  recording = false;
+  paused    = false;
+  clearInterval(timerInterval);
+
+  // Disconnect audio (closes ffmpeg stdin → server-side STT flushes remaining audio)
+  cleanupAudio();
+
+  // Tell the server we're done sending audio
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ cmd: 'done' }));
+  }
+
+  // Session is over — a future recording is a *new* session, so the consent
+  // line should play again next time the record button starts one.
+  announcementPlayed = false;
+
+  // UI — waiting for the STT engine to finish
+  btnRecord.classList.remove('recording', 'is-paused');
+  btnRecord.classList.add('processing');
+  btnRecord.disabled   = true;
+  btnPause.classList.remove('show', 'is-paused');
+  waveform.classList.remove('active');
+  liveBadge.classList.remove('show');
+  recTimer.className   = 'rec-timer';
+  recLabel.textContent = 'Finalising transcript…';
+}
+
+function cleanupAudio() {
+  try { if (scriptProcessor) { scriptProcessor.disconnect(); scriptProcessor = null; } } catch(_) {}
+  try { if (sourceNode)      { sourceNode.disconnect();      sourceNode      = null; } } catch(_) {}
+  try { if (mediaStream)     { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; } } catch(_) {}
+  try { if (audioContext)    { audioContext.close();          audioContext    = null; } } catch(_) {}
+}
+
+function resetRecordingUI() {
+  btnRecord.classList.remove('recording', 'processing', 'is-paused');
+  btnRecord.disabled   = false;
+  btnPause.classList.remove('show', 'is-paused');
+  waveform.classList.remove('active');
+  liveBadge.classList.remove('show');
+  recTimer.className   = 'rec-timer';
+  recTimer.textContent = '—';
+}
+
+/* ── Mic button — starts/stops a session. Pause/Resume is the separate pill above. ── */
+btnRecord.addEventListener('click', async () => {
+  if (recording) {
+    stopRecording();
+    return;
+  }
+  if (btnRecord.classList.contains('processing') || announcementPlaying) return;
+
+  // Reset result cards before a new session
+  ['refine','translate','extract','diagnosis','questions'].forEach(id => {
+    setCard(id, 'idle');
+    const t = $('time-' + id); if (t) t.textContent = '';
+  });
+  if ($('sel-mode').value !== 'doctor') setBody('refine', '<div class="ph">Refined transcript will appear here</div>');
+  setBody('translate', '<div class="ph">English translation will appear here</div>');
+  setBody('extract',   '<div class="ph">Medical features will appear here</div>');
+  setBody('diagnosis', '<div class="ph">ICD-10 recommendations will appear here</div>');
+  setBody('questions', '<div class="ph">Generated questions will appear here</div>');
+  btnSubmit.disabled = true;
+  btnPrint.disabled  = true;
+  transcriptReady    = false;
+  patientStoryText   = '';
+
+  // Play the recording-consent line once, only at the true start of a session,
+  // and only in Conversation Mode — Doctor Mode is a single dictating
+  // clinician, not a recorded doctor-patient conversation, so the spoken
+  // consent notice doesn't apply there.
+  if ($('sel-mode').value === 'conversation' && !announcementPlayed) {
+    announcementPlayed  = true;  // mark immediately — this is a one-shot per session
+    announcementPlaying = true;
+    btnRecord.disabled  = true;
+    recLabel.textContent = 'Playing consent notice…';
+    await startSessionDisclaimer();
+    announcementPlaying = false;
+    btnRecord.disabled  = false;
+  }
+
+  await startRecording();
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Analyse — POST transcript text to /audio/analyze, stream pipeline SSE
+───────────────────────────────────────────────────────────────────────────── */
+btnSubmit.addEventListener('click', async () => {
+  if (!transcriptReady || !liveTranscript) return;
+
+  // Pick up any manual corrections the user made to the transcript before submitting.
+  const finalEl = document.getElementById('tl-final');
+  if (finalEl) liveTranscript = finalEl.innerText.trim();
+  if (!liveTranscript) return;
+
+  const lang       = $('sel-lang').value;
+  const mode       = $('sel-mode').value;
+  const department = $('sel-department').value;
+  const specialty  = $('sel-specialty').value; // '' when "General / Not specified" — sent as empty, backend treats as None
+  const useHistory = $('sel-use-history').value === 'yes';
+  const patientId  = $('pi-code').value.trim();
+  const businessUnit = $('pi-bu').value;        // '' | 'AHJ' | 'AMH' | 'ANC'
+  const isAr  = lang === 'ar';
+  const isDoctorMode = mode === 'doctor';
+
+  if (useHistory && (!patientId || !businessUnit)) {
+    setBody('extract', '<div class="err-box">"Use patient history" is set to Yes, but the Patient Code and/or Business Unit is missing — enter the patient\'s Code and select their Business Unit (Patient info card) so their visit history can be looked up, or set "Use patient history?" back to No.</div>');
+    setCard('extract', 'error');
+    return;
+  }
+
+  btnSubmit.disabled = true;
+  btnPrint.disabled  = true;
+  btnRecord.disabled = false;
+  btnRecord.classList.remove('processing');
+
+  // Setup card states — refine card is hidden entirely in Doctor mode, never shown
+  updateStepNumbers();
+  updateDepartmentSubtitle();
+  $('diagnosis-subtitle').textContent = '(ICD-10 · reasoning)';
+
+  ['refine','translate','extract','diagnosis','questions'].forEach(id => {
+    setCard(id, 'idle');
+    const t = $('time-' + id); if (t) t.textContent = '';
+  });
+  if (!isDoctorMode) setBody('refine', '<div class="ph">Waiting for refinement…</div>');
+  setBody('translate', '<div class="ph">Waiting for translation…</div>');
+  setBody('extract',   '<div class="ph">Waiting for extraction…</div>');
+  setBody('diagnosis', '<div class="ph">Waiting for diagnosis recommendation…</div>');
+  setBody('questions', '<div class="ph">Waiting for questions…</div>');
+
+  const form = new FormData();
+  form.append('text',       liveTranscript);
+  form.append('language',   lang);
+  form.append('mode',       mode);
+  form.append('department', department);
+  if (specialty) form.append('specialty', specialty);
+  if ($('sel-extraction-model').value) form.append('extraction_model', $('sel-extraction-model').value);
+  if ($('sel-reasoning-model').value)  form.append('reasoning_model',  $('sel-reasoning-model').value);
+  form.append('use_history', useHistory ? 'true' : 'false');
+  if (patientId) form.append('patient_id', patientId);
+  if (businessUnit) form.append('business_unit', businessUnit);
+  const clinicianName = ($('pi-dr').value || '').trim();
+  if (clinicianName) form.append('clinician_name', clinicianName);
+  if (lastTranscriptionSec != null) form.append('transcription_sec', String(lastTranscriptionSec));
+  if (sessionId) form.append('session_id', sessionId);
+
+  let refineBuf    = '';
+  let translateBuf = '';
+  let transBuf     = liveTranscript;   // keep raw for tab toggle
+
+  try {
+    const resp = await fetch(API_BASE + '/audio/analyze', { method: 'POST', body: form });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      setBody('refine', '<div class="err-box">HTTP ' + resp.status + ': ' + esc(txt) + '</div>');
+      setCard('refine', 'error');
+      btnSubmit.disabled = false;
+      return;
+    }
+
+    const reader  = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let sseBuf    = '';
+    // Must live OUTSIDE the read loop, same as sseBuf — an SSE "event: X" line
+    // and its "data: Y" line can land in two SEPARATE network chunks (more
+    // likely for large payloads like the extraction event's full feature set).
+    // Resetting this per-chunk meant a data line arriving in a later chunk than
+    // its event line was silently skipped before ever reaching JSON.parse —
+    // valid, fully-formed data, dropped with zero trace.
+    let eName     = null;
+
+    // Marks a step (and, for 'extraction', the Diagnosis and Questions cards
+    // riding along with it) as failed, and makes sure the Record/Analyse
+    // buttons never get stuck disabled just because this one step's data never
+    // arrived — 'extraction' is normally what re-enables them on success, so a
+    // failure here needs to do it too, or the doctor is stuck with no way to retry.
+    function failStep(ev, message) {
+      const cardId = SSE_EVENT_TO_CARD[ev];
+      if (cardId) {
+        setCard(cardId, 'error');
+        setBody(cardId, '<div class="err-box">' + esc(message) + '</div>');
+      }
+      if (ev === 'extraction') {
+        setCard('diagnosis', 'error');
+        setBody('diagnosis', '<div class="err-box">' + esc(message) + '</div>');
+        setCard('questions', 'error');
+        setBody('questions', '<div class="err-box">' + esc(message) + '</div>');
+        btnRecord.disabled = false;
+        btnSubmit.disabled = false;
+      }
+    }
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      sseBuf += decoder.decode(value, { stream: true });
+      const lines = sseBuf.split('\n');
+      sseBuf = lines.pop();
+      for (const line of lines) {
+        if (line.startsWith('event:'))          { eName = line.slice(6).trim(); }
+        else if (line.startsWith('data:') && eName) {
+          let d;
+          try {
+            d = JSON.parse(line.slice(5).trim());
+          } catch (parseErr) {
+            // Never swallow this silently — a step's card would otherwise sit
+            // stuck on its "processing" placeholder forever with zero trace,
+            // while later steps keep completing normally right after it.
+            console.error('[SSE] Failed to parse "' + eName + '" event data:', parseErr, line);
+            failStep(eName, 'Lost this step\'s data mid-stream (malformed response). Check the browser console for details, and try Analyse again.');
+            eName = null;
+            continue;
+          }
+          try {
+            handleAnalyzeEvent(eName, d);
+          } catch (handlerErr) {
+            // A bug while rendering ONE event must never take the rest of the
+            // stream down with it — without this, an exception here would
+            // propagate out of the read loop entirely and silently strand
+            // every step after this one on its "processing" placeholder too.
+            console.error('[SSE] Error handling "' + eName + '" event:', handlerErr, d);
+            failStep(eName, 'This step\'s data arrived, but something went wrong displaying it. Check the browser console for details.');
+          }
+          eName = null;
+        }
+      }
+    }
+
+    // The stream closed without ever completing extraction, and without an
+    // explicit 'error' event either (that path is already handled above) —
+    // this is the connection itself ending early, mid-pipeline. Silent on
+    // the wire, but must not be silent in the UI: without this, the extract/
+    // diagnosis/questions cards would just sit on their placeholders
+    // forever with no indication anything went wrong, and Analyse would stay
+    // disabled with no way to retry.
+    const extractCard = $('card-extract');
+    if (extractCard && !extractCard.classList.contains('done') && !extractCard.classList.contains('error')) {
+      console.warn('[SSE] Stream ended before an "extraction" event was received.');
+      failStep('extraction', 'The connection closed before the clinical note fields arrived — this is usually a dropped network connection partway through, not a processing error. Try Analyse again.');
+    }
+  } catch (e) {
+    setBody('refine', '<div class="err-box">' + esc(e.message) + '</div>');
+    setCard('refine', 'error');
+  } finally {
+    btnRecord.disabled = false;
+  }
+
+  function handleAnalyzeEvent(ev, d) {
+    if (ev === 'refinement_skipped') {
+      // Doctor mode: refinement step is bypassed server-side; transcript passes through as-is.
+      // The Refinement card stays hidden — nothing rendered into it.
+      refineBuf = d.refined_text || transBuf;
+      setBody('trans', `<div class="transcript">${esc(transBuf)}</div>`);
+      if (isAr) { setCard('translate','active'); setBody('translate','<div class="transcript c-blink" id="ttl"></div>'); }
+      else       { markAnalysisActive(); }
+
+    } else if (ev === 'refinement_delta') {
+      if (!refineBuf) { setCard('refine','active'); setBody('refine','<div class="transcript c-blink" id="rl"></div>'); }
+      refineBuf += d.delta || '';
+      const el = document.getElementById('rl'); if (el) el.textContent = refineBuf;
+
+    } else if (ev === 'refinement_done') {
+      refineBuf = d.refined_text || refineBuf;
+      setCard('refine','done'); setTime('refine', d.refinement_sec);
+      // Add Raw / Refined tabs to transcription card
+      setBody('trans',
+        `<div class="tabs"><div class="tab on" onclick="switchTab(this,'raw')">Raw</div><div class="tab" onclick="switchTab(this,'refined')">Refined</div></div>
+         <div class="tab-pane on" id="panel-raw"><div class="transcript">${esc(transBuf)}</div></div>
+         <div class="tab-pane" id="panel-refined"><div class="transcript">${esc(refineBuf)}</div></div>`);
+      setBody('refine', '<div class="transcript">' + esc(refineBuf) + '</div>');
+      if (isAr) { setCard('translate','active'); setBody('translate','<div class="transcript c-blink" id="ttl"></div>'); }
+      else       { markAnalysisActive(); }
+
+    } else if (ev === 'translation_delta') {
+      translateBuf += d.delta || '';
+      const el = document.getElementById('ttl'); if (el) el.textContent = translateBuf;
+
+    } else if (ev === 'translation_done') {
+      translateBuf = d.final_text || translateBuf;
+      setCard('translate','done'); setTime('translate', d.translation_sec);
+      setBody('translate', `<div class="xlat-pill">🌐 Translated from Arabic</div><div class="transcript">${esc(translateBuf)}</div>`);
+      markAnalysisActive();
+
+    } else if (ev === 'extraction') {
+      // One atomic event carrying BOTH parallel steps (see app.py) — field
+      // extraction (+ its questions) and the ICD-10 diagnosis recommendation.
+      // Two separate large events each turned out to be an independent point
+      // of failure through this deployment's network path, so they still ship
+      // together; but either step may have failed on its own (d.errors says
+      // which), so each card is resolved independently.
+      const errs = d.errors || {};
+      const dept = d.department || department;
+      patientStoryText      = d.patient_story || transBuf;
+      lastHistoryUsed       = !!d.history_used;
+      lastHistoryVisitCount = d.history_visit_count || 0;
+      lastHistoryCheck      = d.history_check || null;
+      lastHistoryError      = d.history_error || null;
+      if (d.models) {
+        $('extract-subtitle').textContent   = '(' + (DEPARTMENT_LABELS[dept] || dept) + ' · ' + d.models.extraction + ')';
+        $('diagnosis-subtitle').textContent = '(ICD-10 · ' + d.models.reasoning + ')';
+      }
+
+      if (errs.extraction) {
+        const box = '<div class="err-box">Extraction failed: ' + esc(errs.extraction) + '</div>';
+        setCard('extract', 'error');   setBody('extract', box);
+        setCard('questions', 'error'); setBody('questions', box);
+      } else {
+        setCard('extract', 'done'); setTime('extract', d.extraction_sec);
+        renderFeatures(d.extracted_features, dept);
+        btnPrint.disabled = false; // note fields are populated — printable from here on
+        setCard('questions', 'done'); setTime('questions', d.question_generation_sec);
+        renderQuestions(extractQList(d), department);
+      }
+
+      if (errs.diagnosis) {
+        setCard('diagnosis', 'error');
+        setBody('diagnosis', '<div class="err-box">Diagnosis recommendation failed: ' + esc(errs.diagnosis) + '</div>');
+      } else {
+        setCard('diagnosis', 'done'); setTime('diagnosis', d.diagnosis_sec);
+        renderDiagnosis(d.diagnosis, dept);
+        btnPrint.disabled = false;
+      }
+
+      updateSummary();
+      // Re-enable for another recording
+      btnRecord.disabled  = false;
+      btnSubmit.disabled  = false;
+
+    } else if (ev === 'error') {
+      const idMap = { refinement:'refine', translation:'translate', extraction:'extract', diagnosis:'diagnosis', questions:'questions' };
+      const id    = idMap[d.step || ''] || 'refine';
+      setCard(id,'error'); setBody(id,'<div class="err-box">' + esc(d.detail || 'Unknown error') + '</div>');
+      if (id === 'extract') setCard('questions', 'error');
+      // A server-side error still ends the pipeline — don't leave Record/
+      // Analyse stuck disabled with no way to retry.
+      btnRecord.disabled = false;
+      btnSubmit.disabled = false;
+    }
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Helpers
+───────────────────────────────────────────────────────────────────────────── */
+
+function switchTab(el, panel) {
+  const p = el.closest('.phase-body');
+  p.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  p.querySelectorAll('.tab-pane').forEach(t => t.classList.remove('on'));
+  el.classList.add('on');
+  p.querySelector('#panel-' + panel)?.classList.add('on');
+}
+
+function extractQList(d) {
+  if (!d) return [];
+  const q = d.questions;
+  if (Array.isArray(q)) return q;
+  if (typeof q === 'object' && Array.isArray(q.questions)) return q.questions;
+  return [];
+}
+
+/* ── Feature extraction: department-driven editable field grid + Patient Story.
+      EVERY field for the department is rendered, in template order — fields
+      with no extracted value render as an empty, placeholder-hinted editable
+      cell so the doctor can fill them in by hand rather than the field
+      disappearing. Every field carries data-field="<key>" so the print view
+      (buildPrintHTML) can read back any edits made here. Diagnoses live in
+      the separate Diagnosis card (renderDiagnosis). ── */
+function renderFeatures(raw, department) {
+  let obj = raw;
+  if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch(_) { setBody('extract','<div class="ph">Could not parse features</div>'); return; } }
+  if (!obj || typeof obj !== 'object') { setBody('extract','<div class="ph">No features extracted</div>'); return; }
+  const src    = (obj.json_data && typeof obj.json_data === 'object') ? obj.json_data : obj;
+  const fields = DEPARTMENT_FIELDS[department] || DEPARTMENT_FIELDS.opd;
+  const PLACEHOLDER = 'Not mentioned — click to add';
+
+  let html = '<div class="feat-layout">';
+
+  // Chief complaint gets a highlighted callout — always shown, even empty, since
+  // every department in this build has it as the lead field.
+  const ccField = fields.find(f => f.highlight === 'complaint');
+  if (ccField) {
+    html += `<div class="feat-highlights"><div class="feat-highlight complaint"><div class="feat-highlight-label"><span>${esc(ccField.label)}</span>${micButtonHTML(ccField.key)}</div><div class="feat-highlight-val" data-field="${ccField.key}" data-placeholder="${esc(PLACEHOLDER)}" contenteditable="true" spellcheck="false">${esc(src[ccField.key] || '')}</div></div></div>`;
+  }
+
+  // Every remaining field — mentioned or not — gets a cell.
+  const cells = fields.filter(f => f.key !== (ccField && ccField.key));
+  html += '<div class="feat-grid">';
+  cells.forEach(f => {
+    const value = src[f.key] || '';
+    const themeClass  = f.theme === 'plan' ? 'feat-plan' : f.theme === 'followup' ? 'feat-followup' : '';
+    const wideClass   = f.wide ? 'feat-wide' : '';
+    const missingClass = value ? '' : 'feat-missing';
+    html += `<div class="feat-cell ${wideClass} ${themeClass} ${missingClass}"><div class="feat-cell-label"><span><span class="feat-cell-icon">${f.icon || '📋'}</span>${esc(f.label)}</span>${micButtonHTML(f.key)}</div><div class="feat-cell-val" data-field="${f.key}" data-placeholder="${esc(PLACEHOLDER)}" contenteditable="true" spellcheck="false">${esc(value)}</div></div>`;
+  });
+  // Patient Story — always rendered, filled from the pre-extraction transcript text.
+  html += `<div class="feat-cell feat-wide feat-story"><div class="feat-cell-label"><span class="feat-cell-icon">📖</span>Patient Story</div><div class="feat-cell-val" data-field="patient_story" contenteditable="true" spellcheck="false">${esc(patientStoryText || '')}</div></div>`;
+  html += '</div>';
+
+  html += '</div>';
+  setBody('extract', html);
+}
+
+/* ── Diagnosis card: ICD-10 pills, reasoning, and (ER only) triage priority +
+      differential-diagnosis pills. Everything here is editable and feeds the
+      summary / print view. ── */
+function toList(v) { return Array.isArray(v) ? v.filter(Boolean).map(String) : (v ? [String(v)] : []); }
+
+function pillRowHTML(name, label, placeholder) {
+  return `<div class="icd-row" id="row-${name}">
+    <span class="icd-label">${esc(label)}</span>
+    <span id="pills-${name}"></span>
+    <div class="icd-search-wrap">
+      <input type="text" id="add-input-${name}" class="icd-search-input" placeholder="${esc(placeholder)}" autocomplete="off" />
+      <div class="icd-search-spinner" id="spinner-${name}"></div>
+      <div class="icd-dropdown" id="dropdown-${name}"></div>
+    </div>
+  </div>`;
+}
+
+function renderPills(name) {
+  const list = pillLists[name];
+  const container = document.getElementById('pills-' + name);
+  if (!container) return;
+  if (list.length === 0) {
+    container.innerHTML = '<span class="ph" style="font-size:12px;">None — search and add</span>';
+    return;
+  }
+  container.innerHTML = list.map((c, i) =>
+    `<span class="icd-pill" data-idx="${i}">
+       <span class="icd-dot"></span>
+       <span class="icd-pill-text" contenteditable="false">${esc(c)}</span>
+       <span class="icd-pill-remove" title="Remove">×</span>
+     </span>`
+  ).join('');
+  container.querySelectorAll('.icd-pill-remove').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const pill = e.target.closest('.icd-pill');
+      list.splice(Number(pill.dataset.idx), 1);
+      renderPills(name);
+      updateSummary();
+    });
+  });
+}
+
+function wirePillRow(name) {
+  renderPills(name);
+  const input = document.getElementById('add-input-' + name);
+  const dropdown = document.getElementById('dropdown-' + name);
+  const spinner = document.getElementById('spinner-' + name);
+  if (!input || !dropdown) return;
+
+  let debounceTimer = null;
+  let activeIndex = -1;
+  let currentResults = [];
+
+  function closeDropdown() {
+    dropdown.classList.remove('show');
+    dropdown.innerHTML = '';
+    activeIndex = -1;
+    currentResults = [];
+  }
+
+  function selectItem(item) {
+    const label = `${item.code} - ${item.description}`;
+    if (!pillLists[name].includes(label)) {
+      pillLists[name].push(label);
+      renderPills(name);
+      updateSummary();
+    }
+    input.value = '';
+    closeDropdown();
+    input.focus();
+  }
+
+  function renderDropdown(results) {
+    currentResults = results || [];
+    activeIndex = -1;
+    if (currentResults.length === 0) {
+      dropdown.innerHTML = '<div class="icd-dropdown-empty">No matching Australian ICD-10 codes found. Try another term or code prefix.</div>';
+      dropdown.classList.add('show');
+      return;
+    }
+    dropdown.innerHTML = currentResults.map((r, idx) =>
+      `<div class="icd-dropdown-item" data-idx="${idx}">
+         <span class="icd-dropdown-code">${esc(r.code)}</span>
+         <span class="icd-dropdown-desc">${esc(r.description)}</span>
+       </div>`
+    ).join('');
+    dropdown.classList.add('show');
+
+    dropdown.querySelectorAll('.icd-dropdown-item').forEach(el => {
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const idx = Number(el.dataset.idx);
+        if (currentResults[idx]) {
+          selectItem(currentResults[idx]);
+        }
+      });
+    });
+  }
+
+  function updateActiveHighlight() {
+    const items = dropdown.querySelectorAll('.icd-dropdown-item');
+    items.forEach((item, idx) => {
+      if (idx === activeIndex) {
+        item.classList.add('active');
+        item.scrollIntoView({ block: 'nearest' });
+      } else {
+        item.classList.remove('active');
+      }
+    });
+  }
+
+  const searchCache = new Map(); // query -> results (LRU cache up to 100 entries)
+  let activeAbortController = null;
+
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const q = input.value.trim();
+    if (!q) {
+      if (spinner) spinner.style.display = 'none';
+      if (activeAbortController) {
+        activeAbortController.abort();
+        activeAbortController = null;
+      }
+      closeDropdown();
+      return;
+    }
+
+    // Check client-side LRU cache first for instantaneous sub-1ms response
+    const cacheKey = q.toLowerCase();
+    if (searchCache.has(cacheKey)) {
+      if (spinner) spinner.style.display = 'none';
+      renderDropdown(searchCache.get(cacheKey));
+      return;
+    }
+
+    if (spinner) spinner.style.display = 'block';
+    debounceTimer = setTimeout(async () => {
+      try {
+        if (activeAbortController) {
+          activeAbortController.abort();
+        }
+        activeAbortController = new AbortController();
+        const resp = await fetch(`/audio/icd10/search?q=${encodeURIComponent(q)}&limit=15`, {
+          signal: activeAbortController.signal
+        });
+        if (spinner) spinner.style.display = 'none';
+        if (!resp.ok) throw new Error('Search failed');
+        const data = await resp.json();
+        
+        // Cache result (evict oldest if cache exceeds 100 entries)
+        if (searchCache.size >= 100) {
+          const oldestKey = searchCache.keys().next().value;
+          searchCache.delete(oldestKey);
+        }
+        searchCache.set(cacheKey, data);
+
+        renderDropdown(data);
+      } catch (err) {
+        if (err.name === 'AbortError') return; // Cancelled in-flight request
+        if (spinner) spinner.style.display = 'none';
+        console.error('[ICD Search] Error:', err);
+      }
+    }, 200);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (!dropdown.classList.contains('show')) return;
+    const items = dropdown.querySelectorAll('.icd-dropdown-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (items.length > 0) {
+        activeIndex = (activeIndex + 1) % items.length;
+        updateActiveHighlight();
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (items.length > 0) {
+        activeIndex = (activeIndex - 1 + items.length) % items.length;
+        updateActiveHighlight();
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (activeIndex >= 0 && currentResults[activeIndex]) {
+        selectItem(currentResults[activeIndex]);
+      } else if (currentResults.length > 0) {
+        selectItem(currentResults[0]);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeDropdown();
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    // Timeout to allow mousedown on dropdown items to fire first
+    setTimeout(closeDropdown, 200);
+  });
+}
+
+function focusIcdSearch(name, queryText) {
+  const input = document.getElementById('add-input-' + name);
+  if (!input) return;
+  input.value = queryText || '';
+  input.focus();
+  input.dispatchEvent(new Event('input'));
+}
+
+function renderDiagnosis(dx, department) {
+  dx = dx || {};
+  const isEr = department === 'er';
+  pillLists.icd10        = toList(dx.icd10_codes);
+  pillLists.differential = isEr ? toList(dx.differential_diagnoses) : [];
+
+  let html = '<div class="feat-layout">';
+
+  // Triage Priority (ER only) — AI-recommended, always shown, editable.
+  if (isEr) {
+    html += `<div class="feat-cell feat-wide feat-triage"><div class="feat-cell-label"><span class="feat-cell-icon">🚦</span>Triage Priority</div><div class="feat-cell-val" data-field="triage_priority" data-placeholder="e.g. ESI 3 - Urgent" contenteditable="true" spellcheck="false">${esc(dx.triage_priority || '')}</div></div>`;
+  }
+
+  // ICD-10 row (most likely first) and, for ER, the differential diagnoses row.
+  html += pillRowHTML('icd10', 'ICD-10', 'Search code or description (e.g. J18 or asthma)...');
+  if (isEr) html += pillRowHTML('differential', 'Differential Dx', 'Search diagnosis...');
+
+  // Unmatched codes warning alert if any raw suggestions were not in Australian registry
+  const unmatched = toList(dx.icd10_unmatched);
+  if (unmatched.length > 0) {
+    html += `<div class="icd-unmatched-card">
+      <div class="icd-unmatched-title">⚠️ AI recommended codes not found in official Australian ICD-10-AM:</div>
+      ${unmatched.map(u => `
+        <div class="icd-unmatched-item">
+          <span class="icd-unmatched-label">${esc(u)}</span>
+          <button type="button" class="btn-replace-icd" onclick="focusIcdSearch('icd10', '${esc(u.replace(/'/g, "\\'"))}')">Search replacement →</button>
+        </div>
+      `).join('')}
+    </div>`;
+  }
+
+  // The model's own explanation for why it picked the leading code.
+  html += `<div class="feat-cell feat-wide"><div class="feat-cell-label"><span class="feat-cell-icon">💡</span>Reasoning</div><div class="feat-cell-val" data-field="reasoning" data-placeholder="No reasoning returned — click to add" contenteditable="true" spellcheck="false">${esc(dx.reasoning || '')}</div></div>`;
+
+  // Patient History Considered — only shown when history was actually sent;
+  // surfaces the model's self-reported history_considered / history_notes so
+  // the doctor can verify it was used, not silently ignored. History only ever
+  // feeds this step.
+  if (lastHistoryUsed) {
+    const considered = (dx.history_considered || 'No').trim();
+    const notes = (dx.history_notes || '').trim();
+    const yes = considered.toLowerCase() === 'yes';
+    const bodyText = yes
+      ? (notes || "The model reported using this patient's history, but gave no further detail.")
+      : `Reviewed ${lastHistoryVisitCount} prior visit(s) on file, but none were relevant to today's presentation.`;
+    let caution = '';
+    if (lastHistoryCheck && lastHistoryCheck.flag === 'claims_used_no_overlap') {
+      caution = `<div class="feat-history-caution">⚠️ The model said it used the patient's history, but none of today's ICD-10 codes share a category with anything in their history — worth a quick manual check.</div>`;
+    } else if (lastHistoryCheck && lastHistoryCheck.flag === 'overlap_but_not_flagged') {
+      caution = `<div class="feat-history-caution">⚠️ Today's diagnosis shares an ICD-10 category (${esc(lastHistoryCheck.overlap_families.join(', '))}) with something in this patient's history, but the model didn't flag history as considered — worth a quick manual check.</div>`;
+    }
+    html += `<div class="feat-cell feat-wide ${yes ? 'feat-history-used' : 'feat-history-notused'}"><div class="feat-cell-label"><span class="feat-cell-icon">${yes ? '✅' : '➖'}</span>Patient History Considered: ${esc(considered)}</div><div class="feat-cell-val" data-field="history_notes">${esc(bodyText)}</div>${caution}</div>`;
+  }
+  // Patient History Not Applied — the doctor asked for history but the lookup
+  // itself failed server-side (DB unreachable, etc.), so this recommendation
+  // was generated WITHOUT it. Deliberately distinct from "patient has no
+  // history". No data-field, so it never leaks into the summary/print output.
+  if (lastHistoryError) {
+    html += `<div class="feat-cell feat-wide feat-history-error"><div class="feat-cell-label"><span class="feat-cell-icon">⚠️</span>Patient History Not Applied</div><div class="feat-cell-val" style="white-space:normal;">${esc(lastHistoryError)}. This recommendation was generated without the patient's visit history — try Analyse again, or check the diagnosis manually.</div></div>`;
+  }
+
+  html += '</div>';
+  setBody('diagnosis', html);
+
+  wirePillRow('icd10');
+  if (isEr) wirePillRow('differential');
+}
+
+/* Questions are now exclusively "field not mentioned in the transcript" —
+   the department prompt never returns an entry for a field that was already
+   covered, so there's no ask/skip split to render anymore, and ICD-10 /
+   diagnoses are never among them (they're produced by the diagnosis step). */
+function renderQuestions(list, department) {
+  if (!Array.isArray(list) || list.length === 0) {
+    setBody('questions', '<div class="ph">All clinical note fields were covered in the transcript — nothing further to ask.</div>');
+    return;
+  }
+  // Each question's "category" is the same display label used for its field
+  // in DEPARTMENT_FIELDS — resolve it back to the field's `key` so the mic
+  // button here can write straight into the matching cell in the Clinical
+  // note fields grid above.
+  const fields = DEPARTMENT_FIELDS[department] || DEPARTMENT_FIELDS.opd;
+  function keyForCategory(cat) { return (fields.find(f => f.label === cat) || {}).key || null; }
+
+  let html = `<div class="q-summary"><div class="q-summary-card ask"><div class="q-summary-num">${list.length}</div><div class="q-summary-meta"><div class="q-summary-title">Fields to clarify</div><div class="q-summary-sub">Not mentioned in the transcript — answer by typing above or 🎤 below</div></div></div></div>`;
+  function groupBy(arr) { const m = {}; arr.forEach(q => { const cat = q.category || 'general'; if (!m[cat]) m[cat] = []; m[cat].push(q); }); return m; }
+  const groups = groupBy(list);
+  for (const [cat, qs] of Object.entries(groups)) {
+    html += `<div class="q-cat-group"><span class="q-cat-label">${esc(cat.replace(/_/g,' '))}</span>`;
+    qs.forEach(q => {
+      const key = keyForCategory(cat);
+      const micRow = key
+        ? `<div class="q-item-mic-row">${micButtonHTML(key, 'Answer this by voice')}<span class="q-mic-hint">Answer by voice</span><span class="q-answered-tag"></span></div>`
+        : '';
+      html += `<div class="q-item ask" data-key="${esc(key || '')}"><div class="q-indicator"></div><div class="q-body"><div class="q-question">${esc(q.question)}</div>${micRow}</div></div>`;
+    });
+    html += '</div>';
+  }
+  setBody('questions', html);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Field-level voice answer — lets the doctor fill ONE missing field, either
+   from its mic button in the Clinical note fields grid or from the matching
+   "Questions for the doctor" item, by speaking the answer instead of typing
+   it. Reuses the same /ws/transcribe protocol as the main recording (see
+   startRecording above), but scoped to a single short utterance, then sends
+   the raw text to POST /audio/refine-field for the same specialty-term
+   correction + light cleanup the full pipeline uses, before writing it into
+   the field. Kept entirely separate from the main recording's state (ws,
+   audioContext, etc.) so one never interferes with the other.
+───────────────────────────────────────────────────────────────────────────── */
+let fieldRec = null; // { key, ws, audioContext, sourceNode, scriptProcessor, mediaStream, text } | null
+
+function fieldCell(key) {
+  return document.querySelector(`#body-extract [data-field="${key}"]`);
+}
+
+function setFieldMicState(key, state) {
+  // state: 'idle' | 'rec' | 'busy'
+  document.querySelectorAll(`.field-mic-btn[data-key="${key}"]`).forEach(btn => {
+    btn.classList.remove('rec', 'busy');
+    if (state !== 'idle') btn.classList.add(state);
+    btn.title = state === 'rec' ? 'Recording — click to stop' : state === 'busy' ? 'Processing…' : 'Click to answer by voice';
+  });
+}
+
+function cleanupFieldAudio() {
+  if (!fieldRec) return;
+  try { fieldRec.scriptProcessor && fieldRec.scriptProcessor.disconnect(); } catch(_) {}
+  try { fieldRec.sourceNode      && fieldRec.sourceNode.disconnect(); }      catch(_) {}
+  try { fieldRec.mediaStream     && fieldRec.mediaStream.getTracks().forEach(t => t.stop()); } catch(_) {}
+  try { fieldRec.audioContext    && fieldRec.audioContext.close(); }         catch(_) {}
+}
+
+function cancelFieldRecording() {
+  if (!fieldRec) return;
+  const key = fieldRec.key;
+  cleanupFieldAudio();
+  try { fieldRec.ws.close(); } catch(_) {}
+  fieldRec = null;
+  setFieldMicState(key, 'idle');
+}
+
+async function startFieldRecording(key) {
+  if (fieldRec) {
+    // One field-level recording at a time — clicking the same field's mic
+    // again stops+submits it; clicking a different one while busy is ignored.
+    if (fieldRec.key === key) stopFieldRecording();
+    return;
+  }
+  if (recording) return; // don't collide with the main dictation session
+
+  const lang = $('sel-lang').value;
+  let audioContext;
+  try {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  } catch (e) {
+    console.error('[FieldMic] AudioContext error', e);
+    return;
+  }
+  const sampleRate = audioContext.sampleRate;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws/transcribe`);
+  ws.binaryType = 'arraybuffer';
+
+  fieldRec = { key, ws, audioContext, sourceNode: null, scriptProcessor: null, mediaStream: null, text: '' };
+
+  let resolveOpen, rejectOpen;
+  const wsOpen = new Promise((res, rej) => { resolveOpen = res; rejectOpen = rej; });
+  ws.onopen = () => { ws.send(JSON.stringify({ sampleRate, language: lang })); resolveOpen(); };
+  ws.onerror = () => rejectOpen(new Error('WebSocket error'));
+  ws.onmessage = e => {
+    let msg; try { msg = JSON.parse(e.data); } catch(_) { return; }
+    if (!fieldRec) return;
+    if (msg.type === 'delta')      fieldRec.text += msg.text;
+    else if (msg.type === 'done')  finishFieldRecording();
+    else if (msg.type === 'error') { console.error('[FieldMic] transcription error:', msg.detail); cancelFieldRecording(); }
+  };
+
+  try {
+    fieldRec.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch (e) {
+    console.error('[FieldMic] mic error', e);
+    cancelFieldRecording();
+    return;
+  }
+  try { await wsOpen; } catch (e) { cancelFieldRecording(); return; }
+  if (!fieldRec) return; // cancelled while awaiting mic/handshake
+
+  fieldRec.sourceNode = audioContext.createMediaStreamSource(fieldRec.mediaStream);
+  fieldRec.scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+  fieldRec.scriptProcessor.onaudioprocess = ev => {
+    if (fieldRec && fieldRec.ws.readyState === WebSocket.OPEN) {
+      const data = ev.inputBuffer.getChannelData(0);
+      const copy = new Float32Array(data.length);
+      copy.set(data);
+      fieldRec.ws.send(copy.buffer);
+    }
+  };
+  fieldRec.sourceNode.connect(fieldRec.scriptProcessor);
+  const silentGain = audioContext.createGain();
+  silentGain.gain.value = 0;
+  fieldRec.scriptProcessor.connect(silentGain);
+  silentGain.connect(audioContext.destination);
+
+  setFieldMicState(key, 'rec');
+}
+
+function stopFieldRecording() {
+  if (!fieldRec) return;
+  setFieldMicState(fieldRec.key, 'busy');
+  try { fieldRec.ws.send(JSON.stringify({ cmd: 'done' })); } catch(_) {}
+  cleanupFieldAudio();
+  // finishFieldRecording() fires once the server confirms with "done",
+  // carrying the final committed text — same handshake the main recording uses.
+}
+
+async function finishFieldRecording() {
+  if (!fieldRec) return;
+  const key = fieldRec.key;
+  const raw = fieldRec.text.trim();
+  try { fieldRec.ws.close(); } catch(_) {}
+  fieldRec = null;
+
+  if (!raw) { setFieldMicState(key, 'idle'); return; }
+
+  setFieldMicState(key, 'busy');
+  try {
+    const form = new FormData();
+    form.append('text', raw);
+    form.append('language', $('sel-lang').value);
+    const specialty = $('sel-specialty').value;
+    if (specialty) form.append('specialty', specialty);
+    const resp = await fetch(API_BASE + '/audio/refine-field', { method: 'POST', body: form });
+    const data = resp.ok ? await resp.json() : null;
+    applyFieldAnswer(key, ((data && data.refined_text) || raw).trim());
+  } catch (e) {
+    console.error('[FieldMic] refine-field request failed, using raw text', e);
+    applyFieldAnswer(key, raw);
+  } finally {
+    setFieldMicState(key, 'idle');
+  }
+}
+
+function applyFieldAnswer(key, value) {
+  if (!value) return;
+  const cell = fieldCell(key);
+  if (cell) {
+    cell.textContent = value;
+    cell.closest('.feat-cell')?.classList.remove('feat-missing');
+  }
+  // Mark the matching "Questions for the doctor" item(s) as answered, if shown.
+  document.querySelectorAll(`.q-item[data-key="${key}"]`).forEach(item => {
+    item.classList.add('answered');
+    const tag = item.querySelector('.q-answered-tag');
+    if (tag) tag.textContent = '✓ Added to clinical note fields';
+  });
+  updateSummary();
+}
+
+// Event delegation — mic buttons are re-rendered every time renderFeatures()/
+// renderQuestions() run, so a single listener on .main covers all of them
+// without needing to re-attach handlers after each render.
+document.querySelector('.main').addEventListener('click', e => {
+  const btn = e.target.closest('.field-mic-btn');
+  if (!btn) return;
+  const key = btn.dataset.key;
+  if (!key) return;
+  if (btn.classList.contains('busy')) return;
+  startFieldRecording(key);
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Summary — free-text rendering of everything that will print, with a one-
+   click copy button so the doctor can paste it straight into their own
+   system. Rebuilt from the live (possibly hand-edited or voice-filled) DOM
+   state, same source of truth as buildPrintHTML below, so it's never out of
+   sync with what Print actually produces.
+───────────────────────────────────────────────────────────────────────────── */
+function buildSummaryText(department) {
+  const fields = DEPARTMENT_FIELDS[department] || DEPARTMENT_FIELDS.opd;
+  const line = (label, value) => `${label}: ${(value || '').trim() || '—'}`;
+
+  const lines = [];
+  lines.push('— Clinical Note —');
+  fields.forEach(f => lines.push(line(f.label, fieldValue(f.key))));
+  lines.push('');
+  lines.push('— Diagnosis Recommendation —');
+  if (department === 'er') lines.push(line('Triage Priority', fieldValue('triage_priority')));
+  lines.push(line('Possible Diagnoses (ICD-10 Codes)', pillLists.icd10.join(', ')));
+  if (department === 'er') lines.push(line('Differential Diagnoses', pillLists.differential.join(', ')));
+  lines.push(line('Diagnosis Reasoning', fieldValue('reasoning')));
+  if (lastHistoryUsed) lines.push(line('Patient History Considered', fieldValue('history_notes')));
+  lines.push('');
+  lines.push('— Patient Story —');
+  lines.push(fieldValue('patient_story') || patientStoryText || '—');
+
+  return lines.join('\n');
+}
+
+function updateSummary() {
+  const summaryCard = $('card-summary');
+  if (!summaryCard || summaryCard.classList.contains('hidden')) { /* still render below */ }
+  const department = currentDepartment();
+  const text = buildSummaryText(department);
+  setCard('summary', 'done');
+  setBody('summary', `
+    <div class="summary-toolbar">
+      <button type="button" class="btn-copy" id="btn-copy-summary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="11" height="11" rx="2"/>
+          <path d="M5 15V5a2 2 0 0 1 2-2h10"/>
+        </svg>
+        Copy
+      </button>
+    </div>
+    <pre class="summary-text" id="summary-text">${esc(text)}</pre>
+  `);
+  const copyBtn = $('btn-copy-summary');
+  copyBtn?.addEventListener('click', async () => {
+    const current = $('summary-text')?.textContent || '';
+    try {
+      await navigator.clipboard.writeText(current);
+    } catch (e) {
+      // Clipboard API unavailable/blocked — fall back to a manual selection copy.
+      const range = document.createRange();
+      range.selectNodeContents($('summary-text'));
+      const sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(range);
+      document.execCommand('copy');
+      sel.removeAllRanges();
+    }
+    copyBtn.classList.add('copied');
+    copyBtn.textContent = '';
+    copyBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied`;
+    setTimeout(() => {
+      copyBtn.classList.remove('copied');
+      copyBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg> Copy`;
+    }, 1600);
+  });
+}
+
+// Keep the summary live as the doctor edits any field by hand (contenteditable
+// cells, pills, patient-info inputs) — debounced so fast typing doesn't
+// rebuild the whole block on every keystroke.
+let summaryDebounce = null;
+document.querySelector('.main').addEventListener('input', () => {
+  // nothing extracted or recommended yet
+  if (!$('card-extract')?.classList.contains('done') && !$('card-diagnosis')?.classList.contains('done')) return;
+  clearTimeout(summaryDebounce);
+  summaryDebounce = setTimeout(updateSummary, 400);
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Print — builds a plain-HTML rendering that mirrors the department's Word
+   template (field order and labels) from the current, possibly-edited, DOM
+   state, then opens the browser print dialog. No server round-trip; whatever
+   the doctor sees on screen (including manual corrections) is what prints.
+───────────────────────────────────────────────────────────────────────────── */
+// Reads a field's current text from either the note-fields card or the
+// diagnosis card (both carry data-field attributes).
+function fieldValue(key) {
+  const el = document.querySelector(`#body-extract [data-field="${key}"], #body-diagnosis [data-field="${key}"]`);
+  return el ? el.innerText.trim() : '';
+}
+
+function buildPrintHTML(department) {
+  const val = id => (document.getElementById(id)?.value || '').trim();
+  const fields = DEPARTMENT_FIELDS[department] || DEPARTMENT_FIELDS.opd;
+  const deptLabel = DEPARTMENT_LABELS[department] || department;
+  const row   = (label, html) => `<div class="pf-row"><span class="pf-label">${esc(label)}:</span> <span class="pf-val">${html || '—'}</span></div>`;
+  const multi = s => esc(s).replace(/\n/g, '<br>');
+
+  let rows = '';
+  fields.forEach(f => { rows += row(f.label, multi(fieldValue(f.key))); });
+
+  let dx = '';
+  if (department === 'er') dx += row('Triage Priority', esc(fieldValue('triage_priority')));
+  dx += row('Possible Diagnoses (ICD-10 Codes)', esc(pillLists.icd10.join(', ')));
+  if (department === 'er') dx += row('Differential Diagnoses', esc(pillLists.differential.join(', ')));
+  dx += row('Diagnosis Reasoning', multi(fieldValue('reasoning')));
+  if (lastHistoryUsed) {
+    dx += row('Patient History Considered', esc(fieldValue('history_notes')) +
+      (lastHistoryCheck && lastHistoryCheck.flag ? ' (⚠ flagged for manual review — see app)' : ''));
+  }
+
+  return `
+    <h1>${esc(deptLabel)} Clinical Note</h1>
+    <div class="ps-header">
+      <div><span class="pf-label">Patient Name:</span> ${esc(val('pi-name')) || '—'}</div>
+      <div><span class="pf-label">DOB:</span> ${esc(val('pi-dob')) || '—'}</div>
+      <div><span class="pf-label">Gender:</span> ${esc(val('pi-gender')) || '—'}</div>
+      <div><span class="pf-label">Nationality:</span> ${esc(val('pi-nationality')) || '—'}</div>
+      <div><span class="pf-label">Code:</span> ${esc(val('pi-code')) || '—'}</div>
+      <div><span class="pf-label">Phone:</span> ${esc(val('pi-phone')) || '—'}</div>
+      <div><span class="pf-label">Blood Group:</span> ${esc(val('pi-blood')) || '—'}</div>
+    </div>
+    <div class="ps-header">
+      <div><span class="pf-label">Visit:</span> ${esc(val('pi-visit')) || '—'}</div>
+      <div><span class="pf-label">Financial Type:</span> ${esc(val('pi-financial')) || '—'}</div>
+      <div><span class="pf-label">Speciality:</span> ${esc(val('pi-speciality')) || '—'}</div>
+      <div><span class="pf-label">Dr:</span> ${esc(val('pi-dr')) || '—'}</div>
+    </div>
+    <h2>Clinical Note</h2>
+    ${rows}
+    ${dx}
+    ${row('Patient Story', multi(fieldValue('patient_story') || patientStoryText))}
+  `;
+}
+
+btnPrint.addEventListener('click', () => {
+  const department = currentDepartment();
+  document.getElementById('print-sheet').innerHTML = buildPrintHTML(department);
+  window.print();
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Doctor feedback — free text + optional thumbs rating, sent to POST
+   /feedback. Independent of the recording pipeline (no card/step state),
+   so it works whether or not anything has been recorded yet this session.
+───────────────────────────────────────────────────────────────────────────── */
+(function initFeedback() {
+  const textEl    = $('feedback-text');
+  const nameEl     = $('feedback-name');
+  const thumbUp    = $('thumb-up');
+  const thumbDown  = $('thumb-down');
+  const submitBtn  = $('btn-feedback-submit');
+  const statusEl   = $('feedback-status');
+  let rating = null; // 'up' | 'down' | null
+
+  function setRating(r) {
+    rating = (rating === r) ? null : r; // clicking the selected one again clears it
+    thumbUp.classList.toggle('selected', rating === 'up');
+    thumbDown.classList.toggle('selected', rating === 'down');
+  }
+  thumbUp.addEventListener('click', () => setRating('up'));
+  thumbDown.addEventListener('click', () => setRating('down'));
+
+  submitBtn.addEventListener('click', async () => {
+    const text = textEl.value.trim();
+    if (!text && !rating) {
+      statusEl.textContent = 'Add a note and/or a thumbs rating before sending.';
+      statusEl.className = 'feedback-status err';
+      return;
+    }
+    submitBtn.disabled = true;
+    statusEl.textContent = 'Sending…';
+    statusEl.className = 'feedback-status';
+    try {
+      const form = new FormData();
+      if (rating) form.append('rating', rating);
+      form.append('text', text);
+      // Falls back to the Patient Info "Dr" field if the doctor didn't type
+      // a name into this box specifically — better than sending nothing.
+      const name = (nameEl.value || $('pi-dr').value || '').trim();
+      if (name) form.append('name', name);
+      form.append('department', currentDepartment());
+      form.append('language', $('sel-lang').value);
+      if (sessionId) form.append('session_id', sessionId);
+      const resp = await fetch(API_BASE + '/feedback', { method: 'POST', body: form });
+      if (!resp.ok) throw new Error('Request failed with status ' + resp.status);
+      statusEl.textContent = 'Thanks — feedback sent.';
+      statusEl.className = 'feedback-status ok';
+      textEl.value = '';
+      rating = null;
+      thumbUp.classList.remove('selected');
+      thumbDown.classList.remove('selected');
+    } catch (e) {
+      console.error('[Feedback] Submit failed:', e);
+      statusEl.textContent = 'Could not send feedback — please try again.';
+      statusEl.className = 'feedback-status err';
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+})();
+
+/* ── Initial state — default mode is Doctor, so Refinement is hidden from the start ── */
+updateStepNumbers();
+updateDepartmentSubtitle();
+loadModelOptions();
+</script>
+</body>
+</html>
