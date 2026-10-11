@@ -44,7 +44,7 @@ class DiagnosisRecommender:
             logger.info(f"[Diagnosis] {dept} recommendation, model={model or 'default'}, history={'yes' if patient_history_text else 'no'}")
             out = LLMService.recommend_diagnosis(
                 translated_text=end_text,
-                api_key=Config.openrouter_api_key(),
+                api_key=Config.OPENROUTER_API_KEY,
                 department=dept,
                 patient_history_text=patient_history_text,
                 is_conversation=is_conversation,
@@ -55,38 +55,16 @@ class DiagnosisRecommender:
             summary = out.get("summary", "") if out else ""
 
             # Normalize — models differ in how strictly they follow the list/string shapes.
-            raw_codes = _as_str_list(data.get("icd10_codes"))
-            from validation.icd10 import get_icd10_validator
-            validator = get_icd10_validator()
-            batch_val = validator.validate_codes(raw_codes)
-            data["icd10_codes"] = batch_val.validated_codes
-            data["icd10_unmatched"] = batch_val.unmatched_codes
-            if batch_val.rejection_reasons:
-                data["icd10_rejection_reasons"] = batch_val.rejection_reasons
-
-            # If model returned differential diagnoses (e.g. ER), validate them too
+            data["icd10_codes"] = _as_str_list(data.get("icd10_codes"))
+            data["reasoning"] = str(data.get("reasoning") or "").strip()
+            data["history_considered"] = str(data.get("history_considered") or "No").strip()
+            data["history_notes"] = str(data.get("history_notes") or "").strip()
             if dept == "er":
-                raw_diff = _as_str_list(data.get("differential_diagnoses"))
-                diff_batch = validator.validate_codes(raw_diff)
-                data["differential_diagnoses"] = diff_batch.validated_codes
-                data["differential_unmatched"] = diff_batch.unmatched_codes
-                if diff_batch.rejection_reasons:
-                    data["differential_rejection_reasons"] = diff_batch.rejection_reasons
+                data["differential_diagnoses"] = _as_str_list(data.get("differential_diagnoses"))
                 data["triage_priority"] = str(data.get("triage_priority") or "").strip()
-            # Phase 2 (M3.2): Strict Pydantic diagnosis reasoning schema validation
-            from validation.schemas import SchemaValidator
-            diag_model, diag_rejection = SchemaValidator.validate_diagnosis(data)
-            if diag_model:
-                diag_dump = diag_model.model_dump(exclude_unset=False)
-                # Keep fields synchronized
-                data["reasoning"] = diag_dump.get("reasoning", "")
-                if "history_considered" in diag_dump and diag_dump["history_considered"] is not None:
-                    data["history_considered"] = diag_dump["history_considered"]
-                if "history_notes" in diag_dump and diag_dump["history_notes"]:
-                    data["history_notes"] = diag_dump["history_notes"]
-            elif diag_rejection:
-                logger.warning(f"[Diagnosis] Schema validation warning: {diag_rejection.reason}")
-                data["_schema_rejection"] = diag_rejection.to_dict()
+            else:
+                data.pop("differential_diagnoses", None)
+                data.pop("triage_priority", None)
 
             if patient_history_text and "history_considered" not in (out or {}).get("json_data", {}):
                 logger.warning("[Diagnosis] History was supplied but the response had no 'history_considered' key.")

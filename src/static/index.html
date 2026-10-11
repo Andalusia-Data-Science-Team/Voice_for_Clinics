@@ -274,80 +274,15 @@
   .icd-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-3); margin-right: 4px; }
   .icd-pill { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 12px; color: var(--accent); background: var(--accent-light); border: 1px solid #e1cfbc; border-radius: var(--r-md); padding: 4px 10px; font-weight: 500; }
   .icd-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
-  .icd-pill-text { outline: none; min-width: 8px; user-select: text; }
+  .icd-pill-text { outline: none; min-width: 8px; }
+  .icd-pill-text:focus { background: rgba(255,255,255,0.6); border-radius: 4px; }
   .icd-pill-remove { cursor: pointer; color: var(--text-3); font-weight: 700; line-height: 1; padding: 0 2px; border-radius: 3px; }
   .icd-pill-remove:hover { color: var(--red); background: rgba(177,98,75,0.1); }
-  
-  .icd-search-wrap { position: relative; display: inline-flex; align-items: center; margin-left: 4px; }
-  .icd-search-input {
-    font-family: var(--sans); font-size: 12px; padding: 5px 10px;
-    border: 1px solid var(--border-mid); border-radius: var(--r-md);
-    background: var(--surface); color: var(--text-1);
-    width: 250px; outline: none; transition: all 0.15s ease;
-  }
-  .icd-search-input:focus {
-    border-color: var(--accent-2);
-    box-shadow: 0 0 0 3px rgba(184,124,74,0.12);
-    width: 310px;
-  }
-  .icd-search-spinner {
-    position: absolute; right: 9px; width: 12px; height: 12px;
-    border: 2px solid rgba(184,124,74,0.25); border-top-color: var(--accent);
-    border-radius: 50%; animation: spin 0.6s linear infinite; display: none;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .icd-dropdown {
-    position: absolute; top: calc(100% + 4px); left: 0; width: 380px; max-width: 90vw;
-    max-height: 280px; overflow-y: auto; z-index: 1000;
-    background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px);
-    border: 1px solid var(--border-mid); border-radius: var(--r-md);
-    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.06);
-    display: none; padding: 4px 0;
-  }
-  .icd-dropdown.show { display: block; }
-  .icd-dropdown-item {
-    padding: 7px 11px; cursor: pointer; display: flex; flex-direction: column; gap: 2px;
-    border-bottom: 1px solid rgba(0,0,0,0.03); transition: background 0.12s;
-  }
-  .icd-dropdown-item:last-child { border-bottom: none; }
-  .icd-dropdown-item:hover, .icd-dropdown-item.active {
-    background: var(--accent-light);
-  }
-  .icd-dropdown-code {
-    font-family: var(--mono); font-weight: 700; font-size: 11.5px; color: var(--accent);
-  }
-  .icd-dropdown-desc {
-    font-size: 11.5px; color: var(--text-2); line-height: 1.35;
-  }
-  .icd-dropdown-empty {
-    padding: 12px 14px; font-size: 12px; color: var(--text-3); text-align: center; font-style: italic;
-  }
-
-  .icd-unmatched-card {
-    background: #fff8f5; border: 1px solid #f4c7be; border-radius: var(--r-md);
-    padding: 10px 14px; margin-top: 10px; display: flex; flex-direction: column; gap: 6px;
-  }
-  .icd-unmatched-title {
-    font-size: 12px; font-weight: 600; color: var(--red); display: flex; align-items: center; gap: 6px;
-  }
-  .icd-unmatched-item {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    background: rgba(255,255,255,0.7); border: 1px solid #f2d4ce; border-radius: var(--r-sm);
-    padding: 5px 10px; font-size: 11.5px;
-  }
-  .icd-unmatched-label {
-    font-family: var(--mono); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .btn-replace-icd {
-    font-family: var(--sans); font-size: 11px; font-weight: 500;
-    padding: 3px 9px; border: 1px solid var(--accent-2); border-radius: var(--r-sm);
-    background: var(--surface); color: var(--accent); cursor: pointer; flex-shrink: 0;
-    transition: all 0.15s;
-  }
-  .btn-replace-icd:hover {
-    background: var(--accent-light);
-  }
+  .icd-add { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; }
+  .icd-add input { font-family: var(--sans); font-size: 12px; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); width: 100px; outline: none; }
+  .icd-add input:focus { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(184,124,74,0.12); }
+  .icd-add button { font-family: var(--sans); font-size: 11px; font-weight: 500; padding: 5px 10px; border: 1px solid var(--border-mid); border-radius: var(--r-md); background: var(--surface); color: var(--accent); cursor: pointer; transition: background 0.15s; }
+  .icd-add button:hover { background: var(--accent-light); }
 
   .feat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 10px; }
   .feat-cell { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; }
@@ -592,16 +527,6 @@
           <option value="yes">Yes — factor into ICD-10 / diagnosis</option>
         </select>
         <span class="field-hint" id="use-history-hint">Uses the Patient Code and Business Unit entered in the Patient info card to look up last year's visits.</span>
-      </div>
-      <div class="field">
-        <label>Extraction model</label>
-        <select id="sel-extraction-model"></select>
-        <span class="field-hint">Fills the clinical note fields.</span>
-      </div>
-      <div class="field">
-        <label>Reasoning model</label>
-        <select id="sel-reasoning-model"></select>
-        <span class="field-hint">Recommends ICD-10 codes (ER: also differentials + triage).</span>
       </div>
     </div>
 
@@ -1026,21 +951,6 @@ function updateDepartmentSubtitle() {
 $('sel-lang').addEventListener('change', updateStepNumbers);
 $('sel-mode').addEventListener('change', updateStepNumbers);
 $('sel-department').addEventListener('change', updateDepartmentSubtitle);
-
-/* ─────────────────────────────────────────────────────────────────────────────
-   Model selection — the dropdown contents come from GET /models so the UI and
-   backend registry (core/model_registry.py) can never drift apart.
-───────────────────────────────────────────────────────────────────────────── */
-async function loadModelOptions() {
-  try {
-    const cfg = await (await fetch(API_BASE + '/models')).json();
-    [['extraction', 'sel-extraction-model'], ['reasoning', 'sel-reasoning-model']].forEach(([step, id]) => {
-      const sel = $(id);
-      sel.innerHTML = cfg[step].models.map(m => `<option value="${esc(m.id)}">${esc(m.label)}</option>`).join('');
-      sel.value = cfg[step].default;
-    });
-  } catch (e) { console.warn('[Models] could not load model list', e); }
-}
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Patient history — "Show Patient Previous Visits Over the Last Year" button.
@@ -1589,8 +1499,6 @@ btnSubmit.addEventListener('click', async () => {
   form.append('mode',       mode);
   form.append('department', department);
   if (specialty) form.append('specialty', specialty);
-  if ($('sel-extraction-model').value) form.append('extraction_model', $('sel-extraction-model').value);
-  if ($('sel-reasoning-model').value)  form.append('reasoning_model',  $('sel-reasoning-model').value);
   form.append('use_history', useHistory ? 'true' : 'false');
   if (patientId) form.append('patient_id', patientId);
   if (businessUnit) form.append('business_unit', businessUnit);
@@ -1865,11 +1773,7 @@ function pillRowHTML(name, label, placeholder) {
   return `<div class="icd-row" id="row-${name}">
     <span class="icd-label">${esc(label)}</span>
     <span id="pills-${name}"></span>
-    <div class="icd-search-wrap">
-      <input type="text" id="add-input-${name}" class="icd-search-input" placeholder="${esc(placeholder)}" autocomplete="off" />
-      <div class="icd-search-spinner" id="spinner-${name}"></div>
-      <div class="icd-dropdown" id="dropdown-${name}"></div>
-    </div>
+    <span class="icd-add"><input type="text" id="add-input-${name}" placeholder="${esc(placeholder)}" /><button type="button" id="add-btn-${name}">+ Add</button></span>
   </div>`;
 }
 
@@ -1878,16 +1782,24 @@ function renderPills(name) {
   const container = document.getElementById('pills-' + name);
   if (!container) return;
   if (list.length === 0) {
-    container.innerHTML = '<span class="ph" style="font-size:12px;">None — search and add</span>';
+    container.innerHTML = '<span class="ph" style="font-size:12px;">None — add one</span>';
     return;
   }
   container.innerHTML = list.map((c, i) =>
     `<span class="icd-pill" data-idx="${i}">
        <span class="icd-dot"></span>
-       <span class="icd-pill-text" contenteditable="false">${esc(c)}</span>
+       <span class="icd-pill-text" contenteditable="true" spellcheck="false">${esc(c)}</span>
        <span class="icd-pill-remove" title="Remove">×</span>
      </span>`
   ).join('');
+  container.querySelectorAll('.icd-pill-text').forEach((el, i) => {
+    el.addEventListener('blur', () => {
+      const val = el.textContent.trim();
+      if (val) { list[i] = val; }
+      else      { list.splice(i, 1); renderPills(name); }
+      updateSummary();
+    });
+  });
   container.querySelectorAll('.icd-pill-remove').forEach(btn => {
     btn.addEventListener('click', e => {
       const pill = e.target.closest('.icd-pill');
@@ -1898,169 +1810,23 @@ function renderPills(name) {
   });
 }
 
-function wirePillRow(name) {
-  renderPills(name);
+function addPill(name) {
   const input = document.getElementById('add-input-' + name);
-  const dropdown = document.getElementById('dropdown-' + name);
-  const spinner = document.getElementById('spinner-' + name);
-  if (!input || !dropdown) return;
-
-  let debounceTimer = null;
-  let activeIndex = -1;
-  let currentResults = [];
-
-  function closeDropdown() {
-    dropdown.classList.remove('show');
-    dropdown.innerHTML = '';
-    activeIndex = -1;
-    currentResults = [];
-  }
-
-  function selectItem(item) {
-    const label = `${item.code} - ${item.description}`;
-    if (!pillLists[name].includes(label)) {
-      pillLists[name].push(label);
-      renderPills(name);
-      updateSummary();
-    }
-    input.value = '';
-    closeDropdown();
-    input.focus();
-  }
-
-  function renderDropdown(results) {
-    currentResults = results || [];
-    activeIndex = -1;
-    if (currentResults.length === 0) {
-      dropdown.innerHTML = '<div class="icd-dropdown-empty">No matching Australian ICD-10 codes found. Try another term or code prefix.</div>';
-      dropdown.classList.add('show');
-      return;
-    }
-    dropdown.innerHTML = currentResults.map((r, idx) =>
-      `<div class="icd-dropdown-item" data-idx="${idx}">
-         <span class="icd-dropdown-code">${esc(r.code)}</span>
-         <span class="icd-dropdown-desc">${esc(r.description)}</span>
-       </div>`
-    ).join('');
-    dropdown.classList.add('show');
-
-    dropdown.querySelectorAll('.icd-dropdown-item').forEach(el => {
-      el.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        const idx = Number(el.dataset.idx);
-        if (currentResults[idx]) {
-          selectItem(currentResults[idx]);
-        }
-      });
-    });
-  }
-
-  function updateActiveHighlight() {
-    const items = dropdown.querySelectorAll('.icd-dropdown-item');
-    items.forEach((item, idx) => {
-      if (idx === activeIndex) {
-        item.classList.add('active');
-        item.scrollIntoView({ block: 'nearest' });
-      } else {
-        item.classList.remove('active');
-      }
-    });
-  }
-
-  const searchCache = new Map(); // query -> results (LRU cache up to 100 entries)
-  let activeAbortController = null;
-
-  input.addEventListener('input', () => {
-    clearTimeout(debounceTimer);
-    const q = input.value.trim();
-    if (!q) {
-      if (spinner) spinner.style.display = 'none';
-      if (activeAbortController) {
-        activeAbortController.abort();
-        activeAbortController = null;
-      }
-      closeDropdown();
-      return;
-    }
-
-    // Check client-side LRU cache first for instantaneous sub-1ms response
-    const cacheKey = q.toLowerCase();
-    if (searchCache.has(cacheKey)) {
-      if (spinner) spinner.style.display = 'none';
-      renderDropdown(searchCache.get(cacheKey));
-      return;
-    }
-
-    if (spinner) spinner.style.display = 'block';
-    debounceTimer = setTimeout(async () => {
-      try {
-        if (activeAbortController) {
-          activeAbortController.abort();
-        }
-        activeAbortController = new AbortController();
-        const resp = await fetch(`/audio/icd10/search?q=${encodeURIComponent(q)}&limit=15`, {
-          signal: activeAbortController.signal
-        });
-        if (spinner) spinner.style.display = 'none';
-        if (!resp.ok) throw new Error('Search failed');
-        const data = await resp.json();
-        
-        // Cache result (evict oldest if cache exceeds 100 entries)
-        if (searchCache.size >= 100) {
-          const oldestKey = searchCache.keys().next().value;
-          searchCache.delete(oldestKey);
-        }
-        searchCache.set(cacheKey, data);
-
-        renderDropdown(data);
-      } catch (err) {
-        if (err.name === 'AbortError') return; // Cancelled in-flight request
-        if (spinner) spinner.style.display = 'none';
-        console.error('[ICD Search] Error:', err);
-      }
-    }, 200);
-  });
-
-  input.addEventListener('keydown', (e) => {
-    if (!dropdown.classList.contains('show')) return;
-    const items = dropdown.querySelectorAll('.icd-dropdown-item');
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (items.length > 0) {
-        activeIndex = (activeIndex + 1) % items.length;
-        updateActiveHighlight();
-      }
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (items.length > 0) {
-        activeIndex = (activeIndex - 1 + items.length) % items.length;
-        updateActiveHighlight();
-      }
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (activeIndex >= 0 && currentResults[activeIndex]) {
-        selectItem(currentResults[activeIndex]);
-      } else if (currentResults.length > 0) {
-        selectItem(currentResults[0]);
-      }
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      closeDropdown();
-    }
-  });
-
-  input.addEventListener('blur', () => {
-    // Timeout to allow mousedown on dropdown items to fire first
-    setTimeout(closeDropdown, 200);
-  });
+  const val = (input?.value || '').trim();
+  if (!val) return;
+  pillLists[name].push(val);
+  renderPills(name);
+  input.value = '';
+  input.focus();
+  updateSummary();
 }
 
-function focusIcdSearch(name, queryText) {
-  const input = document.getElementById('add-input-' + name);
-  if (!input) return;
-  input.value = queryText || '';
-  input.focus();
-  input.dispatchEvent(new Event('input'));
+function wirePillRow(name) {
+  renderPills(name);
+  document.getElementById('add-btn-' + name)?.addEventListener('click', () => addPill(name));
+  document.getElementById('add-input-' + name)?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addPill(name); }
+  });
 }
 
 function renderDiagnosis(dx, department) {
@@ -2077,22 +1843,8 @@ function renderDiagnosis(dx, department) {
   }
 
   // ICD-10 row (most likely first) and, for ER, the differential diagnoses row.
-  html += pillRowHTML('icd10', 'ICD-10', 'Search code or description (e.g. J18 or asthma)...');
-  if (isEr) html += pillRowHTML('differential', 'Differential Dx', 'Search diagnosis...');
-
-  // Unmatched codes warning alert if any raw suggestions were not in Australian registry
-  const unmatched = toList(dx.icd10_unmatched);
-  if (unmatched.length > 0) {
-    html += `<div class="icd-unmatched-card">
-      <div class="icd-unmatched-title">⚠️ AI recommended codes not found in official Australian ICD-10-AM:</div>
-      ${unmatched.map(u => `
-        <div class="icd-unmatched-item">
-          <span class="icd-unmatched-label">${esc(u)}</span>
-          <button type="button" class="btn-replace-icd" onclick="focusIcdSearch('icd10', '${esc(u.replace(/'/g, "\\'"))}')">Search replacement →</button>
-        </div>
-      `).join('')}
-    </div>`;
-  }
+  html += pillRowHTML('icd10', 'ICD-10', 'Add code');
+  if (isEr) html += pillRowHTML('differential', 'Differential Dx', 'Add diagnosis');
 
   // The model's own explanation for why it picked the leading code.
   html += `<div class="feat-cell feat-wide"><div class="feat-cell-label"><span class="feat-cell-icon">💡</span>Reasoning</div><div class="feat-cell-val" data-field="reasoning" data-placeholder="No reasoning returned — click to add" contenteditable="true" spellcheck="false">${esc(dx.reasoning || '')}</div></div>`;
@@ -2544,7 +2296,6 @@ btnPrint.addEventListener('click', () => {
 /* ── Initial state — default mode is Doctor, so Refinement is hidden from the start ── */
 updateStepNumbers();
 updateDepartmentSubtitle();
-loadModelOptions();
 </script>
 </body>
 </html>

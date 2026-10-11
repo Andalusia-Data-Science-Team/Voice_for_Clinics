@@ -265,8 +265,8 @@ Return a JSON object with two fields:
 - "json_data": A dictionary with exactly these keys:
   - "icd10_codes": ALWAYS populate this — a list of strings, each formatted "<code> - <description>",
     containing your recommended {code_kind} codes, ordered from MOST to LEAST likely (the first entry is
-    your leading diagnosis). 1-5 entries. Use ICD-10-AM (Australian Modification) codes where possible.
-    This is your clinical recommendation, not a transcription — never return an empty list if the text describes any clinical presentation at all.
+    your leading diagnosis). 1-5 entries. This is your clinical recommendation, not a transcription —
+    never return an empty list if the text describes any clinical presentation at all.
   - "reasoning": ALWAYS populate this — 2-4 sentences explaining WHY the leading code was chosen over
     the alternatives, citing the concrete symptoms, findings, or results from TODAY'S text that support
     it. If history_considered is "Yes", weave in the prior diagnosis/date that reinforced the choice.{er_doc}
