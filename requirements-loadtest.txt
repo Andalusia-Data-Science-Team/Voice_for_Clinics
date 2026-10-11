@@ -1,3 +1,0 @@
-# Install separately from the application's production dependencies.
-locust>=2.32
-websocket-client>=1.8

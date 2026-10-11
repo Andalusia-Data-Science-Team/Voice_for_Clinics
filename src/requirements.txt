@@ -1,6 +1,5 @@
 aiofiles==25.1.0
 pandas==2.2.3
-rapidfuzz==3.14.5
 fastapi-health==0.4.0
 Flask==3.1.2
 flask-cors==6.0.1
@@ -8,7 +7,6 @@ fireworks-ai==0.15.12
 langgraph==0.6.6
 prometheus-client==0.23.1
 python-dotenv==1.0.0
-pyodbc==5.3.0
 beautifulsoup4==4.12.2
 uuid==1.30
 sqlalchemy==2.0.38
@@ -28,11 +26,3 @@ fastapi==0.115.12
 sse-starlette==2.2.1
 starlette==0.45.3
 openai==2.32.0
-tenacity>=8.2
-pytest-asyncio>=0.24
-
-# ── Phase 0: Azure Key Vault + Managed Identity ────────────────────────────
-azure-identity>=1.17.0
-azure-keyvault-secrets>=4.9.0
-# Phase 2: OpenTelemetry-based App Insights (Azure-native, non-deprecated)
-azure-monitor-opentelemetry>=1.6.0
