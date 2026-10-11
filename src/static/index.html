@@ -528,16 +528,6 @@
         </select>
         <span class="field-hint" id="use-history-hint">Uses the Patient Code and Business Unit entered in the Patient info card to look up last year's visits.</span>
       </div>
-      <div class="field">
-        <label>Extraction model</label>
-        <select id="sel-extraction-model"></select>
-        <span class="field-hint">Fills the clinical note fields.</span>
-      </div>
-      <div class="field">
-        <label>Reasoning model</label>
-        <select id="sel-reasoning-model"></select>
-        <span class="field-hint">Recommends ICD-10 codes (ER: also differentials + triage).</span>
-      </div>
     </div>
 
     <div>
@@ -961,21 +951,6 @@ function updateDepartmentSubtitle() {
 $('sel-lang').addEventListener('change', updateStepNumbers);
 $('sel-mode').addEventListener('change', updateStepNumbers);
 $('sel-department').addEventListener('change', updateDepartmentSubtitle);
-
-/* ─────────────────────────────────────────────────────────────────────────────
-   Model selection — the dropdown contents come from GET /models so the UI and
-   backend registry (core/model_registry.py) can never drift apart.
-───────────────────────────────────────────────────────────────────────────── */
-async function loadModelOptions() {
-  try {
-    const cfg = await (await fetch(API_BASE + '/models')).json();
-    [['extraction', 'sel-extraction-model'], ['reasoning', 'sel-reasoning-model']].forEach(([step, id]) => {
-      const sel = $(id);
-      sel.innerHTML = cfg[step].models.map(m => `<option value="${esc(m.id)}">${esc(m.label)}</option>`).join('');
-      sel.value = cfg[step].default;
-    });
-  } catch (e) { console.warn('[Models] could not load model list', e); }
-}
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Patient history — "Show Patient Previous Visits Over the Last Year" button.
@@ -1524,8 +1499,6 @@ btnSubmit.addEventListener('click', async () => {
   form.append('mode',       mode);
   form.append('department', department);
   if (specialty) form.append('specialty', specialty);
-  if ($('sel-extraction-model').value) form.append('extraction_model', $('sel-extraction-model').value);
-  if ($('sel-reasoning-model').value)  form.append('reasoning_model',  $('sel-reasoning-model').value);
   form.append('use_history', useHistory ? 'true' : 'false');
   if (patientId) form.append('patient_id', patientId);
   if (businessUnit) form.append('business_unit', businessUnit);
@@ -2323,7 +2296,6 @@ btnPrint.addEventListener('click', () => {
 /* ── Initial state — default mode is Doctor, so Refinement is hidden from the start ── */
 updateStepNumbers();
 updateDepartmentSubtitle();
-loadModelOptions();
 </script>
 </body>
 </html>

@@ -591,8 +591,6 @@ async def analyze_transcript(
     clinician_name: Optional[str] = Form(None,        description="Self-reported doctor name, from the Patient Info 'Dr' field — best-effort session attribution"),
     transcription_sec: Optional[float] = Form(None,   description="Client-measured duration of the transcription session (recording start to STT completion) — this endpoint doesn't do transcription itself, so it can only log what the browser measured"),
     session_id: Optional[str] = Form(None,            description="Client-generated ID for this record→analyze→feedback cycle, so a later feedback submission can be joined back to this exact session on the dashboard"),
-    extraction_model: Optional[str] = Form(None, description="Model id for clinical-note field extraction (see GET /models)"),
-    reasoning_model:  Optional[str] = Form(None, description="Model id for ICD-10 recommendation + reasoning (see GET /models)"),
 ):
     pipeline_start  = time.perf_counter()
     is_arabic       = language == Language.arabic
@@ -602,8 +600,8 @@ async def analyze_transcript(
     department_value = department.value
 
     try:
-        extraction_spec = get_model("extraction", extraction_model)
-        reasoning_spec  = get_model("reasoning",  reasoning_model)
+        extraction_spec = get_model("extraction", None)
+        reasoning_spec  = get_model("reasoning",  None)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     
@@ -896,4 +894,4 @@ app.include_router(router)
 app.include_router(patient_router)
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=7777)
+    uvicorn.run("app:app", host="0.0.0.0", port=9999)

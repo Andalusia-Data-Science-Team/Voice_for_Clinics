@@ -3,6 +3,19 @@ import re
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _configured_openrouter_api_keys() -> list[str]:
+    """Return the primary OpenRouter key followed by any comma-separated fallbacks."""
+    primary_key = os.getenv("LLM_API_KEY") or os.getenv("OPENROUTER_API_KEY")
+    configured_keys = os.getenv("OPENROUTER_API_KEYS", "").split(",")
+    return list(dict.fromkeys(
+        key.strip()
+        for key in [primary_key, *configured_keys]
+        if key and key.strip()
+    ))
+
+
 class Config:
     """Base configuration."""
 
@@ -20,8 +33,14 @@ class Config:
 
     # Process-local settings for the shared asynchronous OpenRouter runtime.
     LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")
-    LLM_API_KEY = os.getenv("LLM_API_KEY") or OPENROUTER_API_KEY
+    OPENROUTER_API_KEYS = _configured_openrouter_api_keys()
+    LLM_API_KEY = (
+        os.getenv("LLM_API_KEY")
+        or OPENROUTER_API_KEY
+        or (OPENROUTER_API_KEYS[0] if OPENROUTER_API_KEYS else None)
+    )
     LLM_TIMEOUT_S = float(os.getenv("LLM_TIMEOUT_S", "45"))
+    LLM_TOTAL_TIMEOUT_S = float(os.getenv("LLM_TOTAL_TIMEOUT_S", "300"))
     LLM_CONNECT_TIMEOUT_S = float(os.getenv("LLM_CONNECT_TIMEOUT_S", "5"))
     LLM_MAX_ATTEMPTS = int(os.getenv("LLM_MAX_ATTEMPTS", "4"))
     LLM_BACKOFF_MAX_S = float(os.getenv("LLM_BACKOFF_MAX_S", "8"))
@@ -29,11 +48,6 @@ class Config:
     LLM_LIMIT_DEFAULT = int(os.getenv("LLM_LIMIT_DEFAULT", "8"))
     LLM_MAX_CONNECTIONS = int(os.getenv("LLM_MAX_CONNECTIONS", "100"))
     LLM_MAX_KEEPALIVE_CONNECTIONS = int(os.getenv("LLM_MAX_KEEPALIVE_CONNECTIONS", "20"))
-
-    _openrouter_extra_raw = os.getenv("OPENROUTER_API_KEYS", "")
-    OPENROUTER_API_KEYS = [k.strip() for k in _openrouter_extra_raw.split(",") if k.strip()]
-    if LLM_API_KEY and LLM_API_KEY not in OPENROUTER_API_KEYS:
-        OPENROUTER_API_KEYS.insert(0, LLM_API_KEY)
 
     @classmethod
     def llm_model_limit(cls, model: str) -> int:

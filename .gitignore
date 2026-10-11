@@ -2,3 +2,4 @@
 .env
 src/.env
 src/core/.env
+foundry-probe
