@@ -5,13 +5,12 @@ from __future__ import annotations
 import asyncio
 import email.utils
 import logging
-import random
 from datetime import datetime, timezone
 from typing import Awaitable, Callable, TypeVar
 
 import httpx
 import openai
-from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt
+from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt, wait_random_exponential
 
 from core.config import Config
 
@@ -28,36 +27,23 @@ def status_code(exc: BaseException) -> int | None:
 
 
 def is_insufficient_quota(exc: BaseException) -> bool:
-    """Return whether the structured API error body reports insufficient quota."""
+    """Return whether an API error indicates exhausted billing or quota."""
+    text = str(exc).lower()
+    code = getattr(exc, "code", None)
     response = getattr(exc, "response", None)
-    body = getattr(exc, "body", None)
     if response is not None:
         try:
-            body = response.json()
-        except (AttributeError, TypeError, ValueError):
+            text += f" {response.json()}".lower()
+        except Exception:
             pass
-    if not isinstance(body, dict):
-        return False
-    error = body.get("error", body)
-    if not isinstance(error, dict):
-        return False
-    return any(
-        str(error.get(field, "")).lower() == "insufficient_quota"
-        for field in ("code", "type")
-    )
+    return "insufficient_quota" in text or "billing" in text or code == "insufficient_quota"
 
 
 def is_retryable(exc: BaseException) -> bool:
     """Return whether an exception is safe to retry before output is emitted."""
     if is_insufficient_quota(exc):
         return False
-    if isinstance(
-        exc,
-        (
-            openai.APITimeoutError,
-            httpx.TimeoutException,
-        ),
-    ):
+    if isinstance(exc, (openai.APITimeoutError, openai.APIConnectionError, httpx.TimeoutException)):
         return True
     code = status_code(exc)
     return code == 429 or (code is not None and 500 <= code <= 599)
@@ -107,12 +93,13 @@ async def run_with_retries(
         )
 
     retrying = AsyncRetrying(
-        stop=stop_after_attempt(min(4, max(1, Config.LLM_MAX_ATTEMPTS))),
-        wait=_wait_with_retry_after,
+        stop=stop_after_attempt(max(1, Config.LLM_MAX_ATTEMPTS)),
+        wait=wait_random_exponential(multiplier=1, max=Config.LLM_BACKOFF_MAX_S),
         retry=retry_if_exception(is_retryable),
         reraise=True,
         before_sleep=before_sleep,
     )
+    retrying.wait = _wait_with_retry_after
     retrying.sleep = sleeper
     async for attempt in retrying:
         with attempt:
@@ -128,14 +115,10 @@ async def run_with_retries(
 
 def _wait_with_retry_after(retry_state) -> float:
     """Combine tenacity jitter with a provider Retry-After value."""
-    exc = retry_state.outcome.exception() if retry_state.outcome is not None else None
-    return retry_delay(retry_state.attempt_number, exc)
-
-
-def retry_delay(retry_number: int, exc: BaseException | None) -> float:
-    """Return full-jitter exponential backoff combined with Retry-After."""
-    upper_bound = min(Config.LLM_BACKOFF_MAX_S, 2 ** (retry_number - 1))
-    delay = random.uniform(0.0, max(0.0, upper_bound))
-    if exc is not None:
-        delay = max(delay, retry_after_seconds(exc) or 0.0)
+    delay = wait_random_exponential(
+        multiplier=1,
+        max=Config.LLM_BACKOFF_MAX_S,
+    )(retry_state)
+    if retry_state.outcome is not None:
+        delay = max(delay, retry_after_seconds(retry_state.outcome.exception()) or 0.0)
     return delay

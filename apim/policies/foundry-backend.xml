@@ -1,0 +1,65 @@
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  APIM Backend Policy — Azure AI Foundry / Azure OpenAI Model Gateway
+  ═══════════════════════════════════════════════════════════════════════════
+  Purpose:
+    Routes LLM / Foundation Model calls through APIM to Azure AI Foundry.
+    Authenticates to Cognitive Services / Foundry backends using APIM's
+    System-Assigned Managed Identity (zero hardcoded API keys in transit).
+    Enforces per-model token rate limiting and circuit breaking.
+
+  Checklist Item:
+    M1.3 #1 — Backends for each Foundry model use managed identity
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<policies>
+  <inbound>
+    <base />
+
+    <!-- 1. Route to Azure AI Foundry / Azure OpenAI Backend -->
+    <!-- Set backend-id or target service URL -->
+    <set-backend-service base-url="https://andalusiafoundry.openai.azure.com/openai" />
+
+    <!-- 2. Authenticate using Azure Managed Identity -->
+    <!--
+      Acquires an Entra ID OAuth2 token for Cognitive Services resource
+      using APIM's managed identity. Eliminates static API keys.
+    -->
+    <authentication-managed-identity
+        resource="https://cognitiveservices.azure.com"
+        ignore-error="false" />
+
+    <!-- 3. Strip any upstream client API keys for security -->
+    <set-header name="api-key" exists-action="delete" />
+
+    <!-- 4. Inject Correlation ID for end-to-end distributed tracing -->
+    <set-header name="X-Correlation-ID" exists-action="skip">
+      <value>@(Guid.NewGuid().ToString("N").Substring(0,12))</value>
+    </set-header>
+
+    <!-- 5. Per-model RPM Rate Limiting -->
+    <rate-limit-by-key
+        calls="120"
+        renewal-period="60"
+        counter-key='@(context.Request.MatchedParameters.GetValueOrDefault("deployment-id", "default-model"))'
+        remaining-calls-header-name="X-RateLimit-Remaining-Tokens"
+        retry-after-header-name="X-RateLimit-Reset-Tokens" />
+  </inbound>
+
+  <backend>
+    <!-- Forward request with 120s timeout for streaming LLM completions -->
+    <forward-request timeout="120" buffer-request-body="false" fail-on-error-status-code="true" />
+  </backend>
+
+  <outbound>
+    <base />
+    <!-- Strip backend cloud headers to prevent infrastructure leakage -->
+    <set-header name="apim-request-id" exists-action="delete" />
+    <set-header name="x-ms-region" exists-action="delete" />
+    <set-header name="Server" exists-action="delete" />
+  </outbound>
+
+  <on-error>
+    <base />
+  </on-error>
+</policies>

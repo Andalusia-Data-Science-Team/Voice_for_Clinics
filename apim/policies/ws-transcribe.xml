@@ -1,0 +1,38 @@
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  APIM Per-Operation Policy — WebSocket /ws/transcribe
+  ═══════════════════════════════════════════════════════════════════════════
+  Where to apply:
+    Azure Portal → API Management → APIs → MedVoice API
+    → GET /ws/transcribe → Inbound processing → paste this.
+
+  Note: APIM Premium tier (or self-hosted gateway) is required for
+  WebSocket passthrough. The JWT validation in global.xml runs on the
+  HTTP upgrade handshake (the initial GET request), which is where auth
+  must happen for WebSocket connections.
+
+  Rate: 20 connections/min per user. Each connection is long-lived
+  (full transcription session = up to 10 min), so 20/min is generous.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<policies>
+  <inbound>
+    <base />
+    <rate-limit-by-key
+        calls="20"
+        renewal-period="60"
+        counter-key='@(context.Request.Headers.GetValueOrDefault("X-User-ID","anon"))'
+        remaining-calls-header-name="X-RateLimit-Remaining"
+        retry-after-header-name="X-RateLimit-Reset"
+        increment-condition="@(context.Response.StatusCode != 429)" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

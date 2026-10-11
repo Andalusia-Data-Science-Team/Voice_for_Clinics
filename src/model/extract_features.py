@@ -37,7 +37,7 @@ class ExtractFeature:
             logger.info(f"[ExtractFeature] {department} extraction, model={model or 'default'}, conversation={is_conversation}")
             out = LLMService.extract_features(
                 translated_text=end_text,
-                api_key=Config.OPENROUTER_API_KEY,
+                api_key=Config.openrouter_api_key(),
                 department=department,
                 is_conversation=is_conversation,
                 model_id=model,
@@ -45,6 +45,18 @@ class ExtractFeature:
             )
             json_data = out.get("json_data", {}) if out else {}
             summary = out.get("summary", "") if out else ""
+
+            # Phase 2 (M3.2): Strict Pydantic output schema validation
+            from validation.schemas import SchemaValidator
+            validated_model, rejection = SchemaValidator.validate_extraction(json_data, department=department)
+            if validated_model:
+                # Use clean, normalized dictionary representation from Pydantic model
+                json_data = validated_model.model_dump()
+            elif rejection:
+                # In case of rejection, attach structured schema rejection metadata
+                logger.warning(f"[ExtractFeature] Schema validation warning: {rejection.reason}")
+                json_data["_schema_rejection"] = rejection.to_dict()
+
             logger.info(f"[ExtractFeature] {department} extraction completed in {time.time() - start:.2f}s")
             return json_data, summary
         except Exception as e:

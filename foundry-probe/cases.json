@@ -1,0 +1,11 @@
+[
+ {"id":"ar_knee","text":"المريض بيشتكي من ألم في الركبة الشمال من يومين، مفيش حساسية، وبياخد metformin 500 مرتين في اليوم","must_contain_all":["left","knee","500"],"must_not_contain":["right knee"]},
+ {"id":"ar_ear","text":"ألم في الودن اليمين من تلات أيام ومفيش سخونية","must_contain_all":["right","ear","no fever|denies fever|without fever"],"must_not_contain":["left ear"]},
+ {"id":"ar_allergy","text":"عنده حساسية من البنسلين وبياخد أسبرين ٨١ مرة واحدة يوميا","must_contain_all":["penicillin","aspirin","81"]},
+ {"id":"gulf_chest","text":"يشتكي من وجع في صدره من البارح وما عنده ضيق نفس","must_contain_all":["chest","yesterday|since last night|previous day","no shortness of breath|denies shortness of breath|no dyspnea"]},
+ {"id":"mixed_headache","text":"Patient complains of صداع شديد since three days, no vomiting, بياخد paracetamol 1 gram كل 8 ساعات","must_contain_all":["headache","three days|3 days","no vomiting","paracetamol","8"]},
+ {"id":"en_nkda","text":"No known drug allergies. Takes lisinopril 10 mg once daily. Cough for one week.","must_contain_all":["lisinopril","10","cough","no known"]},
+ {"id":"en_dose","text":"Prescribed amoxicillin 500 mg three times daily for 7 days.","must_contain_all":["amoxicillin","500","three times|3 times|tid","7 days"]},
+ {"id":"unclear_drug","text":"المريض بياخد دوا للضغط بس مش فاكر اسمه","must_contain_any":["unclear","not recall","does not remember","doesn't remember","unknown"],"must_not_contain":["amlodipine","lisinopril","losartan","valsartan","enalapril"]},
+ {"id":"er_trauma","text":"حادث سيارة والمريض فاقد الوعي ونبضه ضعيف","must_contain_all":["unconscious|loss of consciousness","weak pulse|pulse"]}
+]
