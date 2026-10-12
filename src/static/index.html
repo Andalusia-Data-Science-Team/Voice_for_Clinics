@@ -1661,6 +1661,20 @@ btnSubmit.addEventListener('click', async () => {
     finishParallelStepsIfReady();
   }
 
+  // Refinement is streamed before its completion event. If a proxy truncates
+  // only that final frame, the received deltas are still a usable result.
+  function completeRefinement(data) {
+    refineBuf = data.refined_text || refineBuf;
+    setCard('refine','done'); setTime('refine', data.refinement_sec);
+    setBody('trans',
+      `<div class="tabs"><div class="tab on" onclick="switchTab(this,'raw')">Raw</div><div class="tab" onclick="switchTab(this,'refined')">Refined</div></div>
+       <div class="tab-pane on" id="panel-raw"><div class="transcript">${esc(transBuf)}</div></div>
+       <div class="tab-pane" id="panel-refined"><div class="transcript">${esc(refineBuf)}</div></div>`);
+    setBody('refine', '<div class="transcript">' + esc(refineBuf) + '</div>');
+    if (isAr) { setCard('translate','active'); setBody('translate','<div class="transcript c-blink" id="ttl"></div>'); }
+    else       { markAnalysisActive(); }
+  }
+
   function dispatchSseFrame(frame) {
     let eventName = 'message';
     const dataLines = [];
@@ -1680,6 +1694,11 @@ btnSubmit.addEventListener('click', async () => {
       data = JSON.parse(dataLines.join('\n'));
     } catch (parseErr) {
       console.error('[SSE] Failed to parse "' + eventName + '" event data:', parseErr, dataLines);
+      if (eventName === 'refinement_done' && refineBuf) {
+        console.warn('[SSE] Refinement completion frame was malformed; using received refinement deltas.');
+        completeRefinement({});
+        return;
+      }
       failStep(eventName, 'Lost this step\'s data mid-stream (malformed response). Check the browser console for details, and try Analyse again.');
       return;
     }
@@ -1747,16 +1766,7 @@ btnSubmit.addEventListener('click', async () => {
       const el = document.getElementById('rl'); if (el) el.textContent = refineBuf;
 
     } else if (ev === 'refinement_done') {
-      refineBuf = d.refined_text || refineBuf;
-      setCard('refine','done'); setTime('refine', d.refinement_sec);
-      // Add Raw / Refined tabs to transcription card
-      setBody('trans',
-        `<div class="tabs"><div class="tab on" onclick="switchTab(this,'raw')">Raw</div><div class="tab" onclick="switchTab(this,'refined')">Refined</div></div>
-         <div class="tab-pane on" id="panel-raw"><div class="transcript">${esc(transBuf)}</div></div>
-         <div class="tab-pane" id="panel-refined"><div class="transcript">${esc(refineBuf)}</div></div>`);
-      setBody('refine', '<div class="transcript">' + esc(refineBuf) + '</div>');
-      if (isAr) { setCard('translate','active'); setBody('translate','<div class="transcript c-blink" id="ttl"></div>'); }
-      else       { markAnalysisActive(); }
+      completeRefinement(d);
 
     } else if (ev === 'translation_delta') {
       translateBuf += d.delta || '';

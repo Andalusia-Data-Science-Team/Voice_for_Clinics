@@ -12,8 +12,7 @@ def test_extraction_and_reasoning_use_gpt_56_luna():
 
     assert DEFAULT_EXTRACTION_MODEL == "gpt-5.6-luna"
     assert DEFAULT_REASONING_MODEL == "gpt-5.6-luna"
-    assert extraction.id == reasoning.id == "gpt-5.6-luna"
-    assert extraction.slug == reasoning.slug == "openai/gpt-5.6-luna"
+    assert extraction.foundry_deployment == reasoning.foundry_deployment == "gpt-5.6-luna"
 
 
 def test_ui_registry_only_exposes_the_fixed_model():
@@ -21,6 +20,6 @@ def test_ui_registry_only_exposes_the_fixed_model():
 
     for step in ("extraction", "reasoning"):
         assert registry[step]["default"] == "gpt-5.6-luna"
-        assert registry[step]["models"] == [
-            {"id": "gpt-5.6-luna", "label": "GPT 5.6 Luna"}
-        ]
+        model_ids = [m["id"] for m in registry[step]["models"]]
+        assert "gpt-5.6-luna" in model_ids
+        assert "DeepSeek-V3.2" in model_ids

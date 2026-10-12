@@ -372,7 +372,7 @@ async def _judge_output(
         create_kwargs=request,
     )
     content = _message_content(response)
-    # Some OpenRouter routes for Claude return an empty content field when the
+    # Some model deployments return an empty content field when the
     # JSON response-format hint is not supported. Retry the same judge request
     # without that optional hint; the prompt still requires JSON.
     if not content:

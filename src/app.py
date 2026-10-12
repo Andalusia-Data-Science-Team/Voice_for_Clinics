@@ -47,6 +47,13 @@ router = APIRouter(prefix="/audio", tags=["Audio Processing"])
 patient_router = APIRouter(prefix="/patient", tags=["Patient History"])
 
 
+def _sse_json(payload: object) -> str:
+    """Serialize SSE data as compact, standards-compliant UTF-8 JSON."""
+    # Arabic text is much smaller as UTF-8 than as ``\\uXXXX`` escapes, and
+    # strict JSON avoids sending Python-only NaN/Infinity values to JSON.parse.
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+
+
 def get_current_request(request: Request) -> Request:
     """Provide the current Starlette request through FastAPI dependency injection."""
     return request
@@ -534,7 +541,7 @@ async def refine_field_answer(
     runtime: LLMRuntime = Depends(get_llm_runtime),
     text: str = Form(..., description="Raw transcript of the doctor's spoken answer for one field"),
     language: Language = Form(Language.english, description="Language the answer was spoken in"),
-    specialty: Optional[str] = Form(None, description="Medical specialty"),
+    specialty: Optional[Specialty] = Form(None, description="Medical specialty"),
 ):
     if not text or not text.strip():
         raise HTTPException(status_code=400, detail="text must not be empty")
@@ -698,7 +705,7 @@ async def analyze_transcript(
                 refined_text = text
                 log["refined_text"] = refined_text
                 log["refinement_sec"] = 0.0  # skipped entirely in Doctor mode — not "instant", just not run
-                yield {"event": "refinement_skipped", "data": json.dumps({
+                yield {"event": "refinement_skipped", "data": _sse_json({
                     "refined_text": refined_text,
                 })}
             else:
@@ -711,17 +718,17 @@ async def analyze_transcript(
                     )
                     async for delta in refine_stream:
                         refined_parts.append(delta)
-                        yield {"event": "refinement_delta", "data": json.dumps({"delta": delta})}
+                        yield {"event": "refinement_delta", "data": _sse_json({"delta": delta})}
                 except Exception as exc:
                     log["status"] = "error"
-                    yield {"event": "error", "data": json.dumps({"step": "refinement", "detail": str(exc)})}
+                    yield {"event": "error", "data": _sse_json({"step": "refinement", "detail": str(exc)})}
                     return
 
                 refined_text      = "".join(refined_parts)
                 refinement_sec    = round(time.perf_counter() - t0, 3)
                 log["refined_text"]   = refined_text
                 log["refinement_sec"] = refinement_sec
-                yield {"event": "refinement_done", "data": json.dumps({
+                yield {"event": "refinement_done", "data": _sse_json({
                     "refined_text":   refined_text,
                     "refinement_sec": refinement_sec,
                 })}
@@ -735,17 +742,17 @@ async def analyze_transcript(
                         refined_text, runtime, is_conversation=is_conversation
                     ):
                         translated_parts.append(delta)
-                        yield {"event": "translation_delta", "data": json.dumps({"delta": delta})}
+                        yield {"event": "translation_delta", "data": _sse_json({"delta": delta})}
                 except Exception as exc:
                     log["status"] = "error"
-                    yield {"event": "error", "data": json.dumps({"step": "translation", "detail": str(exc)})}
+                    yield {"event": "error", "data": _sse_json({"step": "translation", "detail": str(exc)})}
                     return
 
                 final_text             = "".join(translated_parts)
                 translation_sec        = round(time.perf_counter() - t0, 3)
                 log["translated_text"]  = final_text
                 log["translation_sec"]  = translation_sec
-                yield {"event": "translation_done", "data": json.dumps({
+                yield {"event": "translation_done", "data": _sse_json({
                     "final_text":      final_text,
                     "translation_sec": translation_sec,
                 })}
@@ -924,4 +931,4 @@ app.include_router(router)
 app.include_router(patient_router)
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=9999)
+    uvicorn.run("app:app", host="0.0.0.0", port=7777)

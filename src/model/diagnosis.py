@@ -44,7 +44,7 @@ class DiagnosisRecommender:
             logger.info(f"[Diagnosis] {dept} recommendation, model={model or 'default'}, history={'yes' if patient_history_text else 'no'}")
             out = LLMService.recommend_diagnosis(
                 translated_text=end_text,
-                api_key=Config.OPENROUTER_API_KEY,
+                api_key=Config.ai_foundry_key(),
                 department=dept,
                 patient_history_text=patient_history_text,
                 is_conversation=is_conversation,

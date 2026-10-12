@@ -1,19 +1,11 @@
+from __future__ import annotations
+
 import os
 import re
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
-
-
-def _configured_openrouter_api_keys() -> list[str]:
-    """Return the primary OpenRouter key followed by any comma-separated fallbacks."""
-    primary_key = os.getenv("LLM_API_KEY") or os.getenv("OPENROUTER_API_KEY")
-    configured_keys = os.getenv("OPENROUTER_API_KEYS", "").split(",")
-    return list(dict.fromkeys(
-        key.strip()
-        for key in [primary_key, *configured_keys]
-        if key and key.strip()
-    ))
 
 
 class Config:
@@ -29,16 +21,60 @@ class Config:
     FIREWORKS_API_KEY = os.getenv("FIREWORKS_API_KEY")
     MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
     MUNSIT_API_KEY = os.getenv("MUNSIT_API_KEY")
-    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-    # Process-local settings for the shared asynchronous OpenRouter runtime.
-    LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")
-    OPENROUTER_API_KEYS = _configured_openrouter_api_keys()
-    LLM_API_KEY = (
-        os.getenv("LLM_API_KEY")
-        or OPENROUTER_API_KEY
-        or (OPENROUTER_API_KEYS[0] if OPENROUTER_API_KEYS else None)
+    # ── LLM Provider: Azure AI Foundry exclusively ───────────────────────────
+    LLM_PROVIDER = "foundry"
+
+    # ── Azure AI Foundry settings ─────────────────────────────────────────────
+    AI_FOUNDRY_ENDPOINT = (
+        os.getenv("AI_FOUNDRY_ENDPOINT")
+        or os.getenv("FOUNDRY_BASE_URL")
+        or os.getenv("AZURE_OPENAI_ENDPOINT")
+        or "https://andalusiafoundry.openai.azure.com/openai/v1"
     )
+    AI_FOUNDRY_KEY = (
+        os.getenv("AI_FOUNDRY_KEY")
+        or os.getenv("FOUNDRY_API_KEY")
+        or os.getenv("AZURE_API_KEY")
+    )
+    AI_FOUNDRY_API_VERSION = os.getenv("AI_FOUNDRY_API_VERSION", "2024-06-01")
+    AI_FOUNDRY_AUTH_METHOD = os.getenv("AI_FOUNDRY_AUTH_METHOD", "api_key").lower()
+
+    @classmethod
+    def ai_foundry_auth_method(cls) -> str:
+        return os.getenv("AI_FOUNDRY_AUTH_METHOD", cls.AI_FOUNDRY_AUTH_METHOD).lower()
+
+    @classmethod
+    def ai_foundry_endpoint(cls) -> str:
+        return (
+            os.getenv("AI_FOUNDRY_ENDPOINT")
+            or os.getenv("FOUNDRY_BASE_URL")
+            or os.getenv("AZURE_OPENAI_ENDPOINT")
+            or cls.AI_FOUNDRY_ENDPOINT
+        )
+
+    @classmethod
+    def ai_foundry_key(cls) -> str | None:
+        return (
+            os.getenv("AI_FOUNDRY_KEY")
+            or os.getenv("FOUNDRY_API_KEY")
+            or os.getenv("AZURE_API_KEY")
+            or cls.AI_FOUNDRY_KEY
+        )
+
+    @classmethod
+    def ai_foundry_api_version(cls) -> str:
+        return os.getenv("AI_FOUNDRY_API_VERSION", cls.AI_FOUNDRY_API_VERSION)
+
+    FOUNDRY_DEPLOYMENT_DEEPSEEK = os.getenv("FOUNDRY_DEPLOYMENT_DEEPSEEK", "DeepSeek-V3.2")
+
+    @classmethod
+    def foundry_deployment_deepseek(cls) -> str:
+        return os.getenv("FOUNDRY_DEPLOYMENT_DEEPSEEK", cls.FOUNDRY_DEPLOYMENT_DEEPSEEK)
+
+    # Process-local settings for the shared asynchronous Foundry runtime.
+    LLM_BASE_URL = os.getenv("LLM_BASE_URL") or AI_FOUNDRY_ENDPOINT
+    LLM_API_KEY = os.getenv("LLM_API_KEY") or AI_FOUNDRY_KEY
     LLM_TIMEOUT_S = float(os.getenv("LLM_TIMEOUT_S", "45"))
     LLM_TOTAL_TIMEOUT_S = float(os.getenv("LLM_TOTAL_TIMEOUT_S", "300"))
     LLM_CONNECT_TIMEOUT_S = float(os.getenv("LLM_CONNECT_TIMEOUT_S", "5"))
@@ -51,7 +87,7 @@ class Config:
 
     @classmethod
     def llm_model_limit(cls, model: str) -> int:
-        """Return the configured semaphore size for an OpenRouter model slug."""
+        """Return the configured semaphore size for a model deployment."""
         env_name = "LLM_LIMIT__" + re.sub(r"[^A-Za-z0-9]", "_", model).upper()
         raw_limit = os.getenv(env_name)
         limit = int(raw_limit) if raw_limit is not None else cls.LLM_LIMIT_DEFAULT

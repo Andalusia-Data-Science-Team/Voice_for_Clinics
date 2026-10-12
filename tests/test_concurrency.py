@@ -15,7 +15,7 @@ from openai import AsyncOpenAI as RealAsyncOpenAI
 
 import llm.retry as retry_module
 import llm.runtime as runtime_module
-from core.config import Config, _configured_openrouter_api_keys
+from core.config import Config
 from llm.limiter import ModelLimiter
 from llm.retry import is_insufficient_quota, is_retryable, retry_delay, run_with_retries
 
@@ -89,7 +89,7 @@ def _patch_runtime_client(
     handler,
     keys: list[str] | None = None,
 ):
-    """Construct one real AsyncOpenAI client over an in-memory transport."""
+    """Construct one real AsyncOpenAI client over an in-memory transport for Azure AI Foundry."""
     transport = httpx.MockTransport(handler)
     original = RealAsyncOpenAI
 
@@ -98,34 +98,17 @@ def _patch_runtime_client(
         return original(*args, **kwargs)
 
     monkeypatch.setattr(runtime_module, "AsyncOpenAI", factory)
-    monkeypatch.setattr(Config, "LLM_API_KEY", "primary-key")
-    monkeypatch.setattr(Config, "OPENROUTER_API_KEYS", keys or ["primary-key"])
+    monkeypatch.setenv("AI_FOUNDRY_KEY", "primary-key")
+    monkeypatch.setattr(Config, "AI_FOUNDRY_KEY", "primary-key")
+    monkeypatch.setenv("AI_FOUNDRY_ENDPOINT", "https://mock-foundry.openai.azure.com/openai/v1")
+    monkeypatch.setattr(Config, "AI_FOUNDRY_ENDPOINT", "https://mock-foundry.openai.azure.com/openai/v1")
+    monkeypatch.setenv("AI_FOUNDRY_AUTH_METHOD", "api_key")
+    monkeypatch.setattr(Config, "AI_FOUNDRY_AUTH_METHOD", "api_key")
     return runtime_module.LLMRuntime()
 
 
 def _authorization(key: str) -> str:
-    return "Be" + "arer " + key
-
-
-def test_configured_openrouter_api_keys_parses_and_deduplicates(monkeypatch):
-    """The explicit LLM key leads, followed by unique comma-separated fallbacks."""
-    monkeypatch.setenv("LLM_API_KEY", "explicit-key")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "primary-key")
-    monkeypatch.setenv(
-        "OPENROUTER_API_KEYS",
-        " primary-key, fallback-key,explicit-key, ,fallback-key ",
-    )
-
-    assert _configured_openrouter_api_keys() == [
-        "explicit-key",
-        "primary-key",
-        "fallback-key",
-    ]
-
-    monkeypatch.delenv("LLM_API_KEY")
-    monkeypatch.delenv("OPENROUTER_API_KEY")
-    monkeypatch.setenv("OPENROUTER_API_KEYS", "first-key,second-key")
-    assert _configured_openrouter_api_keys() == ["first-key", "second-key"]
+    return "Bearer " + key
 
 
 async def _no_wait(_: float) -> None:
@@ -161,70 +144,27 @@ async def test_concurrency_retryable_429_reaches_success():
 
 
 @pytest.mark.asyncio
-async def test_concurrency_credit_error_uses_next_configured_key(monkeypatch):
-    """A 402 retries once with the next key and does not expose it in logs."""
-    authorization_headers: list[str | None] = []
+async def test_concurrency_foundry_headers_applied(monkeypatch):
+    """Azure AI Foundry requests include api-key or api-version headers."""
+    api_versions: list[str | None] = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        authorization_headers.append(request.headers.get("authorization"))
-        if request.headers.get("authorization") == _authorization("primary-key"):
-            return httpx.Response(
-                402,
-                json={"error": {"code": 402, "message": "Insufficient credits"}},
-            )
+        api_versions.append(request.headers.get("api-version"))
         return httpx.Response(200, json=_completion())
 
-    runtime = _patch_runtime_client(
-        monkeypatch,
-        handler,
-        keys=["primary-key", "secondary-key"],
-    )
+    monkeypatch.setenv("AI_FOUNDRY_API_VERSION", "2024-05-01-preview")
+    monkeypatch.setattr(Config, "AI_FOUNDRY_API_VERSION", "2024-05-01-preview")
+    runtime = _patch_runtime_client(monkeypatch, handler)
     try:
         result = await runtime.complete(
-            model="test-model",
+            model="DeepSeek-V3.2",
             create_kwargs={
-                "model": "test-model",
+                "model": "DeepSeek-V3.2",
                 "messages": [{"role": "user", "content": "hello"}],
             },
         )
         assert result.choices[0].message.content == "ok"
-        assert authorization_headers == [
-            _authorization("primary-key"),
-            _authorization("secondary-key"),
-        ]
-    finally:
-        await runtime.close()
-
-
-@pytest.mark.asyncio
-async def test_concurrency_stream_credit_error_uses_next_configured_key(monkeypatch):
-    """A streaming 402 falls back to the next configured key before yielding."""
-    authorization_headers: list[str | None] = []
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        authorization_headers.append(request.headers.get("authorization"))
-        if request.headers.get("authorization") == _authorization("primary-key"):
-            return httpx.Response(
-                402,
-                json={"error": {"code": 402, "message": "Insufficient credits"}},
-            )
-        return httpx.Response(
-            200,
-            headers={"content-type": "text/event-stream"},
-            stream=_SSEStream([_sse_chunk("ok")]),
-        )
-
-    runtime = _patch_runtime_client(
-        monkeypatch,
-        handler,
-        keys=["primary-key", "secondary-key"],
-    )
-    try:
-        assert await _collect_stream(runtime) == "ok"
-        assert authorization_headers == [
-            _authorization("primary-key"),
-            _authorization("secondary-key"),
-        ]
+        assert api_versions == ["2024-05-01-preview"]
     finally:
         await runtime.close()
 

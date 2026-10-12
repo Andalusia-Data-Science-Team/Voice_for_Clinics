@@ -18,30 +18,84 @@ from llm.retry import is_insufficient_quota, is_retryable, retry_delay, run_with
 logger = logging.getLogger(__name__)
 
 
+def _build_foundry_client(timeout: httpx.Timeout, limits: httpx.Limits) -> tuple[AsyncOpenAI, str]:
+    """Build an AsyncOpenAI client pointed at Azure AI Foundry.
+
+    Returns (client, auth_method) where auth_method is 'managed_identity' or 'api_key'.
+    """
+    endpoint = Config.ai_foundry_endpoint()
+    if not endpoint:
+        raise RuntimeError(
+            "LLM_PROVIDER=foundry but AI_FOUNDRY_ENDPOINT is not set. "
+            "Set AI_FOUNDRY_ENDPOINT to your Azure AI Foundry resource endpoint."
+        )
+
+    endpoint_url = endpoint.rstrip("/")
+    # Normalize to /openai/v1 base URL for the SDK
+    if not endpoint_url.endswith("/openai/v1") and not endpoint_url.endswith("/openai/deployments"):
+        base_url = f"{endpoint_url}/openai/v1"
+    else:
+        base_url = endpoint_url
+
+    auth_method = Config.ai_foundry_auth_method()
+    api_key = Config.ai_foundry_key()
+    token_provider = None
+
+    if auth_method == "managed_identity" or (not api_key and auth_method != "api_key"):
+        try:
+            from azure.identity import DefaultAzureCredential, get_bearer_token_provider  # type: ignore
+            credential = DefaultAzureCredential(logging_enable=False)
+            token_provider = get_bearer_token_provider(
+                credential,
+                "https://cognitiveservices.azure.com/.default",
+            )
+            auth_method = "managed_identity"
+            logger.info("[LLM] Foundry auth: Managed Identity (DefaultAzureCredential)")
+        except Exception as exc:
+            logger.debug("[LLM] DefaultAzureCredential not available (%s), trying API key", exc)
+
+    if auth_method != "managed_identity" or token_provider is None:
+        if not api_key:
+            raise RuntimeError(
+                "LLM_PROVIDER=foundry: neither DefaultAzureCredential succeeded "
+                "nor AI_FOUNDRY_KEY / AZURE_API_KEY is configured."
+            )
+        auth_method = "api_key"
+        logger.info("[LLM] Foundry auth: API key")
+
+    http_client = httpx.AsyncClient(timeout=timeout, limits=limits)
+    if auth_method == "managed_identity" and token_provider is not None:
+        client = AsyncOpenAI(
+            base_url=base_url,
+            azure_ad_token_provider=token_provider,
+            timeout=timeout,
+            max_retries=0,
+            http_client=http_client,
+        )
+    else:
+        client = AsyncOpenAI(
+            base_url=base_url,
+            api_key=api_key,
+            timeout=timeout,
+            max_retries=0,
+            http_client=http_client,
+        )
+
+    logger.info("[LLM] initialized Azure AI Foundry client base_url=%s auth=%s", base_url, auth_method)
+    return client, auth_method
+
+
 class LLMRuntime:
-    """Own one AsyncOpenAI connection pool and model limiters per process."""
+    """Own one AsyncOpenAI connection pool and model limiters per process for Azure AI Foundry."""
 
     def __init__(self) -> None:
-        key = Config.LLM_API_KEY
-        if not key:
-            raise RuntimeError(
-                "No LLM API key configured "
-                "(LLM_API_KEY / OPENROUTER_API_KEY / OPENROUTER_API_KEYS)"
-            )
         timeout = httpx.Timeout(Config.LLM_TIMEOUT_S, connect=Config.LLM_CONNECT_TIMEOUT_S)
         limits = httpx.Limits(
             max_connections=Config.LLM_MAX_CONNECTIONS,
             max_keepalive_connections=Config.LLM_MAX_KEEPALIVE_CONNECTIONS,
         )
-        self.client = AsyncOpenAI(
-            base_url=Config.LLM_BASE_URL,
-            api_key=key,
-            timeout=timeout,
-            max_retries=0,
-            http_client=httpx.AsyncClient(timeout=timeout, limits=limits),
-        )
+        self.client, self._auth_method = _build_foundry_client(timeout, limits)
         self.limiter = ModelLimiter()
-        self._keys = list(dict.fromkeys(Config.OPENROUTER_API_KEYS or [key]))
 
     async def close(self) -> None:
         """Close the shared SDK client and its underlying HTTP transport."""
@@ -54,15 +108,15 @@ class LLMRuntime:
         create_kwargs: dict[str, Any],
         key: str | None = None,
     ) -> Any:
-        """Run a completion, falling back to configured keys after a credit error."""
-        keys = list(dict.fromkeys(([key] if key else []) + self._keys))
-
-        async def attempt(api_key: str) -> Any:
+        """Run a completion on Azure AI Foundry with backoff, jitter, and concurrency limits."""
+        async def attempt() -> Any:
             await self.limiter.acquire(model)
             try:
+                # Remove 'stream' if callers included it; complete() is non-streaming.
+                create_kwargs.pop("stream", None)
                 return await self.client.chat.completions.create(
                     **create_kwargs,
-                    extra_headers=self._headers_for(api_key),
+                    extra_headers=self._headers_for(key),
                 )
             finally:
                 await self.limiter.release(model)
@@ -70,27 +124,7 @@ class LLMRuntime:
         deadline = asyncio.get_running_loop().time() + Config.LLM_TOTAL_TIMEOUT_S
         sleep = self._deadline_sleep(deadline)
         async with asyncio.timeout(Config.LLM_TOTAL_TIMEOUT_S):
-            primary_key = keys[0]
-            try:
-                return await run_with_retries(
-                    lambda: attempt(primary_key), model=model, sleep=sleep
-                )
-            except Exception as exc:
-                if not self._is_credit_error(exc):
-                    raise
-                last_error = exc
-
-            for fallback_key in keys[1:]:
-                logger.warning("[LLM] credit failover model=%s", model)
-                try:
-                    return await run_with_retries(
-                        lambda: attempt(fallback_key), model=model, sleep=sleep
-                    )
-                except Exception as exc:
-                    if not self._is_credit_error(exc):
-                        raise
-                    last_error = exc
-            raise last_error
+            return await run_with_retries(attempt, model=model, sleep=sleep)
 
     async def stream(
         self,
@@ -99,28 +133,26 @@ class LLMRuntime:
         create_kwargs: dict[str, Any],
         key: str | None = None,
     ) -> AsyncIterator[Any]:
-        """Yield a stream, rotating to another configured key after a credit error."""
+        """Yield an async stream from Azure AI Foundry with concurrency limits and retries."""
         max_attempts = min(4, max(1, Config.LLM_MAX_ATTEMPTS))
-        keys = list(dict.fromkeys(([key] if key else []) + self._keys))
         deadline = asyncio.get_running_loop().time() + Config.LLM_TOTAL_TIMEOUT_S
         sleep = self._deadline_sleep(deadline)
         timeout_scope = asyncio.timeout(Config.LLM_TOTAL_TIMEOUT_S)
         attempt_number = 0
-        key_index = 0
-        last_credit_error: Exception | None = None
 
         async with timeout_scope:
-            while attempt_number < max_attempts and key_index < len(keys):
+            while attempt_number < max_attempts:
                 attempt_number += 1
                 stream = None
                 emitted = False
                 retry_error: Exception | None = None
-                current_key = keys[key_index]
                 await self.limiter.acquire(model)
                 try:
+                    # Remove 'stream' from kwargs; we pass it explicitly below.
+                    create_kwargs.pop("stream", None)
                     stream = await self.client.chat.completions.create(
                         **create_kwargs,
-                        extra_headers=self._headers_for(current_key),
+                        extra_headers=self._headers_for(key),
                         stream=True,
                     )
                     async for chunk in stream:
@@ -138,18 +170,9 @@ class LLMRuntime:
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
-                    if emitted:
+                    if emitted or attempt_number >= max_attempts or not is_retryable(exc):
                         raise
-                    if self._is_credit_error(exc):
-                        last_credit_error = exc
-                        key_index += 1
-                        if key_index >= len(keys) or attempt_number >= max_attempts:
-                            raise
-                        logger.warning("[LLM] stream credit failover model=%s", model)
-                    elif attempt_number >= max_attempts or not is_retryable(exc):
-                        raise
-                    else:
-                        retry_error = exc
+                    retry_error = exc
                 finally:
                     try:
                         if stream is not None:
@@ -167,8 +190,6 @@ class LLMRuntime:
                         getattr(retry_error, "status_code", None),
                     )
                     await sleep(retry_delay(attempt_number, retry_error))
-            if last_credit_error is not None:
-                raise last_credit_error
 
     @staticmethod
     def _deadline_sleep(deadline: float) -> Callable[[float], Awaitable[None]]:
@@ -180,17 +201,15 @@ class LLMRuntime:
 
         return sleep
 
-    @staticmethod
-    def _is_credit_error(exc: BaseException) -> bool:
-        """Recognize OpenRouter credit exhaustion without retrying the same key."""
-        return getattr(exc, "status_code", None) == 402 or is_insufficient_quota(exc)
-
-    @staticmethod
-    def _headers_for(key: str) -> dict[str, str] | None:
-        """Override authorization per request without mutating the shared client."""
-        if key == Config.LLM_API_KEY:
-            return None
-        return {"Authorization": "Be" + "arer " + key}
+    def _headers_for(self, key: str | None = None) -> dict[str, str] | None:
+        """Return headers required by Azure AI Foundry."""
+        if self._auth_method == "api_key":
+            headers: dict[str, str] = {}
+            api_ver = Config.ai_foundry_api_version()
+            if api_ver:
+                headers["api-version"] = api_ver
+            return headers or None
+        return None
 
 
 def get_llm_runtime(request: Request) -> LLMRuntime:

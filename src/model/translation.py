@@ -32,7 +32,7 @@ class Translate:
             
             translated_text = LLMService.translate_to_eng(
                 refined_text,
-                Config.OPENROUTER_API_KEY,
+                Config.AI_FOUNDRY_KEY,
                 is_conversation=is_conversation
             )
 

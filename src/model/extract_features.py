@@ -37,7 +37,7 @@ class ExtractFeature:
             logger.info(f"[ExtractFeature] {department} extraction, model={model or 'default'}, conversation={is_conversation}")
             out = LLMService.extract_features(
                 translated_text=end_text,
-                api_key=Config.OPENROUTER_API_KEY,
+                api_key=Config.AI_FOUNDRY_KEY,
                 department=department,
                 is_conversation=is_conversation,
                 model_id=model,

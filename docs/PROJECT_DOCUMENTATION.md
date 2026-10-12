@@ -37,7 +37,7 @@ flowchart TD
     WS -- Arabic --> Munsit[Munsit]
     WS -- deltas --> Browser
     Browser -- transcript + form --> Analyze[/audio/analyze/]
-    Analyze -- refine/translate --> DeepSeek[DeepSeek via OpenRouter]
+    Analyze -- refine/translate --> DeepSeek[DeepSeek via Azure AI Foundry]
     Analyze -- extraction --> Ext[Extraction model]
     Analyze -- diagnosis --> Reason[Reasoning model]
     Analyze -- SSE events --> Browser
@@ -160,21 +160,21 @@ All configuration is environment-driven via `src/core/config.py`
 (`.env` is loaded automatically).
 Docker Compose passes variables from `src/.env` into the container.
 
-### Provider keys
+### Provider keys and credentials
 
 | Variable | Purpose |
 |---|---|
 | `MISTRAL_API_KEY` | Voxtral English transcription |
 | `MUNSIT_API_KEY` | Arabic transcription + TTS disclaimer |
-| `OPENROUTER_API_KEY` | Primary OpenRouter key for all LLM steps |
-| `OPENROUTER_API_KEYS` | Optional comma-separated keys; first is used by default and later keys are tried after credit-related failures |
-| `LLM_API_KEY` | Optional explicit OpenRouter key override; otherwise the singular key or first plural key is used |
+| `AI_FOUNDRY_ENDPOINT` | Azure AI Foundry endpoint URL |
+| `AI_FOUNDRY_KEY` | Primary API key for Azure AI Foundry |
+| `AI_FOUNDRY_AUTH_METHOD` | Authentication mode (`api_key` or `managed_identity`) |
+| `AI_FOUNDRY_API_VERSION` | Azure AI Foundry API version (default: `2024-06-01`) |
 
 ### LLM runtime
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `LLM_BASE_URL` | `https://openrouter.ai/api/v1` | OpenAI-compatible base URL |
 | `LLM_TIMEOUT_S` | `45` | Overall request timeout |
 | `LLM_CONNECT_TIMEOUT_S` | `5` | Connect timeout |
 | `LLM_MAX_ATTEMPTS` | `4` | Retry attempts including the first |
@@ -326,7 +326,7 @@ step completes first. An extraction or diagnosis failure is included as an
 ## Model Registry
 
 `src/core/model_registry.py` is the single source of truth for model ids,
-labels, and OpenRouter slugs.
+labels, and Azure AI Foundry deployments.
 
 **Extraction evaluation candidates:** `gpt-4o-mini`, `gpt-5.6-luna`,
 `glm-5.3-flash`, `claude-sonnet-5.5`.

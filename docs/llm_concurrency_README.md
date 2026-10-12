@@ -11,9 +11,10 @@ Set these environment variables before starting the application:
 
 | Variable | Default | Description |
 | --- | ---: | --- |
-| `LLM_BASE_URL` | `https://openrouter.ai/api/v1` | OpenAI-compatible API base URL |
-| `LLM_API_KEY` | `OPENROUTER_API_KEY` or first `OPENROUTER_API_KEYS` entry | Primary API key |
-| `OPENROUTER_API_KEYS` | — | Optional comma-separated keys; first key is the default, later keys are fallbacks after a credit error |
+| `AI_FOUNDRY_ENDPOINT` | — | Azure AI Foundry endpoint URL |
+| `AI_FOUNDRY_KEY` | — | Primary API key for Azure AI Foundry |
+| `AI_FOUNDRY_API_VERSION` | `2024-06-01` | Azure AI Foundry API version |
+| `AI_FOUNDRY_AUTH_METHOD` | `api_key` | Authentication method (`api_key` or `managed_identity`) |
 | `LLM_TIMEOUT_S` | `45` | Per-attempt SDK request timeout |
 | `LLM_TOTAL_TIMEOUT_S` | `300` | Overall retry deadline, including attempts and sleeps |
 | `LLM_CONNECT_TIMEOUT_S` | `5` | Connection timeout |
@@ -25,8 +26,8 @@ Set these environment variables before starting the application:
 | `LLM_MAX_KEEPALIVE_CONNECTIONS` | `20` | HTTP keep-alive pool maximum |
 | `LLM_LIMIT__<MODEL>` | — | Model-specific limit; non-alphanumeric model characters become `_` |
 
-For example, `LLM_LIMIT__DEEPSEEK_DEEPSEEK_CHAT_V3_0324=6` overrides the limit
-for the refinement/translation model.
+For example, `LLM_LIMIT__DEEPSEEK_V3_2=6` overrides the limit
+for the DeepSeek-V3.2 refinement/translation deployment.
 
 Limits are process-local. With multiple Uvicorn workers or containers, each
 worker has its own client, pool, and semaphores. Size a limit using Little's
@@ -58,12 +59,10 @@ The retry policy retries only:
 - HTTPX timeout errors.
 
 HTTP 400, 401, 403, 404, 422, malformed model output, and
-`insufficient_quota` are not retried with the same key. When fallback keys are
-configured in `OPENROUTER_API_KEYS`, they are tried in order after a credit
-error (including HTTP 402). A provider
+`insufficient_quota` are not retried. A provider
 `Retry-After` value in seconds or HTTP-date form is honored up to
-`LLM_RETRY_AFTER_MAX_S`. The shared client defaults to `LLM_API_KEY`; fallback
-authorization headers are applied per request without changing the shared client.
+`LLM_RETRY_AFTER_MAX_S`. Azure AI Foundry authentication headers are configured
+on the shared async client.
 
 Streaming holds its model slot while requesting or consuming a stream and
 releases it before a retry backoff sleep. A stream can be retried only before
@@ -132,7 +131,7 @@ The test writes `reports/real_use_case_model_evaluation.xlsx` with:
 - **Summary**: one row per scenario/stage/model with latency, cost, and errors;
 - **Errors**: any model calls that failed while still allowing partial reports.
 
-Run it only when a live OpenRouter evaluation is intended:
+Run it only when a live evaluation is intended:
 
 ```text
 RUN_REAL_USE_CASE_EVAL=1 \

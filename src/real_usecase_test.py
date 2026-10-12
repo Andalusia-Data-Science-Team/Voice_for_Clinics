@@ -94,9 +94,9 @@ SETUP
 1. Run pytest from a working directory where `model.*` and `core.config`
    are importable (i.e. your project root) — this file imports the real
    pipeline modules, it does not reimplement them.
-2. Make sure `core.config.Config.OPENROUTER_API_KEY` (or the
-   OPENROUTER_API_KEY / OPENROUTER_API_KEYS env vars it reads) is set —
-   this suite makes real OpenRouter calls, both through your pipeline and
+2. Make sure `core.config.Config.AI_FOUNDRY_KEY` (or the
+   AI_FOUNDRY_KEY env var it reads) is set —
+   this suite makes real Azure AI Foundry calls, both through your pipeline and
    through the LLM judge.
 3. Put the workbook at tests/data/real_use_cases.xlsx relative to this
    file, or point CLINICAL_NOTES_XLSX at it.
@@ -105,8 +105,8 @@ ENV VARS
 --------
   CLINICAL_NOTES_XLSX            path to the workbook (see above)
   CLINICAL_NOTE_PASS_THRESHOLD   float 0-1, default 0.65
-  CLINICAL_JUDGE_MODEL           OpenRouter model id for the LLM judge,
-                                  default "openai/gpt-6-luna"
+  CLINICAL_JUDGE_MODEL           Foundry deployment for the LLM judge,
+                                  default "gpt-5.6-luna"
   CLINICAL_JUDGE_RUNS            how many times to re-judge each scenario's
                                   batch (each with the fields re-shuffled),
                                   averaging the per-field scores — see
@@ -184,7 +184,7 @@ XLSX_PATH = Path(
 )
 
 PASS_THRESHOLD = float(os.environ.get("CLINICAL_NOTE_PASS_THRESHOLD", "0.65"))
-JUDGE_MODEL = os.environ.get("CLINICAL_JUDGE_MODEL", "openai/gpt-6-luna")
+JUDGE_MODEL = os.environ.get("CLINICAL_JUDGE_MODEL", "gpt-5.6-luna")
 # Bias mitigation: each scenario's judged fields are graded this many times,
 # each with the field list presented in a freshly randomized order, and the
 # per-field scores are averaged — see _judge_batch_multi for why.
@@ -610,11 +610,15 @@ def _judge_client():
     global _shared_judge_client
     from openai import OpenAI
 
-    api_key = getattr(Config, "OPENROUTER_API_KEY", None) or os.environ.get("OPENROUTER_API_KEY")
+    api_key = Config.ai_foundry_key()
+    endpoint = Config.ai_foundry_endpoint()
     if not api_key:
-        pytest.skip("No OPENROUTER_API_KEY configured — cannot run the pipeline or the LLM judge.")
+        pytest.skip("No AI_FOUNDRY_KEY configured — cannot run the pipeline or the LLM judge.")
     if _shared_judge_client is None:
-        _shared_judge_client = OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
+        base_url = endpoint.rstrip("/")
+        if not base_url.endswith("/openai/v1") and not base_url.endswith("/openai/deployments"):
+            base_url = f"{base_url}/openai/v1"
+        _shared_judge_client = OpenAI(api_key=api_key, base_url=base_url)
     return _shared_judge_client
 
 
