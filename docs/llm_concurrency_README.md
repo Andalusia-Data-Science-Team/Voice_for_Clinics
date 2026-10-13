@@ -11,11 +11,13 @@ Set these environment variables before starting the application:
 
 | Variable | Default | Description |
 | --- | ---: | --- |
-| `LLM_BASE_URL` | `https://openrouter.ai/api/v1` | OpenAI-compatible API base URL |
-| `LLM_API_KEY` | `OPENROUTER_API_KEY` | Primary API key |
-| `LLM_TIMEOUT_S` | `45` | Overall SDK request timeout |
+| `AI_FOUNDRY_ENDPOINT` | — | Azure AI Foundry endpoint URL |
+| `AI_FOUNDRY_KEY` | — | Primary API key for Azure AI Foundry |
+| `AI_FOUNDRY_API_VERSION` | `2024-06-01` | Azure AI Foundry API version |
+| `AI_FOUNDRY_AUTH_METHOD` | `api_key` | Authentication method (`api_key` or `managed_identity`) |
+| `LLM_TIMEOUT_S` | `45` | Per-attempt SDK request timeout |
+| `LLM_TOTAL_TIMEOUT_S` | `300` | Overall retry deadline, including attempts and sleeps |
 | `LLM_CONNECT_TIMEOUT_S` | `5` | Connection timeout |
-| `LLM_TOTAL_TIMEOUT_S` | `300` | Overall timeout deadline wrapping retry loops (stream deadline until first chunk) |
 | `LLM_MAX_ATTEMPTS` | `4` | Total attempts, including the first request |
 | `LLM_BACKOFF_MAX_S` | `8` | Maximum exponential-jitter backoff |
 | `LLM_RETRY_AFTER_MAX_S` | `30` | Maximum accepted provider Retry-After delay |
@@ -24,8 +26,8 @@ Set these environment variables before starting the application:
 | `LLM_MAX_KEEPALIVE_CONNECTIONS` | `20` | HTTP keep-alive pool maximum |
 | `LLM_LIMIT__<MODEL>` | — | Model-specific limit; non-alphanumeric model characters become `_` |
 
-For example, `LLM_LIMIT__DEEPSEEK_DEEPSEEK_CHAT_V3_0324=6` overrides the limit
-for the refinement/translation model.
+For example, `LLM_LIMIT__DEEPSEEK_V3_2=6` overrides the limit
+for the DeepSeek-V3.2 refinement/translation deployment.
 
 Limits are process-local. With multiple Uvicorn workers or containers, each
 worker has its own client, pool, and semaphores. Size a limit using Little's
@@ -34,27 +36,40 @@ two calls each, and eight seconds of latency imply approximately eight slots.
 
 ## Retry behavior
 
-The retry policy uses bounded exponential jitter and retries only:
+The retry policy uses full-jitter exponential backoff. For retry number `r`
+(starting at 1), the delay is
+`uniform(0, min(LLM_BACKOFF_MAX_S, 1 × 2^(r-1)))` seconds: a 1-second base,
+multiplier 2, and default 8-second cap. When `Retry-After` is present, the
+sleep is `max(jitter, capped Retry-After)`; the Retry-After cap defaults to
+30 seconds and is configured independently of the backoff cap.
+
+`LLM_TIMEOUT_S` limits each SDK request attempt. `LLM_TOTAL_TIMEOUT_S` bounds
+the complete non-stream operation, including retries and backoff sleeps. Its
+300-second default exceeds the 270-second modeled worst case
+(`4 × 45s + 3 × 30s`) for four request attempts and three maximum
+`Retry-After` sleeps. For streams, the total deadline applies until the first
+content chunk is emitted; the stream can continue after that chunk without
+the initial-output deadline.
+
+The retry policy retries only:
 
 - HTTP 429;
 - HTTP 5xx;
-- OpenAI timeout/connection errors; and
+- OpenAI timeout errors; and
 - HTTPX timeout errors.
 
-HTTP 400, 401, 403, 404, 422, malformed model output, and `insufficient_quota`
-are not retried. `insufficient_quota` is detected strictly from `error.code` or
-`error.type` and raises immediately. Key rotation has been entirely eliminated
-from the runtime. A provider `Retry-After` value in seconds or HTTP-date form is
-honored up to `LLM_RETRY_AFTER_MAX_S`.
+HTTP 400, 401, 403, 404, 422, malformed model output, and
+`insufficient_quota` are not retried. A provider
+`Retry-After` value in seconds or HTTP-date form is honored up to
+`LLM_RETRY_AFTER_MAX_S`. Azure AI Foundry authentication headers are configured
+on the shared async client.
 
-Streaming acquires a model slot for active requests. If a retryable failure occurs
-before the first content chunk is yielded, the model slot is explicitly released
-before the full-jitter backoff sleep and re-acquired on the next attempt (up to 4
-attempts total). The slot is released in an isolated `finally` block even if
-stream `aclose()` raises. `LLM_TOTAL_TIMEOUT_S` enforces a deadline wrapping the
-retry loop in `complete()` and until the first content chunk in `stream()`. Logs
-include model, attempt, status, wait, and in-flight metrics only. Prompts, response
-bodies, API keys, and PHI are not logged by the runtime.
+Streaming holds its model slot while requesting or consuming a stream and
+releases it before a retry backoff sleep. A stream can be retried only before
+the first content chunk is yielded; after output is emitted, the error is
+surfaced to avoid duplicated text. Logs include model, attempt, status, wait,
+and in-flight metrics only. Prompts, response bodies, API keys, and PHI are not
+logged by the runtime.
 
 ## Verification
 
@@ -78,10 +93,11 @@ Run the requested suite with:
 
 | Required case | Test name | Status |
 | --- | --- | --- |
-| 30 parallel analyses; 429 then 200 (event loop lag < 50ms) | `test_concurrency_30_parallel_analyses` | passing |
+| 30 parallel analyses; 429 then 200; max event-loop lag under 50 ms | `test_concurrency_30_parallel_analyses` | passing |
+| Persistent mocked 429 limited to four attempts | `test_concurrency_mocked_429_has_at_most_three_retries` | passing |
 | Retry-After honored and capped | `test_concurrency_retry_after_honoured` | passing |
-| Non-retryable 400/401/404/422 | `test_concurrency_no_retry_on_4xx` | passing |
-| Insufficient quota; immediate failure | `test_concurrency_insufficient_quota_not_retried` | passing |
+| Non-retryable 400/401/403/404/422 | `test_concurrency_no_retry_on_4xx` | passing |
+| Insufficient quota raises without retry | `test_concurrency_insufficient_quota_not_retried` | passing |
 | Four-attempt maximum | `test_concurrency_max_attempts_is_four` | passing |
 | 5xx and timeout retry | `test_concurrency_5xx_and_timeout_retried` | passing |
 | Semaphore cap | `test_concurrency_semaphore_cap` | passing |
@@ -89,19 +105,17 @@ Run the requested suite with:
 | Release after error and cancellation | `test_concurrency_semaphore_released_on_error_and_cancel` | passing |
 | Ten async streams do not block the loop | `test_concurrency_stream_no_event_loop_block` | passing |
 | Stream retry only before first chunk | `test_concurrency_stream_retry_only_before_first_chunk` | passing |
-| Stream slot released during backoff sleep | `test_concurrency_stream_slot_released_during_backoff` | passing |
-| Total timeout wrapping completion | `test_concurrency_total_timeout_complete` | passing |
-| Total timeout wrapping stream until first chunk | `test_concurrency_total_timeout_stream` | passing |
-| Stream slot released on aclose() exception | `test_concurrency_stream_aclose_raises_slot_still_released` | passing |
-| Stream persistent 503 exactly 4 attempts | `test_concurrency_stream_persistent_errors_exactly_four_attempts` | passing |
-| Quota detection strictly code/type, not "billing" | `test_concurrency_is_insufficient_quota_classification` | passing |
-| complete() persistent 429 exactly 4 calls | `test_concurrency_complete_persistent_429_exactly_four_calls` | passing |
-| Stream backoff bounds and Retry-After capping | `test_concurrency_stream_backoff_bounds_and_retry_after` | passing |
+| Stream attempts never exceed four | `test_concurrency_stream_attempt_count_never_exceeds_four` | passing |
+| Stream slot released during backoff | `test_concurrency_stream_releases_slot_during_backoff` | passing |
+| Stream close error still releases slot | `test_concurrency_stream_aclose_error_releases_slot` | passing |
+| Overall retry deadline | `test_concurrency_overall_deadline_stops_retry_loop` | passing |
+| Stream deadline ends at first content | `test_concurrency_stream_deadline_stops_at_first_content` | passing |
 | One shared client construction | `test_concurrency_single_client_instance` | passing |
 | Model-specific environment override | `test_concurrency_config_limits_override` | passing |
 
 Additional focused tests cover retry classification and cancellation of an
-active stream: `test_concurrency_retry_classification` and
+active stream: `test_concurrency_retry_classification`,
+`test_concurrency_retry_transport_errors_and_quota_body`, and
 `test_concurrency_stream_cancel_releases_slot`.
 
 ## Six-scenario model comparison report
@@ -117,7 +131,7 @@ The test writes `reports/real_use_case_model_evaluation.xlsx` with:
 - **Summary**: one row per scenario/stage/model with latency, cost, and errors;
 - **Errors**: any model calls that failed while still allowing partial reports.
 
-Run it only when a live OpenRouter evaluation is intended:
+Run it only when a live evaluation is intended:
 
 ```text
 RUN_REAL_USE_CASE_EVAL=1 \
@@ -131,4 +145,8 @@ Useful overrides:
 - `REAL_USE_CASE_FAIL_ON_ERROR=1` to fail on any provider/model error.
 
 The six-scenario report is a live-provider test and is intentionally excluded
-from `pytest -k concurrency`.
+from `pytest -k concurrency`. Each detailed result now includes a 0–100 judge
+score, a short justification, and the judge model used. OpenAI candidates are
+judged by Claude Opus 5.5; all other candidates are judged by GPT 5.6 Sol.
+Override those judge slugs with `JUDGE_SLUG_FOR_OPENAI` and
+`JUDGE_SLUG_FOR_NON_OPENAI` when needed.

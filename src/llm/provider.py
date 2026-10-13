@@ -1,8 +1,7 @@
 """
-llm/provider.py — Provider-aware kwargs builder and error mapper.
+llm/provider.py — Azure AI Foundry kwargs builder and error mapper.
 
-Two providers: "openrouter" (default) and "foundry".
-Selected by LLM_PROVIDER env var at runtime init time.
+Provider: Azure AI Foundry exclusively (Foundry-native).
 
 SECURITY: never logs or exposes secrets, keys, prompts, or PHI.
 Python 3.9 compatible (no X|Y unions, no match statements).
@@ -49,6 +48,33 @@ _FOUNDRY_PROFILES: Dict[str, Dict[str, bool]] = {
         "temperature": False,
         "reasoning_effort": True,
     },
+    "DeepSeek-V3.2": {
+        "max_completion_tokens": False,
+        "max_tokens": True,
+        "streaming": True,
+        "json_object": True,
+        "json_schema_strict": False,
+        "temperature": True,
+        "reasoning_effort": False,
+    },
+    "deepseek-v3.2": {
+        "max_completion_tokens": False,
+        "max_tokens": True,
+        "streaming": True,
+        "json_object": True,
+        "json_schema_strict": False,
+        "temperature": True,
+        "reasoning_effort": False,
+    },
+    "deepseek-v3-2": {
+        "max_completion_tokens": False,
+        "max_tokens": True,
+        "streaming": True,
+        "json_object": True,
+        "json_schema_strict": False,
+        "temperature": True,
+        "reasoning_effort": False,
+    },
 }
 
 # Permissive fallback for unknown deployments (conservative defaults).
@@ -88,7 +114,7 @@ def build_foundry_kwargs(
     json_object, max_tokens legacy alias).  Falls back from json_schema_strict
     to json_object to no response_format, in that order.
 
-    Never includes OpenRouter-specific keys: extra_body usage.include,
+    Never includes unsupported extra_body keys: extra_body usage.include,
     extra_body reasoning.
     """
     profile = get_foundry_profile(deployment_name)
@@ -106,6 +132,8 @@ def build_foundry_kwargs(
     # Temperature — only if the model accepts it (Luna does not)
     # For Foundry we never send temperature=0 to reasoning models.
     # Omit entirely when not supported.
+    if profile.get("temperature", False):
+        kwargs["temperature"] = 0
 
     # Streaming
     if stream and profile.get("streaming", True):

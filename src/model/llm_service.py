@@ -4,10 +4,10 @@ import time
 from typing import Any, Optional, Type
 from pydantic import BaseModel, ValidationError
 
+from core.config import Config
 from core.model_registry import (
     DIAGNOSIS_MAX_TOKENS,
     EXTRACTION_MAX_TOKENS,
-    FOUNDRY_DEFAULT_EXTRACTION_MODEL,
     REASONING_EFFORT,
     ModelSpec,
     get_model,
@@ -22,12 +22,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# ---------------- Helpers ------------------------------------------------- #
-
-def _active_provider() -> str:
-    return os.environ.get("LLM_PROVIDER", "openrouter").lower()
-
-
 # ---------------- Pydantic Models ---------------- #
 
 class ExtractedFeatures(BaseModel):
@@ -37,15 +31,14 @@ class ExtractedFeatures(BaseModel):
 
 def _record_meta(meta: Optional[dict], response, model: ModelSpec, latency_sec: float, used_reasoning: bool) -> None:
     """Fills `meta` (if the caller passed one) with what the evaluation suite and
-    usage log need: model, latency of the LLM call, token counts, and OpenRouter's
-    own cost figure (`usage.cost`, requested via usage.include) when present."""
+    usage log need: model, latency of the LLM call, token counts."""
     if meta is None:
         return
     usage = getattr(response, "usage", None)
     details = getattr(usage, "completion_tokens_details", None)
     meta.update({
         "model_id": model.id,
-        "model_slug": model.slug,
+        "foundry_deployment": model.foundry_deployment,
         "latency_sec": round(latency_sec, 3),
         "prompt_tokens": getattr(usage, "prompt_tokens", None),
         "completion_tokens": getattr(usage, "completion_tokens", None),
@@ -59,7 +52,7 @@ def _record_meta(meta: Optional[dict], response, model: ModelSpec, latency_sec: 
 
 class LLMService:
 
-    DEEPSEEK_MODEL = "deepseek/deepseek-chat-v3-0324"   # fast DeepSeek for text tasks (refine / translate)
+    DEEPSEEK_MODEL = Config.foundry_deployment_deepseek()
 
     # ── Non-streaming text methods ──────────────────────────────────────
     @staticmethod
@@ -159,7 +152,7 @@ class LLMService:
     ):
         """ICD-10 codes + reasoning (ER: + differential diagnoses + triage).
         `model_id` is one of core.model_registry.REASONING_MODELS. Reasoning-
-        capable models run with OpenRouter's `reasoning` param enabled."""
+        capable models run with reasoning parameters enabled."""
         model = get_model("reasoning", model_id)
         prompt = clinical_prompts.get_diagnosis_prompt(department, translated_text, is_conversation, patient_history_text)
         return LLMService._call_structured(
@@ -190,23 +183,14 @@ class LLMService:
     @staticmethod
     async def _call_text_async(text: str, runtime: LLMRuntime, prompt_type: str, is_conversation: bool, specialty: Optional[str] = None) -> str:
         prompt = LLMService._get_prompt(prompt_type, text, is_conversation, specialty=specialty)
-
-        if _active_provider() == "foundry":
-            # Refine/translate use the Luna deployment on Foundry
-            # (DeepSeek is OpenRouter-only)
-            deployment = FOUNDRY_DEFAULT_EXTRACTION_MODEL
-            kwargs = build_foundry_kwargs(
-                deployment,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=2048,
-                stream=False,
-            )
-            response = await runtime.complete(model=deployment, create_kwargs=kwargs)
-        else:
-            response = await runtime.complete(
-                model=LLMService.DEEPSEEK_MODEL,
-                create_kwargs={"model": LLMService.DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}], "max_tokens": 2048, "temperature": 0},
-            )
+        deployment = Config.foundry_deployment_deepseek()
+        kwargs = build_foundry_kwargs(
+            deployment,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=2048,
+            stream=False,
+        )
+        response = await runtime.complete(model=deployment, create_kwargs=kwargs)
         return response.choices[0].message.content.strip() if response.choices and response.choices[0].message.content else text
 
     # ── Internal: structured JSON call ───────────────────────────────────
@@ -227,50 +211,22 @@ class LLMService:
     async def _call_structured_async(prompt: str, pydantic_model: Type[BaseModel], runtime: LLMRuntime, model: ModelSpec, max_tokens: int, reasoning_effort: Optional[str] = None, meta: Optional[dict] = None):
         use_reasoning = bool(reasoning_effort and model.supports_reasoning)
         t0 = time.perf_counter()
-
-        if _active_provider() == "foundry":
-            # ── Foundry path ─────────────────────────────────────────────────
-            # No extra_body (usage.include / reasoning are OpenRouter-specific).
-            # Use json_schema_strict where supported, fall back to json_object.
-            deployment = model.foundry_deployment
-            if not deployment:
-                raise RuntimeError(
-                    f"Model {model.id!r} has no Foundry deployment configured. "
-                    "Select a model with a Foundry deployment or use LLM_PROVIDER=openrouter."
-                )
-            kwargs = build_foundry_kwargs(
-                deployment,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=max_tokens,
-                stream=False,
-                response_format={"type": "json_object"},
-                reasoning_effort=reasoning_effort if use_reasoning else None,
-            )
-            model_key = deployment  # used for limiter, retry, telemetry
-        else:
-            # ── OpenRouter path (unchanged) ───────────────────────────────────
-            extra_body: dict[str, Any] = {"usage": {"include": True}}
-            if use_reasoning:
-                extra_body["reasoning"] = {"effort": reasoning_effort}
-            kwargs = {
-                "model": model.slug,
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": max_tokens,
-                "extra_body": extra_body,
-                "response_format": {"type": "json_object"},
-            }
-            if not use_reasoning:
-                kwargs["temperature"] = 0
-            model_key = model.slug
-
+        deployment = model.foundry_deployment
+        kwargs = build_foundry_kwargs(
+            deployment,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            stream=False,
+            response_format={"type": "json_object"},
+            reasoning_effort=reasoning_effort if use_reasoning else None,
+        )
         try:
-            response = await runtime.complete(model=model_key, create_kwargs=kwargs)
+            response = await runtime.complete(model=deployment, create_kwargs=kwargs)
         except Exception as exc:
             if getattr(exc, "status_code", None) != 400:
                 raise
-            # 400 means the model rejected response_format — retry without it
             kwargs.pop("response_format", None)
-            response = await runtime.complete(model=model_key, create_kwargs=kwargs)
+            response = await runtime.complete(model=deployment, create_kwargs=kwargs)
 
         _record_meta(meta, response, model, time.perf_counter() - t0, use_reasoning)
         choice = response.choices[0] if response.choices else None
@@ -304,23 +260,15 @@ class LLMService:
     @staticmethod
     async def _stream_text_async(text: str, runtime: LLMRuntime, prompt_type: str, is_conversation: bool = False, specialty: Optional[str] = None):
         prompt = LLMService._get_prompt(prompt_type, text, is_conversation, specialty=specialty)
-
-        if _active_provider() == "foundry":
-            deployment = FOUNDRY_DEFAULT_EXTRACTION_MODEL
-            kwargs = build_foundry_kwargs(
-                deployment,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=2048,
-                stream=True,
-            )
-            async for delta in runtime.stream(model=deployment, create_kwargs=kwargs):
-                yield delta
-        else:
-            async for delta in runtime.stream(
-                model=LLMService.DEEPSEEK_MODEL,
-                create_kwargs={"model": LLMService.DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}], "max_tokens": 2048, "temperature": 0},
-            ):
-                yield delta
+        deployment = Config.foundry_deployment_deepseek()
+        kwargs = build_foundry_kwargs(
+            deployment,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=2048,
+            stream=True,
+        )
+        async for delta in runtime.stream(model=deployment, create_kwargs=kwargs):
+            yield delta
 
     # ── Prompt dispatch (refine / translate only) ─────────────────────────
     @staticmethod

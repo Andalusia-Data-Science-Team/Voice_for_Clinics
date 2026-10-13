@@ -1,16 +1,8 @@
-# ── Phase 0: Key Vault bootstrap — MUST be before any other import ──────────
-from core.azure_identity import bootstrap as _kv_bootstrap; _kv_bootstrap()
-# ─────────────────────────────────────────────────────────────────────────────
 import time
 import json
 import logging
 import asyncio
-import sys
 import secrets
-
-# On Windows, asyncio subprocesses (like ffmpeg piping) require ProactorEventLoop
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from enum import Enum
@@ -25,35 +17,14 @@ from fastapi import (
     FastAPI,
     Form,
     HTTPException,
-    Query,
     Request,
     WebSocket,
     WebSocketDisconnect,
 )
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
-
-# Phase 1: APIM-native auth — no JWT library, no BasicAuth
-from core.auth import (
-    AuthenticatedUser,
-    get_current_user,
-    get_sso_user,
-    require_admin,
-    require_authenticated,
-)
-
-# Phase 2: Application Insights telemetry
-from core.telemetry import (
-    init_telemetry,
-    track_event,
-    increment_active_analyses,
-    decrement_active_analyses,
-    increment_active_websockets,
-    decrement_active_websockets,
-)
-
-# Phase 4: Admission controller — capacity gating + health probe
-from core.admission import AdmissionController, AdmissionRejectedError, admission_controller
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from core.config import Config
 from model.speech_service import SpeechService
@@ -76,6 +47,13 @@ router = APIRouter(prefix="/audio", tags=["Audio Processing"])
 patient_router = APIRouter(prefix="/patient", tags=["Patient History"])
 
 
+def _sse_json(payload: object) -> str:
+    """Serialize SSE data as compact, standards-compliant UTF-8 JSON."""
+    # Arabic text is much smaller as UTF-8 than as ``\\uXXXX`` escapes, and
+    # strict JSON avoids sending Python-only NaN/Infinity values to JSON.parse.
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+
+
 def get_current_request(request: Request) -> Request:
     """Provide the current Starlette request through FastAPI dependency injection."""
     return request
@@ -84,10 +62,6 @@ def get_current_request(request: Request) -> Request:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Create and close one shared asynchronous LLM runtime per worker."""
-    # Secrets already in os.environ (bootstrap() ran at module load).
-    # Initialize telemetry (Phase 2)
-    init_telemetry()
-    # LLMRuntime.__init__ reads Config.llm_api_key() lazily — safe here.
     app.state.llm = LLMRuntime()
     try:
         yield
@@ -114,26 +88,16 @@ async def serve_favicon():
     """Return the application logo for browsers requesting a favicon."""
     return FileResponse(Path(__file__).parent / "static" / "andalusia.png")
 
-# ── Phase 1: CORS is handled by APIM global.xml ──────────────────────────────
-# CORSMiddleware has been removed from FastAPI.
-# APIM's <cors> policy in apim/policies/global.xml handles all preflight and
-# CORS headers.  Keeping it here would double-set headers and confuse browsers.
-#
-# Dev mode without APIM: run with APIM_ENABLED=false — browsers that hit
-# FastAPI directly (e.g. via `uvicorn app:app`) will need a local proxy or
-# browser CORS-disabled mode, OR re-enable CORSMiddleware temporarily by
-# setting DEV_CORS=true (checked below).
-import os as _os
-if _os.getenv("DEV_CORS", "false").lower() == "true":
-    from fastapi.middleware.cors import CORSMiddleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    logger.warning("[CORS] DEV_CORS=true — permissive CORS active (dev only, never production)")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:1110",
+        "https://medical-voice-assistant.ahbsdev.com",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -155,12 +119,25 @@ def _get_client_ip(request: Request) -> str:
 
 def _get_client_user(request: Request) -> Optional[str]:
     """
-    Phase 1: Returns the SSO user from APIM-injected X-User-* headers.
-    In dev mode (APIM_ENABLED=false) falls back to legacy proxy headers
-    (X-Forwarded-User etc.) for smooth staging transition.
-    See core.auth.get_sso_user() for the full resolution logic.
+    Best-effort identification of who's using the app, beyond what the
+    person typed into a name field themselves.
+
+    A browser will NEVER expose the machine's logged-in OS/Windows username
+    to a web page — that's a hard security boundary built into every
+    browser, not something fixable from this app's code. The only way to
+    get an authenticated username automatically is if something in front of
+    this app authenticates the request and passes the result along, e.g. a
+    reverse proxy doing Windows-integrated auth (Kerberos/NTLM) or SSO,
+    which typically injects the authenticated identity as a header such as
+    X-Forwarded-User. This checks for a few common ones, in priority order,
+    and returns None if none are present — callers should fall back to a
+    self-reported name (clinician_name / feedback's name field) in that case.
     """
-    return get_sso_user(request)
+    for header in ("x-forwarded-user", "x-remote-user", "x-auth-user", "remote-user"):
+        val = request.headers.get(header)
+        if val and val.strip():
+            return val.strip()
+    return None
 
 
 def save_usage_log(entry: dict) -> None:
@@ -170,37 +147,6 @@ def save_usage_log(entry: dict) -> None:
         logger.info("[UsageLog] Saved entry for %s", entry.get("ip"))
     except Exception as e:
         logger.warning("[UsageLog] Failed to write log: %s", e)
-
-    # Phase 2: Send structured AnalyzeSession event to Application Insights.
-    # PHI text fields are excluded (enforced both here and inside track_event).
-    try:
-        properties = {
-            "session_id": entry.get("session_id"),
-            "ip": entry.get("ip"),
-            "sso_user": entry.get("sso_user"),
-            "clinician_name": entry.get("clinician_name"),
-            "language": entry.get("language"),
-            "mode": entry.get("mode"),
-            "department": entry.get("department"),
-            "specialty": entry.get("specialty"),
-            "patient_id": entry.get("patient_id"),
-            "business_unit": entry.get("business_unit"),
-            "use_history": str(entry.get("use_history")),
-            "status": entry.get("status"),
-            "refinement_skipped": str(entry.get("refinement_skipped")),
-        }
-        measurements = {
-            "total_sec": float(entry["total_sec"]) if entry.get("total_sec") is not None else 0.0,
-            "transcription_sec": float(entry["transcription_sec"]) if entry.get("transcription_sec") is not None else 0.0,
-            "refinement_sec": float(entry["refinement_sec"]) if entry.get("refinement_sec") is not None else 0.0,
-            "translation_sec": float(entry["translation_sec"]) if entry.get("translation_sec") is not None else 0.0,
-            "extraction_sec": float(entry["extraction_sec"]) if entry.get("extraction_sec") is not None else 0.0,
-            "question_generation_sec": float(entry["question_generation_sec"]) if entry.get("question_generation_sec") is not None else 0.0,
-            "history_visit_count": float(entry.get("history_visit_count") or 0),
-        }
-        track_event("AnalyzeSession", properties=properties, measurements=measurements)
-    except Exception:
-        pass
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -224,7 +170,7 @@ def save_feedback_log(entry: dict) -> None:
         logger.warning("[Feedback] Failed to write feedback log: %s", e)
 
 
-@app.get("/models", summary="Fixed models used by the analysis pipeline")
+@app.get("/models", summary="Fixed model per pipeline step")
 async def list_models():
     return registry_for_ui()
 
@@ -262,24 +208,6 @@ async def submit_feedback(
         entry["session_id"], entry["name"], entry["rating"], entry["department"], entry["language"], entry["text"],
     )
     await asyncio.to_thread(save_feedback_log, entry)
-
-    # Phase 2: Send structured DoctorFeedback event to Application Insights
-    try:
-        track_event(
-            "DoctorFeedback",
-            properties={
-                "session_id": entry["session_id"],
-                "name": entry["name"],
-                "sso_user": entry["sso_user"],
-                "rating": entry["rating"],
-                "department": entry["department"],
-                "language": entry["language"],
-                "has_text": str(bool(entry["text"])),
-            },
-        )
-    except Exception:
-        pass
-
     return {"status": "ok"}
 
 
@@ -292,13 +220,27 @@ async def submit_feedback(
 # aggregation client-side from the raw entries, so there's one source of
 # truth (the JSONL files) and no separate "stats" logic to keep in sync.
 #
-# ⚠ ACCESS CONTROL (Phase 1):
-#   In production: APIM admin.xml enforces ClinicalAdmin role at the gateway
-#   BEFORE the request reaches FastAPI.  require_admin() below is the
-#   FastAPI-side defence-in-depth duplicate check.
-#   In dev (APIM_ENABLED=false): ANONYMOUS has ClinicalAdmin, so all routes
-#   are accessible locally without any credentials.
+# ⚠ ACCESS CONTROL: this is genuinely sensitive — usage.jsonl includes full
+# transcripts and extracted clinical note content, and feedback may include
+# clinician names. If Config.DASHBOARD_USERNAME and Config.DASHBOARD_PASSWORD
+# are both set, every route below requires that HTTP Basic Auth login. If
+# either is unset, THE DASHBOARD IS OPEN TO ANYONE WHO KNOWS THE URL — that's
+# a deliberate "works out of the box in dev" default, not a recommendation;
+# set both before exposing this outside a trusted network.
 # ═══════════════════════════════════════════════════════════════════════════════
+
+_dashboard_security = HTTPBasic(auto_error=False)
+
+
+def _require_dashboard_auth(credentials: Optional[HTTPBasicCredentials] = Depends(_dashboard_security)):
+    dash_user = getattr(Config, "DASHBOARD_USERNAME", None)
+    dash_pass = getattr(Config, "DASHBOARD_PASSWORD", None)
+    if not dash_user or not dash_pass:
+        return  # no credentials configured — dashboard runs unauthenticated, see warning above
+    ok = bool(credentials) and secrets.compare_digest(credentials.username, dash_user) \
+                            and secrets.compare_digest(credentials.password, dash_pass)
+    if not ok:
+        raise HTTPException(status_code=401, detail="Unauthorized", headers={"WWW-Authenticate": "Basic"})
 
 
 def _read_jsonl(path: Path, limit: int) -> list:
@@ -318,38 +260,26 @@ def _read_jsonl(path: Path, limit: int) -> list:
                 except json.JSONDecodeError:
                     continue
     except Exception as e:
-        logger.warning("[Dashboard] Failed to read %s: %s", path, e)
+        logger.warning(f"[Dashboard] Failed to read {path}: {e}")
         return []
     entries.reverse()
     return entries[:limit]
 
 
 @app.get("/admin/usage", summary="Recent /audio/analyze usage log entries, newest first")
-async def admin_usage(
-    limit: int = 500,
-    user: AuthenticatedUser = Depends(require_admin),
-):
-    """ClinicalAdmin only. Returns up to `limit` usage log entries, newest first."""
+async def admin_usage(limit: int = 500, _auth=Depends(_require_dashboard_auth)):
     limit = max(1, min(limit, 5000))
-    logger.info("[Dashboard] admin_usage accessed by %s", user.display)
     return {"entries": _read_jsonl(USAGE_LOG, limit)}
 
 
 @app.get("/admin/feedback", summary="Recent doctor feedback entries, newest first")
-async def admin_feedback(
-    limit: int = 500,
-    user: AuthenticatedUser = Depends(require_admin),
-):
-    """ClinicalAdmin only. Returns up to `limit` feedback log entries, newest first."""
+async def admin_feedback(limit: int = 500, _auth=Depends(_require_dashboard_auth)):
     limit = max(1, min(limit, 5000))
-    logger.info("[Dashboard] admin_feedback accessed by %s", user.display)
     return {"entries": _read_jsonl(FEEDBACK_LOG, limit)}
 
 
 @app.get("/dashboard", summary="Analytics dashboard — usage + feedback, for internal review")
-async def serve_dashboard(user: AuthenticatedUser = Depends(require_admin)):
-    """ClinicalAdmin only. Serves the static dashboard HTML."""
-    logger.info("[Dashboard] dashboard accessed by %s", user.display)
+async def serve_dashboard(_auth=Depends(_require_dashboard_auth)):
     return FileResponse(Path(__file__).parent / "static" / "dashboard.html")
 
 
@@ -401,7 +331,7 @@ async def tts_disclaimer():
     never again on pause/resume within that same session.
     """
     try:
-        audio_bytes = await SpeechService.get_recording_disclaimer_audio(Config.munsit_api_key())
+        audio_bytes = await SpeechService.get_recording_disclaimer_audio(Config.MUNSIT_API_KEY)
         return Response(content=audio_bytes, media_type="audio/wav")
     except Exception as e:
         logger.error("[TTS] Disclaimer synthesis failed: %s", e)
@@ -468,21 +398,7 @@ async def ws_transcribe(websocket: WebSocket):
       {"type": "done"}
       {"type": "error",  "detail": "..."}
     """
-    # Phase 4: Admission gate — check capacity BEFORE accepting the socket.
-    # If we are saturated we reject at the TCP level (close before accept),
-    # which is the cleanest signal a client can receive.
-    try:
-        await admission_controller.check_websocket()
-    except AdmissionRejectedError as exc:
-        # Accept then immediately close with a 1008 (Policy Violation) code
-        # so the browser-side WebSocket gets an error event rather than hanging.
-        await websocket.accept()
-        await websocket.close(code=1008, reason=str(exc))
-        logger.warning("[WS] Admission rejected: %s", exc)
-        return
-
     await websocket.accept()
-    increment_active_websockets()
     logger.info("[WS] Client connected — %s", websocket.client.host)
 
     input_sample_rate = 16000
@@ -540,7 +456,7 @@ async def ws_transcribe(websocket: WebSocket):
             # ── Arabic → Munsit ──
             async for event in SpeechService.transcribe_live_stream_ar(
                 raw_pcm_iter=pcm_iter(),
-                api_key=Config.munsit_api_key(),
+                api_key=Config.MUNSIT_API_KEY,
                 input_sample_rate=input_sample_rate,
                 code_switching=True,
                 hotwords=hotwords,
@@ -569,7 +485,7 @@ async def ws_transcribe(websocket: WebSocket):
             # ── English → Voxtral (unchanged) ──
             async for delta in SpeechService.transcribe_live_stream(
                 raw_pcm_iter=pcm_iter(),
-                api_key=Config.mistral_api_key(),
+                api_key=Config.MISTRAL_API_KEY,
                 input_sample_rate=input_sample_rate,
             ):
                 try:
@@ -592,7 +508,6 @@ async def ws_transcribe(websocket: WebSocket):
             pass
 
     finally:
-        decrement_active_websockets()
         receive_task.cancel()
         try:
             await receive_task
@@ -617,26 +532,6 @@ async def ws_transcribe(websocket: WebSocket):
 # since every clinical-note field is always written in English regardless of
 # which language the doctor spoke in.
 # ═══════════════════════════════════════════════════════════════════════════════
-# GET /audio/icd10/search — sub-10ms autocomplete search across 16,954 Australian
-# ICD-10-AM codes, supporting both prefix code matches ("J18") and fuzzy description
-# queries ("pneumonia").
-# ═══════════════════════════════════════════════════════════════════════════════
-
-@router.get(
-    "/icd10/search",
-    summary="Sub-10ms autocomplete search across Australian ICD-10-AM codes",
-)
-async def search_icd10(
-    q: str = Query(..., min_length=1, description="Code prefix or description keyword"),
-    limit: int = Query(20, ge=1, le=50, description="Maximum number of results to return"),
-    user: AuthenticatedUser = Depends(require_authenticated),
-):
-    """Sub-10ms fuzzy search across 16,954 Australian ICD-10-AM codes."""
-    from model.icd10_registry import get_registry
-    registry = get_registry()
-    results = registry.search(q, limit=limit)
-    return [{"code": r[0], "description": r[1]} for r in results]
-
 
 @router.post(
     "/refine-field",
@@ -646,7 +541,7 @@ async def refine_field_answer(
     runtime: LLMRuntime = Depends(get_llm_runtime),
     text: str = Form(..., description="Raw transcript of the doctor's spoken answer for one field"),
     language: Language = Form(Language.english, description="Language the answer was spoken in"),
-    specialty: Optional[str] = Form(None, description="Medical specialty"),
+    specialty: Optional[Specialty] = Form(None, description="Medical specialty"),
 ):
     if not text or not text.strip():
         raise HTTPException(status_code=400, detail="text must not be empty")
@@ -756,25 +651,7 @@ async def analyze_transcript(
     # refinement prompt's specialty context below.
     text = correct_specialty_terms(text, specialty_value)
 
-    # Phase 4: Pre-flight admission check — runs synchronously before the SSE
-    # stream is opened so we can return a clean 503 JSON response instead of
-    # starting the stream and then bailing, which confuses some SSE clients.
-    try:
-        await admission_controller.check_analysis()
-    except AdmissionRejectedError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "capacity_exceeded",
-                "message": str(exc),
-                "active": exc.active,
-                "max": exc.maximum,
-                "retry_after_sec": 5,
-            },
-        )
-
     async def event_stream():
-        increment_active_analyses()
         # Accumulated outputs — populated as each step completes
         log: dict = {
             "timestamp":          datetime.now(timezone.utc).isoformat(),
@@ -816,6 +693,7 @@ async def analyze_transcript(
             "[Analyze] session start — clinician_name=%r sso_user=%r department=%s language=%s mode=%s",
             log["clinician_name"], log["sso_user"], department_value, language.value, mode.value,
         )
+        parallel_tasks = []
 
         try:
             # ── 1. Refine ─────────────────────────────────────────────────
@@ -827,7 +705,7 @@ async def analyze_transcript(
                 refined_text = text
                 log["refined_text"] = refined_text
                 log["refinement_sec"] = 0.0  # skipped entirely in Doctor mode — not "instant", just not run
-                yield {"event": "refinement_skipped", "data": json.dumps({
+                yield {"event": "refinement_skipped", "data": _sse_json({
                     "refined_text": refined_text,
                 })}
             else:
@@ -840,17 +718,17 @@ async def analyze_transcript(
                     )
                     async for delta in refine_stream:
                         refined_parts.append(delta)
-                        yield {"event": "refinement_delta", "data": json.dumps({"delta": delta})}
+                        yield {"event": "refinement_delta", "data": _sse_json({"delta": delta})}
                 except Exception as exc:
                     log["status"] = "error"
-                    yield {"event": "error", "data": json.dumps({"step": "refinement", "detail": str(exc)})}
+                    yield {"event": "error", "data": _sse_json({"step": "refinement", "detail": str(exc)})}
                     return
 
                 refined_text      = "".join(refined_parts)
                 refinement_sec    = round(time.perf_counter() - t0, 3)
                 log["refined_text"]   = refined_text
                 log["refinement_sec"] = refinement_sec
-                yield {"event": "refinement_done", "data": json.dumps({
+                yield {"event": "refinement_done", "data": _sse_json({
                     "refined_text":   refined_text,
                     "refinement_sec": refinement_sec,
                 })}
@@ -864,17 +742,17 @@ async def analyze_transcript(
                         refined_text, runtime, is_conversation=is_conversation
                     ):
                         translated_parts.append(delta)
-                        yield {"event": "translation_delta", "data": json.dumps({"delta": delta})}
+                        yield {"event": "translation_delta", "data": _sse_json({"delta": delta})}
                 except Exception as exc:
                     log["status"] = "error"
-                    yield {"event": "error", "data": json.dumps({"step": "translation", "detail": str(exc)})}
+                    yield {"event": "error", "data": _sse_json({"step": "translation", "detail": str(exc)})}
                     return
 
                 final_text             = "".join(translated_parts)
                 translation_sec        = round(time.perf_counter() - t0, 3)
                 log["translated_text"]  = final_text
                 log["translation_sec"]  = translation_sec
-                yield {"event": "translation_done", "data": json.dumps({
+                yield {"event": "translation_done", "data": _sse_json({
                     "final_text":      final_text,
                     "translation_sec": translation_sec,
                 })}
@@ -924,26 +802,93 @@ async def analyze_transcript(
                 data = diagnosis_result.get("json_data", {}) if diagnosis_result else {}
                 return {"data": data, "meta": meta, "diagnosis_sec": round(time.perf_counter() - t0, 3)}
 
-            ext_res, diag_res = await asyncio.gather(run_extraction(), run_diagnosis(), return_exceptions=True)
-
             errors: dict = {}
             extracted_features, raw_questions, diagnosis_data = {}, [], {}
             extraction_sec = question_generation_sec = diagnosis_sec = None
             ext_meta = diag_meta = None
+            history_check = None
 
-            if isinstance(ext_res, BaseException):
-                errors["extraction"] = str(ext_res)
-                logger.error("[Analyze] extraction failed: %s", ext_res)
-            else:
-                extracted_features, raw_questions = ext_res["features"], ext_res["questions"]
-                extraction_sec, question_generation_sec = ext_res["extraction_sec"], ext_res["question_generation_sec"]
-                ext_meta = ext_res["meta"]
+            async def capture_step(step: str, operation):
+                try:
+                    return step, await operation(), None
+                except Exception as exc:
+                    return step, None, exc
 
-            if isinstance(diag_res, BaseException):
-                errors["diagnosis"] = str(diag_res)
-                logger.error("[Analyze] diagnosis failed: %s", diag_res)
-            else:
-                diagnosis_data, diagnosis_sec, diag_meta = diag_res["data"], diag_res["diagnosis_sec"], diag_res["meta"]
+            parallel_tasks = [
+                asyncio.create_task(capture_step("extraction", run_extraction)),
+                asyncio.create_task(capture_step("diagnosis", run_diagnosis)),
+            ]
+
+            # Send each step as soon as it finishes; the slower parallel step
+            # continues running while the browser renders the completed one.
+            for completed in asyncio.as_completed(parallel_tasks):
+                step, result, error = await completed
+                if step == "extraction":
+                    if error:
+                        errors[step] = str(error)
+                        logger.error("[Analyze] extraction failed: %s", error)
+                        event_data = {
+                            "department": department_value,
+                            "model": extraction_spec.label,
+                            "error": str(error),
+                        }
+                    else:
+                        extracted_features = result["features"]
+                        raw_questions = result["questions"]
+                        extraction_sec = result["extraction_sec"]
+                        question_generation_sec = result["question_generation_sec"]
+                        ext_meta = result["meta"]
+                        event_data = {
+                            "department": department_value,
+                            "patient_story": patient_story,
+                            "extracted_features": extracted_features,
+                            "extraction_sec": extraction_sec,
+                            "questions": raw_questions,
+                            "question_generation_sec": question_generation_sec,
+                            "model": extraction_spec.label,
+                            "usage": ext_meta,
+                        }
+                    yield {"event": "extraction", "data": json.dumps(event_data)}
+                else:
+                    if error:
+                        errors[step] = str(error)
+                        logger.error("[Analyze] diagnosis failed: %s", error)
+                        event_data = {
+                            "department": department_value,
+                            "model": reasoning_spec.label,
+                            "error": str(error),
+                            "history_used": bool(patient_history_text),
+                            "history_visit_count": len(patient_history_visits),
+                            "history_error": history_error,
+                        }
+                    else:
+                        diagnosis_data = result["data"]
+                        diagnosis_sec = result["diagnosis_sec"]
+                        diag_meta = result["meta"]
+                        if patient_history_text and diagnosis_data:
+                            history_check = check_history_usage(patient_history_visits, diagnosis_data)
+                            if history_check["flag"] == "claims_used_no_overlap":
+                                logger.warning(
+                                    "[Analyze] patient_code=%s: history_considered=Yes but no ICD-10 family overlap — history_notes=%r",
+                                    patient_id, diagnosis_data.get("history_notes"),
+                                )
+                            elif history_check["flag"] == "overlap_but_not_flagged":
+                                logger.warning(
+                                    "[Analyze] patient_code=%s: ICD-10 family overlap %s but history_considered was not 'Yes'",
+                                    patient_id, history_check["overlap_families"],
+                                )
+                        event_data = {
+                            "department": department_value,
+                            "diagnosis": diagnosis_data,
+                            "diagnosis_sec": diagnosis_sec,
+                            "model": reasoning_spec.label,
+                            "usage": diag_meta,
+                            "history_used": bool(patient_history_text),
+                            "history_visit_count": len(patient_history_visits),
+                            "history_check": history_check,
+                            "history_error": history_error,
+                        }
+                    yield {"event": "diagnosis", "data": json.dumps(event_data)}
 
             log["extracted_features"]       = extracted_features
             log["questions"]                = raw_questions
@@ -953,55 +898,16 @@ async def analyze_transcript(
             log["diagnosis_sec"]            = diagnosis_sec
             log["extraction_usage"]         = ext_meta
             log["diagnosis_usage"]          = diag_meta
-
+            log["history_check"]            = history_check
             if errors:
                 log["status"] = "error"
-                if len(errors) == 2:     # nothing to show — surface both failures and stop
-                    for step, detail in errors.items():
-                        yield {"event": "error", "data": json.dumps({"step": step, "detail": detail})}
-                    return
-
-            # History audit — history only ever feeds the diagnosis step now.
-            history_check = None
-            if patient_history_text and diagnosis_data:
-                history_check = check_history_usage(patient_history_visits, diagnosis_data)
-                if history_check["flag"] == "claims_used_no_overlap":
-                    logger.warning(f"[Analyze] patient_code={patient_id}: history_considered=Yes but no ICD-10 family overlap "
-                                   f"— history_notes={diagnosis_data.get('history_notes')!r}")
-                elif history_check["flag"] == "overlap_but_not_flagged":
-                    logger.warning(f"[Analyze] patient_code={patient_id}: ICD-10 family overlap {history_check['overlap_families']} "
-                                   f"but history_considered was not 'Yes'")
-            log["history_check"] = history_check
-
-            payload = {
-                "department":              department_value,
-                "patient_story":           patient_story,
-                # step 1
-                "extracted_features":      extracted_features,
-                "extraction_sec":          extraction_sec,
-                "questions":               raw_questions,
-                "question_generation_sec": question_generation_sec,
-                # step 2
-                "diagnosis":               diagnosis_data,
-                "diagnosis_sec":           diagnosis_sec,
-                "history_used":            bool(patient_history_text),
-                "history_visit_count":     len(patient_history_visits),
-                "history_check":           history_check,
-                "history_error":           history_error,
-                # meta
-                "models":  {"extraction": extraction_spec.label, "reasoning": reasoning_spec.label},
-                "usage":   {"extraction": ext_meta, "diagnosis": diag_meta},
-                "errors":  errors,
-                "total_sec": round(time.perf_counter() - pipeline_start, 3),
-            }
-            logger.info("[Analyze] Emitting combined 'extraction' SSE event (extraction=%s, diagnosis=%s, %d question(s), ~%d bytes)",
-                        "ok" if "extraction" not in errors else "FAILED",
-                        "ok" if "diagnosis" not in errors else "FAILED",
-                        len(raw_questions), len(json.dumps(payload)))
-            yield {"event": "extraction", "data": json.dumps(payload)}
 
         finally:
-            decrement_active_analyses()
+            for task in parallel_tasks:
+                if not task.done():
+                    task.cancel()
+            if parallel_tasks:
+                await asyncio.gather(*parallel_tasks, return_exceptions=True)
             log["total_sec"] = round(time.perf_counter() - pipeline_start, 3)
             await asyncio.to_thread(save_usage_log, log)
 
@@ -1021,57 +927,8 @@ async def analyze_transcript(
     )
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# GET /health — APIM health probe + Azure Monitor liveness endpoint
-# ═══════════════════════════════════════════════════════════════════════════════
-
-@app.get("/health", summary="Liveness + capacity health probe for APIM and Azure Monitor")
-async def health_probe(request: Request):
-    """
-    Returns HTTP 200 (status=ok) or HTTP 503 (status=degraded) with a JSON
-    body that Azure API Management can use as a backend health check.
-
-    Response body:
-      status              : "ok" | "degraded"
-      timestamp           : ISO-8601 UTC
-      version             : application version label
-      admission           : concurrency stats from AdmissionController
-        active_analyses       / max_analyses    / analyses_utilization
-        active_websockets     / max_websockets  / websockets_utilization
-        is_saturated          : true when either limit is reached
-
-    HTTP status codes:
-      200 — healthy (no limit saturated)
-      503 — saturated / degraded (APIM should stop routing new traffic here)
-    """
-    stats = admission_controller.stats
-    is_degraded = stats["is_saturated"]
-
-    # Emit a point-in-time metric snapshot to Application Insights on every probe
-    try:
-        from core.telemetry import track_metric
-        track_metric("medvoice.active_analyses",   float(stats["active_analyses"]),   unit="sessions")
-        track_metric("medvoice.active_websockets", float(stats["active_websockets"]), unit="sessions")
-    except Exception:
-        pass
-
-    body = {
-        "status":    "degraded" if is_degraded else "ok",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version":   "M1.4",
-        "admission": stats,
-    }
-
-    status_code = 503 if is_degraded else 200
-    return Response(
-        content=json.dumps(body),
-        media_type="application/json",
-        status_code=status_code,
-    )
-
-
 app.include_router(router)
 app.include_router(patient_router)
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=9999)
+    uvicorn.run("app:app", host="0.0.0.0", port=7777)

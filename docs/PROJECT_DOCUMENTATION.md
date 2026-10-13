@@ -37,7 +37,7 @@ flowchart TD
     WS -- Arabic --> Munsit[Munsit]
     WS -- deltas --> Browser
     Browser -- transcript + form --> Analyze[/audio/analyze/]
-    Analyze -- refine/translate --> DeepSeek[DeepSeek via OpenRouter]
+    Analyze -- refine/translate --> DeepSeek[DeepSeek via Azure AI Foundry]
     Analyze -- extraction --> Ext[Extraction model]
     Analyze -- diagnosis --> Reason[Reasoning model]
     Analyze -- SSE events --> Browser
@@ -55,8 +55,9 @@ Key design points:
   their own clients.
 - **Streaming everywhere**: transcription streams over WebSocket, analysis
   streams over SSE, so the doctor sees results as each step finishes.
-- **Extraction and diagnosis run in parallel** with `asyncio.gather`, halving
-  the tail latency of the analysis step.
+- **Extraction and diagnosis run in parallel**. Separate SSE events are sent
+  as each step finishes, so the browser can display the first result without
+  waiting for the slower step.
 
 ---
 
@@ -82,10 +83,11 @@ sequenceDiagram
     end
     par Extraction
         S->>S: Extract clinical fields
+        S-->>U: SSE extraction event (fields + questions)
     and Diagnosis
         S->>S: ICD-10 + reasoning
+        S-->>U: SSE diagnosis event
     end
-    S-->>U: SSE extraction event (fields, questions, diagnosis)
 ```
 
 Stages:
@@ -158,21 +160,21 @@ All configuration is environment-driven via `src/core/config.py`
 (`.env` is loaded automatically).
 Docker Compose passes variables from `src/.env` into the container.
 
-### Provider keys
+### Provider keys and credentials
 
 | Variable | Purpose |
 |---|---|
 | `MISTRAL_API_KEY` | Voxtral English transcription |
 | `MUNSIT_API_KEY` | Arabic transcription + TTS disclaimer |
-| `OPENROUTER_API_KEY` | Primary OpenRouter key for all LLM steps |
-| `OPENROUTER_API_KEYS` | Optional comma-separated keys; first is used by default and later keys are tried after credit-related failures |
-| `LLM_API_KEY` | Optional explicit OpenRouter key override; otherwise the singular key or first plural key is used |
+| `AI_FOUNDRY_ENDPOINT` | Azure AI Foundry endpoint URL |
+| `AI_FOUNDRY_KEY` | Primary API key for Azure AI Foundry |
+| `AI_FOUNDRY_AUTH_METHOD` | Authentication mode (`api_key` or `managed_identity`) |
+| `AI_FOUNDRY_API_VERSION` | Azure AI Foundry API version (default: `2024-06-01`) |
 
 ### LLM runtime
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `LLM_BASE_URL` | `https://openrouter.ai/api/v1` | OpenAI-compatible base URL |
 | `LLM_TIMEOUT_S` | `45` | Overall request timeout |
 | `LLM_CONNECT_TIMEOUT_S` | `5` | Connect timeout |
 | `LLM_MAX_ATTEMPTS` | `4` | Retry attempts including the first |
@@ -234,7 +236,7 @@ Interactive docs are served by FastAPI at `/docs`.
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/` | Web UI |
-| GET | `/models` | Fixed extraction and reasoning models |
+| GET | `/models` | Selectable models per pipeline step |
 | POST | `/audio/analyze` | Full analysis pipeline (SSE) |
 | POST | `/audio/refine-field` | Refine one spoken field answer |
 | GET | `/audio/tts-disclaimer` | Recording-consent WAV (Munsit TTS) |
@@ -259,6 +261,8 @@ Interactive docs are served by FastAPI at `/docs`.
 | `use_history` | | `false` | Include patient history in diagnosis |
 | `patient_id` | | — | Required when `use_history=true` |
 | `business_unit` | | — | `AHJ`, `AMH`, or `ANC`; required with history |
+| `extraction_model` | | default | Model id from `GET /models` |
+| `reasoning_model` | | default | Model id from `GET /models` |
 | `session_id` | | — | Joins feedback to this analysis |
 
 Example:
@@ -308,21 +312,31 @@ alive through pauses by an 8-second KeepAlive loop on the server side.
 | `refinement_done` | Refinement complete | `refined_text`, `refinement_sec` |
 | `translation_delta` | Arabic only | partial English text |
 | `translation_done` | Translation complete | `final_text`, `translation_sec` |
-| `extraction` | Final combined result | fields, questions, diagnosis, usage |
-| `error` | Any step failed | `step`, `detail` |
+| `extraction` | Extraction and question generation finish | fields, questions, model, usage; `error` on failure |
+| `diagnosis` | Diagnosis finishes | diagnosis, history audit, model, usage; `error` on failure |
+| `error` | Refinement or translation failed | `step`, `detail` |
 
-The `extraction` event is emitted after extraction **and** diagnosis finish
-(they run in parallel) and contains the complete clinical note payload.
+Extraction and diagnosis run concurrently. Each result event is emitted as
+soon as its corresponding step finishes; event arrival order depends on which
+step completes first. An extraction or diagnosis failure is included as an
+`error` field in that step's event, so it does not delay the other result.
 
 ---
 
 ## Model Registry
 
 `src/core/model_registry.py` is the single source of truth for model ids,
-labels, and OpenRouter slugs.
+labels, and Azure AI Foundry deployments.
 
-The UI does not offer model selection. Both clinical-note extraction and
-diagnosis reasoning use `gpt-5.6-luna` (`openai/gpt-5.6-luna`).
+**Extraction evaluation candidates:** `gpt-4o-mini`, `gpt-5.6-luna`,
+`glm-5.3-flash`, `claude-sonnet-5.5`.
+
+**Reasoning evaluation candidates:** `gpt-4o-mini`, `gemini-3.7-flash`,
+`claude-sonnet-5.5`, `gpt-5.6-luna`.
+
+Defaults for both steps: `gpt-5.6-luna` (`openai/gpt-5.6-luna`). The UI registry
+exposes only this fixed model for each step; the additional candidates are
+retained for evaluation runs.
 
 **Judges** (used by the evaluation suite, cross-family by design):
 

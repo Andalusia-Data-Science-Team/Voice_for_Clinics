@@ -855,6 +855,120 @@ const waveform   = $('waveform');
 
 const API_BASE = '';
 
+function normalizeQueryValue(v) {
+  return String(v ?? '').trim().replace(/\s+/g, ' ');
+}
+
+function normalizeForMatch(v) {
+  return normalizeQueryValue(v).toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '');
+}
+
+function applySelectByValue(selectId, rawValue, aliases = {}) {
+  const el = document.getElementById(selectId);
+  if (!el || !rawValue) return false;
+
+  const incoming = normalizeQueryValue(rawValue);
+  const normalized = incoming.toLowerCase();
+  const direct = aliases[normalized];
+  if (direct) {
+    el.value = direct;
+    return true;
+  }
+
+  const match = Array.from(el.options).find(option => {
+    const optionValue = normalizeForMatch(option.value);
+    const optionText = normalizeForMatch(option.text);
+    const incomingValue = normalizeForMatch(incoming);
+    return optionValue === incomingValue || optionText === incomingValue;
+  });
+
+  if (match) {
+    el.value = match.value;
+    return true;
+  }
+
+  if (selectId === 'pi-bu') {
+    const mapped = incoming.toUpperCase();
+    if (['AHJ', 'AMH', 'ANC'].includes(mapped)) {
+      el.value = mapped;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function applyIncomingQueryValues() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params || params.keys().next().done) return;
+
+  const patientCode = params.get('patient_code');
+  if (patientCode !== null) {
+    const el = document.getElementById('pi-code');
+    if (el) el.value = normalizeQueryValue(patientCode);
+  }
+
+  const businessUnit = params.get('business_unit');
+  if (businessUnit !== null) {
+    applySelectByValue('pi-bu', businessUnit, {});
+  }
+
+  const doctorName = params.get('doctor_name');
+  if (doctorName !== null) {
+    const drEl = document.getElementById('pi-dr');
+    if (drEl) drEl.value = normalizeQueryValue(doctorName);
+    const feedbackNameEl = document.getElementById('feedback-name');
+    if (feedbackNameEl && !feedbackNameEl.value.trim()) {
+      feedbackNameEl.value = normalizeQueryValue(doctorName);
+    }
+  }
+
+  const specialty = params.get('specialty');
+  if (specialty !== null) {
+    const specialtyEl = document.getElementById('sel-specialty');
+    if (specialtyEl) {
+      applySelectByValue('sel-specialty', specialty, {});
+    }
+    const patientSpecialtyEl = document.getElementById('pi-speciality');
+    if (patientSpecialtyEl) {
+      patientSpecialtyEl.value = normalizeQueryValue(specialty);
+    }
+  }
+
+  const sessionIdParam = params.get('session_id');
+  if (sessionIdParam !== null && normalizeQueryValue(sessionIdParam)) {
+    sessionId = normalizeQueryValue(sessionIdParam);
+  }
+
+  const language = params.get('language');
+  if (language !== null) {
+    applySelectByValue('sel-lang', language, {
+      en: 'en',
+      english: 'en',
+      ar: 'ar',
+      arabic: 'ar',
+    });
+  }
+
+  const mode = params.get('mode');
+  if (mode !== null) {
+    applySelectByValue('sel-mode', mode, {
+      doctor: 'doctor',
+      conversation: 'conversation',
+    });
+  }
+
+  const useHistory = params.get('use_history');
+  if (useHistory !== null) {
+    const normalized = normalizeQueryValue(useHistory).toLowerCase();
+    const target = (normalized === 'true' || normalized === 'yes' || normalized === '1' || normalized === 'y') ? 'yes' : 'no';
+    const el = document.getElementById('sel-use-history');
+    if (el) el.value = target;
+  }
+}
+
+applyIncomingQueryValues();
+
 function fmtTime(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -892,6 +1006,7 @@ const SSE_EVENT_TO_CARD = {
   translation_delta:  'translate',
   translation_done:   'translate',
   extraction:          'extract',
+  diagnosis:           'diagnosis',
 };
 
 const DEPARTMENT_FIELDS = {
@@ -1246,10 +1361,11 @@ async function startRecording() {
   transcriptReady = false;
   paused          = false;
 
-  // A fresh ID for this record→analyze→feedback cycle, so a later feedback
-  // submission can be joined back to the exact session it's about (see the
-  // dashboard's session_id column on both the Sessions and Feedback tables).
-  sessionId = (crypto.randomUUID ? crypto.randomUUID() : ('sess-' + Date.now() + '-' + Math.random().toString(36).slice(2)));
+  // Use any externally supplied session_id so a hospital system can maintain
+  // a stable record across the full workflow; otherwise generate a fresh one.
+  if (!sessionId) {
+    sessionId = (crypto.randomUUID ? crypto.randomUUID() : ('sess-' + Date.now() + '-' + Math.random().toString(36).slice(2)));
+  }
 
   const lang = $('sel-lang').value; // 'en' | 'ar' — decides which STT engine the server uses
 
@@ -1552,6 +1668,12 @@ btnSubmit.addEventListener('click', async () => {
     setCard(id, 'idle');
     const t = $('time-' + id); if (t) t.textContent = '';
   });
+  pillLists = { icd10: [], differential: [] };
+  patientStoryText = '';
+  lastHistoryUsed = false;
+  lastHistoryVisitCount = 0;
+  lastHistoryCheck = null;
+  lastHistoryError = null;
   if (!isDoctorMode) setBody('refine', '<div class="ph">Waiting for refinement…</div>');
   setBody('translate', '<div class="ph">Waiting for translation…</div>');
   setBody('extract',   '<div class="ph">Waiting for extraction…</div>');
@@ -1575,6 +1697,83 @@ btnSubmit.addEventListener('click', async () => {
   let refineBuf    = '';
   let translateBuf = '';
   let transBuf     = liveTranscript;   // keep raw for tab toggle
+  let sseBuf       = '';
+  let eventReceived = { extraction: false, diagnosis: false };
+
+  function finishParallelStepsIfReady() {
+    if (eventReceived.extraction && eventReceived.diagnosis) {
+      updateSummary();
+      btnRecord.disabled = false;
+      btnSubmit.disabled = false;
+    }
+  }
+
+  // Marks a step (and the Questions card derived from extraction) as failed,
+  // while allowing the independent parallel step to finish normally.
+  function failStep(ev, message) {
+    const cardId = SSE_EVENT_TO_CARD[ev];
+    if (cardId) {
+      setCard(cardId, 'error');
+      setBody(cardId, '<div class="err-box">' + esc(message) + '</div>');
+    }
+    if (ev === 'extraction') {
+      setCard('questions', 'error');
+      setBody('questions', '<div class="err-box">' + esc(message) + '</div>');
+      eventReceived.extraction = true;
+    } else if (ev === 'diagnosis') {
+      eventReceived.diagnosis = true;
+    }
+    finishParallelStepsIfReady();
+  }
+
+  // Refinement is streamed before its completion event. If a proxy truncates
+  // only that final frame, the received deltas are still a usable result.
+  function completeRefinement(data) {
+    refineBuf = data.refined_text || refineBuf;
+    setCard('refine','done'); setTime('refine', data.refinement_sec);
+    setBody('trans',
+      `<div class="tabs"><div class="tab on" onclick="switchTab(this,'raw')">Raw</div><div class="tab" onclick="switchTab(this,'refined')">Refined</div></div>
+       <div class="tab-pane on" id="panel-raw"><div class="transcript">${esc(transBuf)}</div></div>
+       <div class="tab-pane" id="panel-refined"><div class="transcript">${esc(refineBuf)}</div></div>`);
+    setBody('refine', '<div class="transcript">' + esc(refineBuf) + '</div>');
+    if (isAr) { setCard('translate','active'); setBody('translate','<div class="transcript c-blink" id="ttl"></div>'); }
+    else       { markAnalysisActive(); }
+  }
+
+  function dispatchSseFrame(frame) {
+    let eventName = 'message';
+    const dataLines = [];
+    for (const line of frame.split(/\r\n|\r|\n/)) {
+      if (!line || line.startsWith(':')) continue;
+      const separator = line.indexOf(':');
+      const field = separator < 0 ? line : line.slice(0, separator);
+      let value = separator < 0 ? '' : line.slice(separator + 1);
+      if (value.startsWith(' ')) value = value.slice(1);
+      if (field === 'event') eventName = value;
+      else if (field === 'data') dataLines.push(value);
+    }
+    if (!dataLines.length) return;
+
+    let data;
+    try {
+      data = JSON.parse(dataLines.join('\n'));
+    } catch (parseErr) {
+      console.error('[SSE] Failed to parse "' + eventName + '" event data:', parseErr, dataLines);
+      if (eventName === 'refinement_done' && refineBuf) {
+        console.warn('[SSE] Refinement completion frame was malformed; using received refinement deltas.');
+        completeRefinement({});
+        return;
+      }
+      failStep(eventName, 'Lost this step\'s data mid-stream (malformed response). Check the browser console for details, and try Analyse again.');
+      return;
+    }
+    try {
+      handleAnalyzeEvent(eventName, data);
+    } catch (handlerErr) {
+      console.error('[SSE] Error handling "' + eventName + '" event:', handlerErr, data);
+      failStep(eventName, 'This step\'s data arrived, but something went wrong displaying it. Check the browser console for details.');
+    }
+  }
 
   try {
     const resp = await fetch(API_BASE + '/audio/analyze', { method: 'POST', body: form });
@@ -1588,83 +1787,27 @@ btnSubmit.addEventListener('click', async () => {
 
     const reader  = resp.body.getReader();
     const decoder = new TextDecoder();
-    let sseBuf    = '';
-    // Must live OUTSIDE the read loop, same as sseBuf — an SSE "event: X" line
-    // and its "data: Y" line can land in two SEPARATE network chunks (more
-    // likely for large payloads like the extraction event's full feature set).
-    // Resetting this per-chunk meant a data line arriving in a later chunk than
-    // its event line was silently skipped before ever reaching JSON.parse —
-    // valid, fully-formed data, dropped with zero trace.
-    let eName     = null;
-
-    // Marks a step (and, for 'extraction', the Diagnosis and Questions cards
-    // riding along with it) as failed, and makes sure the Record/Analyse
-    // buttons never get stuck disabled just because this one step's data never
-    // arrived — 'extraction' is normally what re-enables them on success, so a
-    // failure here needs to do it too, or the doctor is stuck with no way to retry.
-    function failStep(ev, message) {
-      const cardId = SSE_EVENT_TO_CARD[ev];
-      if (cardId) {
-        setCard(cardId, 'error');
-        setBody(cardId, '<div class="err-box">' + esc(message) + '</div>');
-      }
-      if (ev === 'extraction') {
-        setCard('diagnosis', 'error');
-        setBody('diagnosis', '<div class="err-box">' + esc(message) + '</div>');
-        setCard('questions', 'error');
-        setBody('questions', '<div class="err-box">' + esc(message) + '</div>');
-        btnRecord.disabled = false;
-        btnSubmit.disabled = false;
-      }
-    }
-
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       sseBuf += decoder.decode(value, { stream: true });
-      const lines = sseBuf.split('\n');
-      sseBuf = lines.pop();
-      for (const line of lines) {
-        if (line.startsWith('event:'))          { eName = line.slice(6).trim(); }
-        else if (line.startsWith('data:') && eName) {
-          let d;
-          try {
-            d = JSON.parse(line.slice(5).trim());
-          } catch (parseErr) {
-            // Never swallow this silently — a step's card would otherwise sit
-            // stuck on its "processing" placeholder forever with zero trace,
-            // while later steps keep completing normally right after it.
-            console.error('[SSE] Failed to parse "' + eName + '" event data:', parseErr, line);
-            failStep(eName, 'Lost this step\'s data mid-stream (malformed response). Check the browser console for details, and try Analyse again.');
-            eName = null;
-            continue;
-          }
-          try {
-            handleAnalyzeEvent(eName, d);
-          } catch (handlerErr) {
-            // A bug while rendering ONE event must never take the rest of the
-            // stream down with it — without this, an exception here would
-            // propagate out of the read loop entirely and silently strand
-            // every step after this one on its "processing" placeholder too.
-            console.error('[SSE] Error handling "' + eName + '" event:', handlerErr, d);
-            failStep(eName, 'This step\'s data arrived, but something went wrong displaying it. Check the browser console for details.');
-          }
-          eName = null;
-        }
+      const frames = sseBuf.split(/\r\n\r\n|\n\n|\r\r/);
+      sseBuf = frames.pop();
+      for (const frame of frames) {
+        if (frame) dispatchSseFrame(frame);
       }
     }
+    sseBuf += decoder.decode();
+    if (sseBuf.trim()) dispatchSseFrame(sseBuf);
 
-    // The stream closed without ever completing extraction, and without an
-    // explicit 'error' event either (that path is already handled above) —
-    // this is the connection itself ending early, mid-pipeline. Silent on
-    // the wire, but must not be silent in the UI: without this, the extract/
-    // diagnosis/questions cards would just sit on their placeholders
-    // forever with no indication anything went wrong, and Analyse would stay
-    // disabled with no way to retry.
-    const extractCard = $('card-extract');
-    if (extractCard && !extractCard.classList.contains('done') && !extractCard.classList.contains('error')) {
+    // A dropped stream can interrupt either parallel step independently.
+    if (!eventReceived.extraction) {
       console.warn('[SSE] Stream ended before an "extraction" event was received.');
       failStep('extraction', 'The connection closed before the clinical note fields arrived — this is usually a dropped network connection partway through, not a processing error. Try Analyse again.');
+    }
+    if (!eventReceived.diagnosis) {
+      console.warn('[SSE] Stream ended before a "diagnosis" event was received.');
+      failStep('diagnosis', 'The connection closed before the diagnosis recommendation arrived — this is usually a dropped network connection partway through, not a processing error. Try Analyse again.');
     }
   } catch (e) {
     setBody('refine', '<div class="err-box">' + esc(e.message) + '</div>');
@@ -1688,16 +1831,7 @@ btnSubmit.addEventListener('click', async () => {
       const el = document.getElementById('rl'); if (el) el.textContent = refineBuf;
 
     } else if (ev === 'refinement_done') {
-      refineBuf = d.refined_text || refineBuf;
-      setCard('refine','done'); setTime('refine', d.refinement_sec);
-      // Add Raw / Refined tabs to transcription card
-      setBody('trans',
-        `<div class="tabs"><div class="tab on" onclick="switchTab(this,'raw')">Raw</div><div class="tab" onclick="switchTab(this,'refined')">Refined</div></div>
-         <div class="tab-pane on" id="panel-raw"><div class="transcript">${esc(transBuf)}</div></div>
-         <div class="tab-pane" id="panel-refined"><div class="transcript">${esc(refineBuf)}</div></div>`);
-      setBody('refine', '<div class="transcript">' + esc(refineBuf) + '</div>');
-      if (isAr) { setCard('translate','active'); setBody('translate','<div class="transcript c-blink" id="ttl"></div>'); }
-      else       { markAnalysisActive(); }
+      completeRefinement(d);
 
     } else if (ev === 'translation_delta') {
       translateBuf += d.delta || '';
@@ -1710,27 +1844,14 @@ btnSubmit.addEventListener('click', async () => {
       markAnalysisActive();
 
     } else if (ev === 'extraction') {
-      // One atomic event carrying BOTH parallel steps (see app.py) — field
-      // extraction (+ its questions) and the ICD-10 diagnosis recommendation.
-      // Two separate large events each turned out to be an independent point
-      // of failure through this deployment's network path, so they still ship
-      // together; but either step may have failed on its own (d.errors says
-      // which), so each card is resolved independently.
-      const errs = d.errors || {};
+      eventReceived.extraction = true;
       const dept = d.department || department;
       patientStoryText      = d.patient_story || transBuf;
-      lastHistoryUsed       = !!d.history_used;
-      lastHistoryVisitCount = d.history_visit_count || 0;
-      lastHistoryCheck      = d.history_check || null;
-      lastHistoryError      = d.history_error || null;
-      if (d.models) {
-        $('extract-subtitle').textContent   = '(' + (DEPARTMENT_LABELS[dept] || dept) + ' · ' + d.models.extraction + ')';
-        $('diagnosis-subtitle').textContent = '(ICD-10 · ' + d.models.reasoning + ')';
-      }
+      $('extract-subtitle').textContent = '(' + (DEPARTMENT_LABELS[dept] || dept) + ' · ' + (d.model || 'GPT 5.6 Luna') + ')';
 
-      if (errs.extraction) {
-        const box = '<div class="err-box">Extraction failed: ' + esc(errs.extraction) + '</div>';
-        setCard('extract', 'error');   setBody('extract', box);
+      if (d.error) {
+        const box = '<div class="err-box">Extraction failed: ' + esc(d.error) + '</div>';
+        setCard('extract', 'error'); setBody('extract', box);
         setCard('questions', 'error'); setBody('questions', box);
       } else {
         setCard('extract', 'done'); setTime('extract', d.extraction_sec);
@@ -1740,25 +1861,38 @@ btnSubmit.addEventListener('click', async () => {
         renderQuestions(extractQList(d), department);
       }
 
-      if (errs.diagnosis) {
+      finishParallelStepsIfReady();
+
+    } else if (ev === 'diagnosis') {
+      eventReceived.diagnosis = true;
+      const dept = d.department || department;
+      lastHistoryUsed       = !!d.history_used;
+      lastHistoryVisitCount = d.history_visit_count || 0;
+      lastHistoryCheck      = d.history_check || null;
+      lastHistoryError      = d.history_error || null;
+      $('diagnosis-subtitle').textContent = '(ICD-10 · ' + (d.model || 'GPT 5.6 Luna') + ')';
+
+      if (d.error) {
         setCard('diagnosis', 'error');
-        setBody('diagnosis', '<div class="err-box">Diagnosis recommendation failed: ' + esc(errs.diagnosis) + '</div>');
+        setBody('diagnosis', '<div class="err-box">Diagnosis recommendation failed: ' + esc(d.error) + '</div>');
       } else {
         setCard('diagnosis', 'done'); setTime('diagnosis', d.diagnosis_sec);
         renderDiagnosis(d.diagnosis, dept);
         btnPrint.disabled = false;
       }
 
-      updateSummary();
-      // Re-enable for another recording
-      btnRecord.disabled  = false;
-      btnSubmit.disabled  = false;
+      finishParallelStepsIfReady();
 
     } else if (ev === 'error') {
       const idMap = { refinement:'refine', translation:'translate', extraction:'extract', diagnosis:'diagnosis', questions:'questions' };
       const id    = idMap[d.step || ''] || 'refine';
-      setCard(id,'error'); setBody(id,'<div class="err-box">' + esc(d.detail || 'Unknown error') + '</div>');
-      if (id === 'extract') setCard('questions', 'error');
+      if (id === 'extract') {
+        failStep('extraction', d.detail || 'Unknown error');
+      } else if (id === 'diagnosis') {
+        failStep('diagnosis', d.detail || 'Unknown error');
+      } else {
+        setCard(id,'error'); setBody(id,'<div class="err-box">' + esc(d.detail || 'Unknown error') + '</div>');
+      }
       // A server-side error still ends the pipeline — don't leave Record/
       // Analyse stuck disabled with no way to retry.
       btnRecord.disabled = false;

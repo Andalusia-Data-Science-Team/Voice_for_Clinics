@@ -17,12 +17,7 @@ import llm.retry as retry_module
 import llm.runtime as runtime_module
 from core.config import Config
 from llm.limiter import ModelLimiter
-from llm.retry import (
-    calculate_backoff_delay,
-    is_insufficient_quota,
-    is_retryable,
-    run_with_retries,
-)
+from llm.retry import is_insufficient_quota, is_retryable, retry_delay, run_with_retries
 
 
 class StatusError(Exception):
@@ -94,7 +89,7 @@ def _patch_runtime_client(
     handler,
     keys: list[str] | None = None,
 ):
-    """Construct one real AsyncOpenAI client over an in-memory transport."""
+    """Construct one real AsyncOpenAI client over an in-memory transport for Azure AI Foundry."""
     transport = httpx.MockTransport(handler)
     original = RealAsyncOpenAI
 
@@ -103,12 +98,17 @@ def _patch_runtime_client(
         return original(*args, **kwargs)
 
     monkeypatch.setattr(runtime_module, "AsyncOpenAI", factory)
-    monkeypatch.setenv("LLM_API_KEY", "primary-key")
-    monkeypatch.setenv(
-        "OPENROUTER_API_KEYS",
-        ",".join(keys or ["primary-key"]),
-    )
+    monkeypatch.setenv("AI_FOUNDRY_KEY", "primary-key")
+    monkeypatch.setattr(Config, "AI_FOUNDRY_KEY", "primary-key")
+    monkeypatch.setenv("AI_FOUNDRY_ENDPOINT", "https://mock-foundry.openai.azure.com/openai/v1")
+    monkeypatch.setattr(Config, "AI_FOUNDRY_ENDPOINT", "https://mock-foundry.openai.azure.com/openai/v1")
+    monkeypatch.setenv("AI_FOUNDRY_AUTH_METHOD", "api_key")
+    monkeypatch.setattr(Config, "AI_FOUNDRY_AUTH_METHOD", "api_key")
     return runtime_module.LLMRuntime()
+
+
+def _authorization(key: str) -> str:
+    return "Bearer " + key
 
 
 async def _no_wait(_: float) -> None:
@@ -144,9 +144,35 @@ async def test_concurrency_retryable_429_reaches_success():
 
 
 @pytest.mark.asyncio
+async def test_concurrency_foundry_headers_applied(monkeypatch):
+    """Azure AI Foundry requests include api-key or api-version headers."""
+    api_versions: list[str | None] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        api_versions.append(request.headers.get("api-version"))
+        return httpx.Response(200, json=_completion())
+
+    monkeypatch.setenv("AI_FOUNDRY_API_VERSION", "2024-05-01-preview")
+    monkeypatch.setattr(Config, "AI_FOUNDRY_API_VERSION", "2024-05-01-preview")
+    runtime = _patch_runtime_client(monkeypatch, handler)
+    try:
+        result = await runtime.complete(
+            model="DeepSeek-V3.2",
+            create_kwargs={
+                "model": "DeepSeek-V3.2",
+                "messages": [{"role": "user", "content": "hello"}],
+            },
+        )
+        assert result.choices[0].message.content == "ok"
+        assert api_versions == ["2024-05-01-preview"]
+    finally:
+        await runtime.close()
+
+
+@pytest.mark.asyncio
 async def test_concurrency_no_retry_on_4xx():
     """Client errors are surfaced without retry."""
-    for status in (400, 401, 404, 422):
+    for status in (400, 401, 403, 404, 422):
         attempts = 0
 
         async def operation():
@@ -160,9 +186,10 @@ async def test_concurrency_no_retry_on_4xx():
 
 
 @pytest.mark.asyncio
-async def test_concurrency_max_attempts_is_four():
-    """Persistent throttling stops at the configured four attempts."""
+async def test_concurrency_max_attempts_is_four(monkeypatch):
+    """The retry policy never exceeds four attempts even if configured higher."""
     attempts = 0
+    monkeypatch.setattr(retry_module.Config, "LLM_MAX_ATTEMPTS", 10)
 
     async def operation():
         nonlocal attempts
@@ -253,46 +280,73 @@ def test_concurrency_retry_classification():
     assert is_retryable(StatusError(503))
     assert not is_retryable(StatusError(400))
     assert not is_retryable(StatusError(401))
+    assert not is_retryable(StatusError(403))
     assert not is_retryable(StatusError(404))
     assert not is_retryable(StatusError(422))
 
 
+def test_concurrency_retry_transport_errors_and_quota_body(monkeypatch):
+    """Only timeout errors are retried among transport failures."""
+    request = httpx.Request("POST", "https://example.test")
+    assert not is_retryable(httpx.ConnectError("connect", request=request))
+    assert not is_retryable(httpx.ReadError("read", request=request))
+    assert not is_retryable(httpx.RemoteProtocolError("protocol", request=request))
+    assert not is_retryable(openai.APIConnectionError(request=request))
+    assert is_retryable(openai.APITimeoutError(request=request))
+    assert is_retryable(httpx.TimeoutException("timeout", request=request))
+
+    message_only = RuntimeError("billing issue, please contact support")
+    message_only.body = {"error": {"message": "billing issue"}}
+    assert not is_insufficient_quota(message_only)
+
+    quota_error = RuntimeError("provider rejected request")
+    quota_error.body = {"error": {"type": "insufficient_quota"}}
+    assert is_insufficient_quota(quota_error)
+
+    monkeypatch.setattr(retry_module.random, "uniform", lambda low, high: high)
+    monkeypatch.setattr(retry_module.Config, "LLM_BACKOFF_MAX_S", 8.0)
+    assert retry_delay(1, StatusError(429)) == 1.0
+    assert retry_delay(2, StatusError(429)) == 2.0
+    assert retry_delay(4, StatusError(429)) == 8.0
+
+
 @pytest.mark.asyncio
 async def test_concurrency_30_parallel_analyses(monkeypatch):
-    """Thirty real runtime completions recover from one 429 each while loop stays responsive."""
+    """Thirty parallel analyses recover without event-loop scheduling stalls."""
     attempts = defaultdict(int)
 
     async def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         request_id = body["messages"][0]["content"]
         attempts[request_id] += 1
+        if request_id == "warm-up":
+            return httpx.Response(200, json=_completion(request_id, body["model"]))
         if attempts[request_id] == 1:
             return httpx.Response(429, json={"error": {"message": "busy"}})
         return httpx.Response(200, json=_completion(request_id, body["model"]))
 
     runtime = _patch_runtime_client(monkeypatch, handler)
-    # Warm the SDK/MockTransport path before measuring scheduling latency so
-    # import/validation setup is not mistaken for event-loop blocking.
     await runtime.complete(
         model="test-model",
         create_kwargs={
             "model": "test-model",
-            "messages": [{"role": "user", "content": "warmup"}],
+            "messages": [{"role": "user", "content": "warm-up"}],
         },
     )
-    attempts.clear()
-
     loop_lags: list[float] = []
-    stop = asyncio.Event()
+    stop_sampler = asyncio.Event()
+    sampler_task = None
 
-    async def sampler():
-        while not stop.is_set():
-            scheduled = asyncio.get_running_loop().time() + 0.01
+    async def sample_loop_lag():
+        loop = asyncio.get_running_loop()
+        while not stop_sampler.is_set():
+            scheduled = loop.time() + 0.01
             await asyncio.sleep(0.01)
-            loop_lags.append(max(0.0, asyncio.get_running_loop().time() - scheduled))
+            loop_lags.append(max(0.0, loop.time() - scheduled))
 
-    sampler_task = asyncio.create_task(sampler())
     try:
+        sampler_task = asyncio.create_task(sample_loop_lag())
+
         async def call(index: int):
             request_id = f"request-{index}"
             result = await runtime.complete(
@@ -305,16 +359,52 @@ async def test_concurrency_30_parallel_analyses(monkeypatch):
             return result.choices[0].message.content
 
         results = await asyncio.gather(*(call(index) for index in range(30)))
-        stop.set()
+        stop_sampler.set()
         await sampler_task
         assert results == [f"request-{index}" for index in range(30)]
-        assert len(attempts) == 30
-        assert all(1 <= count <= 4 for count in attempts.values())
+        request_attempts = {
+            request_id: count for request_id, count in attempts.items()
+            if request_id != "warm-up"
+        }
+        assert len(request_attempts) == 30
+        assert all(1 <= count <= 4 for count in request_attempts.values())
         assert max(loop_lags, default=0.0) < 0.05
     finally:
-        stop.set()
-        sampler_task.cancel()
-        await asyncio.gather(sampler_task, return_exceptions=True)
+        stop_sampler.set()
+        if sampler_task is not None:
+            await sampler_task
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrency_mocked_429_has_at_most_three_retries(monkeypatch):
+    """Four persistent mocked 429 responses mean one try and three retries."""
+    calls = 0
+
+    async def handler(request: httpx.Request):
+        nonlocal calls
+        calls += 1
+        return httpx.Response(
+            429,
+            request=request,
+            json={"error": {"message": "busy"}},
+        )
+
+    runtime = _patch_runtime_client(monkeypatch, handler)
+    monkeypatch.setattr(Config, "LLM_MAX_ATTEMPTS", 10)
+
+    async def no_wait(_: float):
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", no_wait)
+    try:
+        with pytest.raises(openai.RateLimitError):
+            await runtime.complete(
+                model="test-model",
+                create_kwargs={"model": "test-model", "messages": []},
+            )
+        assert calls == 4
+    finally:
         await runtime.close()
 
 
@@ -435,9 +525,182 @@ async def test_concurrency_stream_retry_only_before_first_chunk(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_concurrency_stream_attempt_count_never_exceeds_four(monkeypatch):
+    """Even a higher configured limit cannot yield more than four stream tries."""
+    runtime = _patch_runtime_client(monkeypatch, lambda _: httpx.Response(200))
+    create = AsyncMock(side_effect=StatusError(503))
+    monkeypatch.setattr(runtime.client.chat.completions, "create", create)
+    monkeypatch.setattr(Config, "LLM_MAX_ATTEMPTS", 10)
+    monkeypatch.setattr(Config, "LLM_BACKOFF_MAX_S", 0.0)
+
+    async def no_wait(_: float):
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", no_wait)
+    try:
+        with pytest.raises(StatusError):
+            await _collect_stream(runtime)
+        assert create.await_count == 4
+        assert (await runtime.limiter.stats("test-model")).in_flight == 0
+    finally:
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrency_stream_releases_slot_during_backoff(monkeypatch):
+    """A failed stream releases its semaphore before sleeping for a retry."""
+    async def handler(_: httpx.Request):
+        return httpx.Response(200, json=_completion())
+
+    runtime = _patch_runtime_client(monkeypatch, handler)
+    sleep_entered = asyncio.Event()
+    resume = asyncio.Event()
+
+    class ContentStream:
+        def __aiter__(self):
+            async def chunks():
+                yield SimpleNamespace(choices=[
+                    SimpleNamespace(delta=SimpleNamespace(content="ok")),
+                ])
+            return chunks()
+
+        async def aclose(self):
+            return None
+
+    create = AsyncMock(side_effect=[StatusError(503), ContentStream()])
+    monkeypatch.setattr(runtime.client.chat.completions, "create", create)
+
+    async def observe_sleep(_: float):
+        stats = await runtime.limiter.stats("test-model")
+        assert stats.in_flight == 0
+        sleep_entered.set()
+        await resume.wait()
+
+    monkeypatch.setattr(runtime_module.asyncio, "sleep", observe_sleep)
+    monkeypatch.setattr(runtime_module.Config, "LLM_BACKOFF_MAX_S", 0.0)
+    task = asyncio.create_task(_collect_stream(runtime))
+    try:
+        await asyncio.wait_for(sleep_entered.wait(), timeout=1.0)
+        assert (await runtime.limiter.stats("test-model")).in_flight == 0
+        resume.set()
+        assert await asyncio.wait_for(task, timeout=1.0) == "ok"
+    finally:
+        resume.set()
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrency_stream_aclose_error_releases_slot(monkeypatch):
+    """A failing stream close cannot skip semaphore release."""
+    async def handler(_: httpx.Request):
+        return httpx.Response(200, json=_completion())
+
+    runtime = _patch_runtime_client(monkeypatch, handler)
+
+    class FailingCloseStream:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise StatusError(503)
+
+        async def aclose(self):
+            raise RuntimeError("close failed")
+
+    monkeypatch.setattr(
+        runtime.client.chat.completions,
+        "create",
+        AsyncMock(return_value=FailingCloseStream()),
+    )
+    try:
+        with pytest.raises(RuntimeError, match="close failed"):
+            await _collect_stream(runtime)
+        assert (await runtime.limiter.stats("test-model")).in_flight == 0
+    finally:
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrency_overall_deadline_stops_retry_loop(monkeypatch):
+    """The total timeout bounds all attempts and retry sleeps."""
+    calls = 0
+
+    async def handler(request: httpx.Request):
+        nonlocal calls
+        calls += 1
+        return httpx.Response(429, request=request)
+
+    runtime = _patch_runtime_client(monkeypatch, handler)
+    monkeypatch.setattr(Config, "LLM_TOTAL_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(retry_module.Config, "LLM_TOTAL_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(retry_module.Config, "LLM_BACKOFF_MAX_S", 8.0)
+    monkeypatch.setattr(retry_module.random, "uniform", lambda low, high: high)
+    try:
+        with pytest.raises(TimeoutError):
+            await runtime.complete(
+                model="test-model",
+                create_kwargs={"model": "test-model", "messages": []},
+            )
+        assert calls == 1
+    finally:
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrency_stream_deadline_stops_at_first_content(monkeypatch):
+    """The stream total deadline is disabled after its first content chunk."""
+    async def handler(_: httpx.Request):
+        return httpx.Response(200, json=_completion())
+
+    runtime = _patch_runtime_client(monkeypatch, handler)
+    first_chunk = asyncio.Event()
+    continue_stream = asyncio.Event()
+
+    class DelayedStream:
+        def __aiter__(self):
+            async def chunks():
+                yield SimpleNamespace(choices=[
+                    SimpleNamespace(delta=SimpleNamespace(content="first")),
+                ])
+                await continue_stream.wait()
+            return chunks()
+
+        async def aclose(self):
+            return None
+
+    monkeypatch.setattr(Config, "LLM_TOTAL_TIMEOUT_S", 0.02)
+    monkeypatch.setattr(
+        runtime.client.chat.completions,
+        "create",
+        AsyncMock(return_value=DelayedStream()),
+    )
+
+    async def consume():
+        async for chunk in runtime.stream(
+            model="test-model",
+            create_kwargs={"model": "test-model", "messages": []},
+        ):
+            assert chunk == "first"
+            first_chunk.set()
+            await continue_stream.wait()
+
+    task = asyncio.create_task(consume())
+    try:
+        await asyncio.wait_for(first_chunk.wait(), timeout=1.0)
+        await asyncio.sleep(0.05)
+        assert not task.done()
+        continue_stream.set()
+        await asyncio.wait_for(task, timeout=1.0)
+    finally:
+        continue_stream.set()
+        await runtime.close()
+
+
+@pytest.mark.asyncio
 async def test_concurrency_single_client_instance(monkeypatch):
-    """A load run creates one shared AsyncOpenAI client."""
+    """A load run reuses one client configured with the runtime timeout and no SDK retries."""
     constructed = 0
+    client_options = []
 
     async def handler(_: httpx.Request):
         return httpx.Response(200, json=_completion())
@@ -448,11 +711,17 @@ async def test_concurrency_single_client_instance(monkeypatch):
     def factory(*args, **kwargs):
         nonlocal constructed
         constructed += 1
+        client_options.append({
+            "timeout": kwargs["timeout"],
+            "max_retries": kwargs["max_retries"],
+        })
         kwargs["http_client"] = httpx.AsyncClient(transport=transport)
         return original(*args, **kwargs)
 
     monkeypatch.setattr(runtime_module, "AsyncOpenAI", factory)
-    monkeypatch.setenv("LLM_API_KEY", "primary-key")
+    monkeypatch.setattr(Config, "LLM_API_KEY", "primary-key")
+    monkeypatch.setattr(Config, "LLM_TIMEOUT_S", 45.0)
+    monkeypatch.setattr(Config, "LLM_CONNECT_TIMEOUT_S", 5.0)
     runtime = runtime_module.LLMRuntime()
     try:
         await asyncio.gather(*(
@@ -463,6 +732,9 @@ async def test_concurrency_single_client_instance(monkeypatch):
             for _ in range(30)
         ))
         assert constructed == 1
+        assert client_options[0]["timeout"].read == 45.0
+        assert client_options[0]["timeout"].connect == 5.0
+        assert client_options[0]["max_retries"] == 0
     finally:
         await runtime.close()
 
@@ -496,26 +768,29 @@ async def test_concurrency_config_limits_override(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_concurrency_insufficient_quota_not_retried(monkeypatch):
-    """Quota failure raises immediately and is not retried or rotated."""
+    """An insufficient-quota error is surfaced after one request."""
     attempts = 0
+    uses_primary_key = False
 
     async def handler(request: httpx.Request):
-        nonlocal attempts
+        nonlocal attempts, uses_primary_key
         attempts += 1
-        return httpx.Response(402, json={"error": {"code": "insufficient_quota"}})
+        uses_primary_key = request.headers.get("authorization") == _authorization("primary-key")
+        return httpx.Response(
+            402,
+            json={"error": {"code": "insufficient_quota"}},
+            request=request,
+        )
 
-    runtime = _patch_runtime_client(
-        monkeypatch,
-        handler,
-        keys=["primary-key", "secondary-key"],
-    )
+    runtime = _patch_runtime_client(monkeypatch, handler)
     try:
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(openai.APIStatusError):
             await runtime.complete(
-                model="test-model", create_kwargs={"model": "test-model", "messages": []},
+                model="test-model",
+                create_kwargs={"model": "test-model", "messages": []},
             )
         assert attempts == 1
-        assert "insufficient_quota" in str(exc_info.value) or getattr(exc_info.value, "code", None) == "insufficient_quota"
+        assert uses_primary_key
     finally:
         await runtime.close()
 
@@ -572,313 +847,3 @@ async def test_concurrency_stream_cancel_releases_slot(monkeypatch):
     assert stats.in_flight == 0
     gate.set()
     await runtime.close()
-
-
-@pytest.mark.asyncio
-async def test_concurrency_stream_slot_released_during_backoff(monkeypatch):
-    """The limiter slot is released during retry sleep before being re-acquired."""
-    slot_during_sleep: int | None = None
-    calls = 0
-
-    async def fake_sleep(duration: float):
-        nonlocal slot_during_sleep
-        if duration > 0:
-            stats = await runtime.limiter.stats("test-model")
-            slot_during_sleep = stats.in_flight
-
-    monkeypatch.setattr(runtime_module.asyncio, "sleep", fake_sleep)
-
-    async def handler(_: httpx.Request):
-        nonlocal calls
-        calls += 1
-        if calls == 1:
-            return httpx.Response(429, json={"error": {"message": "rate limit"}})
-        return httpx.Response(
-            200,
-            headers={"content-type": "text/event-stream"},
-            stream=_SSEStream([_sse_chunk("hello")]),
-        )
-
-    runtime = _patch_runtime_client(monkeypatch, handler)
-    try:
-        chunks = []
-        async for chunk in runtime.stream(
-            model="test-model",
-            create_kwargs={"model": "test-model", "messages": []},
-        ):
-            chunks.append(chunk)
-        assert chunks == ["hello"]
-        assert calls == 2
-        assert slot_during_sleep == 0
-    finally:
-        await runtime.close()
-
-
-@pytest.mark.asyncio
-async def test_concurrency_total_timeout_complete(monkeypatch):
-    """Overall timeout wraps the completion retry loop."""
-    monkeypatch.setattr(runtime_module.Config, "LLM_TOTAL_TIMEOUT_S", 0.05)
-
-    async def handler(_: httpx.Request):
-        await asyncio.sleep(0.2)
-        return httpx.Response(200, json=_completion("done"))
-
-    runtime = _patch_runtime_client(monkeypatch, handler)
-    try:
-        with pytest.raises((asyncio.TimeoutError, TimeoutError)):
-            await runtime.complete(
-                model="test-model",
-                create_kwargs={"model": "test-model", "messages": []},
-            )
-    finally:
-        await runtime.close()
-
-
-@pytest.mark.asyncio
-async def test_concurrency_total_timeout_stream(monkeypatch):
-    """Overall timeout applies only until the first content chunk is yielded."""
-    monkeypatch.setattr(runtime_module.Config, "LLM_TOTAL_TIMEOUT_S", 0.05)
-
-    async def handler(_: httpx.Request):
-        await asyncio.sleep(0.2)
-        return httpx.Response(
-            200,
-            headers={"content-type": "text/event-stream"},
-            stream=_SSEStream([_sse_chunk("hello")]),
-        )
-
-    runtime = _patch_runtime_client(monkeypatch, handler)
-    try:
-        with pytest.raises((asyncio.TimeoutError, TimeoutError)):
-            async for _ in runtime.stream(
-                model="test-model",
-                create_kwargs={"model": "test-model", "messages": []},
-            ):
-                pass
-    finally:
-        await runtime.close()
-
-
-@pytest.mark.asyncio
-async def test_concurrency_stream_aclose_raises_slot_still_released(monkeypatch):
-    """When stream.aclose() raises an exception, the model semaphore slot is still released."""
-    async def handler(_: httpx.Request):
-        return httpx.Response(
-            200,
-            headers={"content-type": "text/event-stream"},
-            stream=_SSEStream([_sse_chunk("hello")]),
-        )
-
-    async def bad_aclose(self):
-        raise RuntimeError("simulated aclose crash")
-
-    monkeypatch.setattr(openai.AsyncStream, "aclose", bad_aclose, raising=False)
-
-    runtime = _patch_runtime_client(monkeypatch, handler)
-    try:
-        try:
-            async for chunk in runtime.stream(
-                model="test-model",
-                create_kwargs={"model": "test-model", "messages": []},
-            ):
-                assert chunk == "hello"
-        except RuntimeError as exc:
-            assert "simulated aclose crash" in str(exc)
-
-        stats = await runtime.limiter.stats("test-model")
-        assert stats.in_flight == 0
-    finally:
-        await runtime.close()
-
-
-@pytest.mark.asyncio
-async def test_concurrency_stream_persistent_errors_exactly_four_attempts(monkeypatch):
-    """Persistent retryable errors trigger exactly 4 attempts without counter reset and surface final error."""
-    attempts = 0
-    attempt_delays: list[float] = []
-
-    async def no_delay(duration: float):
-        if duration > 0:
-            attempt_delays.append(duration)
-
-    monkeypatch.setattr(runtime_module.asyncio, "sleep", no_delay)
-
-    async def handler(_: httpx.Request):
-        nonlocal attempts
-        attempts += 1
-        return httpx.Response(503, json={"error": {"message": f"service unavailable attempt {attempts}"}})
-
-    runtime = _patch_runtime_client(monkeypatch, handler)
-    try:
-        with pytest.raises(openai.InternalServerError) as exc_info:
-            async for _ in runtime.stream(
-                model="test-model",
-                create_kwargs={"model": "test-model", "messages": []},
-            ):
-                pass
-
-        # Exactly 4 attempts (1 initial try + 3 retries)
-        assert attempts == 4
-        # Sleep was called 3 times between the 4 attempts
-        assert len(attempt_delays) == 3
-        # Attempt counter was never reset
-        assert "attempt 4" in str(exc_info.value)
-        # Final error was surfaced and slot released
-        stats = await runtime.limiter.stats("test-model")
-        assert stats.in_flight == 0
-    finally:
-        await runtime.close()
-
-
-def test_concurrency_is_insufficient_quota_classification():
-    """Verify is_insufficient_quota strictly inspects code/type and ignores mere 'billing' text."""
-    # 1. Attribute error.code
-    exc1 = Exception("test")
-    exc1.code = "insufficient_quota"
-    assert is_insufficient_quota(exc1) is True
-
-    # 2. Attribute error.type
-    exc2 = Exception("test")
-    exc2.type = "insufficient_quota"
-    assert is_insufficient_quota(exc2) is True
-
-    # 3. exc.body with nested error code
-    exc3 = Exception("test")
-    exc3.body = {"error": {"code": "insufficient_quota"}}
-    assert is_insufficient_quota(exc3) is True
-
-    # 4. exc.body with nested error type
-    exc4 = Exception("test")
-    exc4.body = {"error": {"type": "insufficient_quota"}}
-    assert is_insufficient_quota(exc4) is True
-
-    # 5. exc.body flat code/type
-    exc5 = Exception("test")
-    exc5.body = {"code": "insufficient_quota"}
-    assert is_insufficient_quota(exc5) is True
-
-    # 6. Response JSON with code
-    req = httpx.Request("POST", "http://test")
-    resp_code = httpx.Response(402, json={"error": {"code": "insufficient_quota"}}, request=req)
-    exc6 = openai.APIStatusError(message="quota exceeded", response=resp_code, body=None)
-    assert is_insufficient_quota(exc6) is True
-
-    # 7. Response JSON with type
-    resp_type = httpx.Response(402, json={"error": {"type": "insufficient_quota"}}, request=req)
-    exc7 = openai.APIStatusError(message="quota exceeded", response=resp_type, body=None)
-    assert is_insufficient_quota(exc7) is True
-
-    # 8. False when only the word "billing" appears in message text
-    exc8 = Exception("Please check your billing details and update credit card")
-    assert is_insufficient_quota(exc8) is False
-
-    exc9 = openai.APIError(
-        message="Your billing account is undergoing routine review",
-        request=req,
-        body=None,
-    )
-    assert is_insufficient_quota(exc9) is False
-
-    resp_billing = httpx.Response(402, json={"error": {"message": "Billing problem encountered"}}, request=req)
-    exc10 = openai.APIStatusError(message="Billing problem", response=resp_billing, body=None)
-    assert is_insufficient_quota(exc10) is False
-
-
-@pytest.mark.asyncio
-async def test_concurrency_complete_persistent_429_exactly_four_calls(monkeypatch):
-    """complete() on persistent mocked 429 executes exactly 4 calls (1 try + 3 retries)."""
-    calls = 0
-
-    async def no_delay(duration: float):
-        pass
-
-    monkeypatch.setattr(asyncio, "sleep", no_delay)
-
-    async def handler(_: httpx.Request):
-        nonlocal calls
-        calls += 1
-        return httpx.Response(429, json={"error": {"message": f"rate limit attempt {calls}"}})
-
-    runtime = _patch_runtime_client(monkeypatch, handler)
-    try:
-        with pytest.raises(openai.RateLimitError) as exc_info:
-            await runtime.complete(
-                model="test-model",
-                create_kwargs={"model": "test-model", "messages": []},
-            )
-        assert calls == 4
-        assert "attempt 4" in str(exc_info.value)
-        stats = await runtime.limiter.stats("test-model")
-        assert stats.in_flight == 0
-    finally:
-        await runtime.close()
-
-
-@pytest.mark.asyncio
-async def test_concurrency_stream_backoff_bounds_and_retry_after(monkeypatch):
-    """stream backoff delay is within [0, LLM_BACKOFF_MAX_S] and honors a capped Retry-After."""
-    # 1. Pure calculation tests across attempt numbers
-    for attempt in range(1, 10):
-        for _ in range(25):
-            delay = calculate_backoff_delay(attempt)
-            assert 0.0 <= delay <= Config.LLM_BACKOFF_MAX_S
-
-    req = httpx.Request("POST", "http://test")
-    resp_capped = httpx.Response(429, headers={"Retry-After": "100"}, request=req)
-    exc_capped = openai.RateLimitError(message="throttled", response=resp_capped, body=None)
-    for _ in range(10):
-        delay = calculate_backoff_delay(1, exc_capped)
-        assert delay == Config.LLM_RETRY_AFTER_MAX_S
-
-    resp_valid = httpx.Response(429, headers={"Retry-After": "4.5"}, request=req)
-    exc_valid = openai.RateLimitError(message="throttled", response=resp_valid, body=None)
-    for _ in range(10):
-        delay = calculate_backoff_delay(1, exc_valid)
-        assert delay >= 4.5
-
-    # 2. Integration test with runtime.stream()
-    recorded_delays: list[float] = []
-
-    async def fake_sleep(duration: float):
-        if duration > 0:
-            recorded_delays.append(duration)
-
-    monkeypatch.setattr(runtime_module.asyncio, "sleep", fake_sleep)
-
-    calls = 0
-    async def handler(_: httpx.Request):
-        nonlocal calls
-        calls += 1
-        if calls == 1:
-            return httpx.Response(429, json={"error": {"message": "rate limit no header"}})
-        if calls == 2:
-            return httpx.Response(429, headers={"Retry-After": "3.5"}, json={"error": {"message": "rate limit header"}})
-        if calls == 3:
-            return httpx.Response(429, headers={"Retry-After": "120"}, json={"error": {"message": "rate limit header big"}})
-        return httpx.Response(
-            200,
-            headers={"content-type": "text/event-stream"},
-            stream=_SSEStream([_sse_chunk("chunk")]),
-        )
-
-    runtime = _patch_runtime_client(monkeypatch, handler)
-    try:
-        chunks = []
-        async for chunk in runtime.stream(
-            model="test-model",
-            create_kwargs={"model": "test-model", "messages": []},
-        ):
-            chunks.append(chunk)
-
-        assert chunks == ["chunk"]
-        assert len(recorded_delays) == 3
-        # Attempt 1: within [0, LLM_BACKOFF_MAX_S]
-        assert 0.0 <= recorded_delays[0] <= Config.LLM_BACKOFF_MAX_S
-        # Attempt 2: honors Retry-After 3.5
-        assert recorded_delays[1] >= 3.5
-        # Attempt 3: capped at Config.LLM_RETRY_AFTER_MAX_S (30s)
-        assert recorded_delays[2] == Config.LLM_RETRY_AFTER_MAX_S
-    finally:
-        await runtime.close()
-
-

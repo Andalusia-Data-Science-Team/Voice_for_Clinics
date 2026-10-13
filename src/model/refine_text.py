@@ -53,14 +53,14 @@ class RefineText:
             if language.lower() == "ar":
                 refined_text = LLMService.refine_ar_transcription(
                     pre_corrected,
-                    Config.openrouter_api_key(),
+                    Config.AI_FOUNDRY_KEY,
                     is_conversation=is_conversation,
                     specialty=specialty,
                 )
             else:
                 refined_text = LLMService.refine_en_transcription(
                     pre_corrected,
-                    Config.openrouter_api_key(),
+                    Config.AI_FOUNDRY_KEY,
                     is_conversation=is_conversation,
                     specialty=specialty,
                 )
