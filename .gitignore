@@ -1,6 +1,187 @@
-.venv
+# ─────────────────────────────────────────────────────────────
+#  MedVoice — .gitignore
+#  Covers: Python, FastAPI/Uvicorn, MongoDB, Docker, editors,
+#          OS noise, secrets, and project-specific runtime data
+# ─────────────────────────────────────────────────────────────
+
+
+# ── Secrets & credentials ────────────────────────────────────
 .env
+.env.*
+!.env.example          # keep the example template
 src/.env
+src/.env.*
+!src/.env.example
 src/core/.env
-foundry-probe
-src/data
+src/core/.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.cert
+*.crt
+service_account.json
+*_credentials.json
+azure_credentials.json
+
+
+# ── Python bytecode & caches ─────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+
+# ── Python packaging artifacts ────────────────────────────────
+*.egg
+*.egg-info/
+dist/
+build/
+wheels/
+pip-wheel-metadata/
+MANIFEST
+.eggs/
+*.whl
+
+
+# ── Virtual environments ──────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.env.bak
+
+
+# ── Test & coverage artifacts ─────────────────────────────────
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+.cache/
+nosetests.xml
+test-results/
+junit*.xml
+*.prof
+
+
+# ── Type checking ─────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyright/
+.pyrefly/
+pyrightconfig.json
+
+
+# ── Linting / formatting ──────────────────────────────────────
+.ruff_cache/
+
+
+# ── Jupyter / IPython ─────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+
+# ── Runtime / operational data ────────────────────────────────
+# Uploaded audio files (patient data — never commit)
+src/uploads/
+uploads/
+
+# Application logs and JSONL session store
+src/logs/
+logs/
+*.log
+*.jsonl
+
+# Raw audio recordings captured by the app
+*.pcm
+*.wav
+*.mp3
+*.ogg
+*.webm
+*.m4a
+recording.pcm
+
+# MongoDB local data directory (if running Mongo natively)
+data/db/
+mongo-data/
+
+
+# ── Project-specific ignores ──────────────────────────────────
+# Internal Azure AI Foundry probe scripts
+foundry-probe/
+
+# Local training / evaluation data blobs
+src/data/
+
+# Excel and CSV datasets (large; use DVC or releases instead)
+*.xlsx
+*.xls
+*.csv
+
+# ICD / clinical reference files committed separately if needed
+Austrilian\ ICD\ codes.csv
+
+# Tracker spreadsheets
+MedVoice_*.xlsx
+Book*.xlsx
+
+
+# ── Static build output (if frontend is ever bundled) ─────────
+src/static/dist/
+src/static/*.min.js
+src/static/*.min.css
+
+
+# ── Docker ────────────────────────────────────────────────────
+# Don't ignore docker-compose.yml — it's source-controlled.
+# Ignore override files that hold local secrets/port overrides:
+docker-compose.override.yml
+docker-compose.local.yml
+.docker/
+
+
+# ── OS noise ─────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+
+# ── Editors & IDEs ────────────────────────────────────────────
+# VSCode
+.vscode/
+!.vscode/extensions.json   # keep recommended extensions list
+
+# JetBrains (PyCharm, etc.)
+.idea/
+*.iml
+*.iws
+
+# Vim / Emacs
+*.swp
+*.swo
+*~
+\#*\#
+.\#*
+
+# Cursor IDE
+.cursor/
+
+# Sublime Text
+*.sublime-workspace
+
+
+# ── Misc tooling ─────────────────────────────────────────────
+.python-version      # managed by pyenv; machine-specific
+.tool-versions       # asdf version manager
+*.lock               # pip-tools lock files (use requirements.txt instead)
+pip-log.txt
+pip-delete-this-directory.txt
+=1.8
+=2.32
