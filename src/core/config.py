@@ -22,8 +22,9 @@ class Config:
     MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
     MUNSIT_API_KEY = os.getenv("MUNSIT_API_KEY")
 
-    # ── LLM Provider: Azure AI Foundry exclusively ───────────────────────────
-    LLM_PROVIDER = "foundry"
+    # ── Provider switches (M2) ────────────────────────────────────────────────
+    LLM_PROVIDER = os.getenv("LLM_PROVIDER", "foundry").lower()
+    STT_PROVIDER = os.getenv("STT_PROVIDER", "munsit").lower()
 
     # ── Azure AI Foundry settings ─────────────────────────────────────────────
     AI_FOUNDRY_ENDPOINT = (

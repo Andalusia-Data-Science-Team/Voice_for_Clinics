@@ -1,3 +1,4 @@
+import os
 import time
 import json
 import logging
@@ -90,8 +91,15 @@ def get_current_request(request: Request) -> Request:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Create and close shared asynchronous LLM runtime and MongoDB connection per worker."""
-    app.state.llm = LLMRuntime()
+    """Create and close shared provider adapters and MongoDB connection per worker."""
+    from providers.factory import build_llm_provider, build_stt_provider
+
+    # Initialize M2 providers
+    app.state.llm_provider = build_llm_provider()
+    app.state.stt_provider = build_stt_provider()
+    # Backward compatibility alias for LLMRuntime consumers
+    app.state.llm = getattr(app.state.llm_provider, "runtime", app.state.llm_provider)
+
     try:
         app.state.db = await connect_db()
         app.state.sessions = SessionRepository(app.state.db)
@@ -106,7 +114,10 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        await app.state.llm.close()
+        if hasattr(app.state.llm_provider, "close"):
+            await app.state.llm_provider.close()
+        elif hasattr(app.state.llm, "close"):
+            await app.state.llm.close()
         await close_db()
 
 
@@ -414,36 +425,26 @@ async def _check_mongo(request: Request) -> dict:
 
 
 async def _check_llm(request: Request) -> dict:
-    """Probe LLM reachability by attempting a minimal models-list call.
+    """Probe LLM reachability via the active LLMProvider abstraction.
 
-    We intentionally avoid a real completion call to keep the health check
-    cheap. If the endpoint is unreachable (network/DNS) the SDK raises
-    httpx.ConnectError; other transient errors are treated as degraded rather
-    than completely failed so a single quota spike doesn't fail the probe.
+    Calls provider.health_check() which performs a lightweight probe without tokens.
     """
-    llm: Optional[LLMRuntime] = getattr(request.app.state, "llm", None)
-    if llm is None:
-        return {"component": "llm", "status": "unavailable", "detail": "LLMRuntime not initialised"}
-
-    import httpx
-    start = time.perf_counter()
+    from providers.factory import get_llm
+    provider = getattr(request.app.state, "llm_provider", None) or get_llm()
     try:
-        # Cheapest possible round-trip: list available models (no tokens spent)
-        await asyncio.wait_for(llm.client.models.list(), timeout=5.0)
-        latency_ms = round((time.perf_counter() - start) * 1000, 2)
-        return {"component": "llm", "status": "ok", "latency_ms": latency_ms}
-    except asyncio.TimeoutError:
-        return {"component": "llm", "status": "timeout", "detail": "models.list timed out after 5 s"}
-    except httpx.ConnectError as exc:
-        return {"component": "llm", "status": "unreachable", "detail": str(exc)}
-    except Exception as exc:
-        # Any other error (auth, quota, 4xx) — report degraded, not down;
-        # the endpoint is reachable even if this call failed.
-        latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        result = await provider.health_check()
         return {
             "component": "llm",
-            "status": "degraded",
-            "latency_ms": latency_ms,
+            "provider": getattr(provider, "provider_name", os.getenv("LLM_PROVIDER", "foundry")),
+            "status": "ok" if result.ok else "degraded",
+            "latency_ms": result.latency_ms,
+            "detail": result.detail,
+        }
+    except Exception as exc:
+        return {
+            "component": "llm",
+            "provider": getattr(provider, "provider_name", os.getenv("LLM_PROVIDER", "foundry")),
+            "status": "error",
             "detail": str(exc),
         }
 
