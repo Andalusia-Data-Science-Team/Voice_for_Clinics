@@ -1,4 +1,15 @@
 services:
+  mongodb:
+    image: mongo:7
+    container_name: medvoice-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: medvoice
+    restart: unless-stopped
+
   medvoice:
     build:
       context: .
@@ -6,10 +17,18 @@ services:
     container_name: medvoice
     ports:
       - "9999:9999"
+    depends_on:
+      - mongodb
     env_file:
       - src/.env
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DATABASE: medvoice
     volumes:
       - ./src/uploads:/app/uploads        # results appear here on the host
-      - ./src/static:/app/static          # ← added: serves index.html
-      - ./src/logs:/app/logs              # ← added: serves log files
+      - ./src/static:/app/static          # serves index.html
+      - ./src/logs:/app/logs              # serves log files
     restart: unless-stopped
+
+volumes:
+  mongo_data:

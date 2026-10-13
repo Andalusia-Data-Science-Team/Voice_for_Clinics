@@ -11,13 +11,35 @@ from typing import Optional, Tuple, Dict, Any, AsyncIterator
 import httpx
 import websockets
 from mistralai import Mistral
-from mistralai.models import (
-    AudioFormat,
-    RealtimeTranscriptionError,
-    TranscriptionStreamDone,
-    TranscriptionStreamTextDelta,
-)
-from mistralai.extra.realtime import UnknownRealtimeEvent
+try:
+    from mistralai.models import (
+        AudioFormat,
+        RealtimeTranscriptionError,
+        TranscriptionStreamDone,
+        TranscriptionStreamTextDelta,
+    )
+except ImportError:
+    try:
+        from mistralai.models import TranscriptionStreamDone, TranscriptionStreamTextDelta
+    except ImportError:
+        class TranscriptionStreamDone:  # type: ignore
+            pass
+        class TranscriptionStreamTextDelta:  # type: ignore
+            pass
+
+    class AudioFormat:  # type: ignore
+        def __init__(self, encoding: str = "pcm_s16le", sample_rate: int = 16000):
+            self.encoding = encoding
+            self.sample_rate = sample_rate
+
+    class RealtimeTranscriptionError(Exception):  # type: ignore
+        pass
+
+try:
+    from mistralai.extra.realtime import UnknownRealtimeEvent
+except (ImportError, AttributeError):
+    class UnknownRealtimeEvent:  # type: ignore
+        pass
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

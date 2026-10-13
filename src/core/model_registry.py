@@ -87,6 +87,9 @@ DEFAULT_REASONING_MODEL = os.environ.get(
     "FOUNDRY_DEFAULT_REASONING_MODEL", "gpt-5.6-luna"
 ).strip()
 
+FOUNDRY_DEFAULT_EXTRACTION_MODEL = DEFAULT_EXTRACTION_MODEL
+FOUNDRY_DEFAULT_REASONING_MODEL = DEFAULT_REASONING_MODEL
+
 # Reasoning effort sent to Foundry for reasoning-capable models in step 2.
 REASONING_EFFORT = os.environ.get("REASONING_EFFORT", "medium")
 

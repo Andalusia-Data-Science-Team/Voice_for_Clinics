@@ -150,3 +150,7 @@ def calculate_backoff_delay(attempt_number: int, exc: BaseException | None = Non
         delay = max(delay, retry_after_seconds(exc) or 0.0)
     return delay
 
+
+retry_delay = calculate_backoff_delay
+
+

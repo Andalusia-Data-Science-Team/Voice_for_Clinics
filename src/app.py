@@ -5,7 +5,6 @@ import asyncio
 import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from enum import Enum
 from pathlib import Path
 from typing import Optional
 
@@ -36,10 +35,40 @@ from model.patient_history import (
     get_patient_visits,
     format_history_for_prompt,
     check_history_usage,
-    BusinessUnit,
+    BusinessUnit as _PatientBU,   # aliased to avoid clash with schemas.BusinessUnit
     PatientHistoryError,
 )
 from llm.runtime import LLMRuntime, get_llm_runtime
+
+# ── Phase 2: schema + middleware imports ─────────────────────────────────────
+from schemas.input_schemas import (
+    AnalyzeInput,
+    FeedbackInput,
+    Language,
+    Mode,
+    Department,
+    BusinessUnit,
+    RefineFieldInput,
+)
+from validation.middleware import (
+    validate_analyze_input,
+    validate_refine_field_input,
+    validate_feedback_input,
+    validate_extraction_output,
+    validate_diagnosis_output,
+)
+from schemas.output_schemas import PipelineSessionOutput
+from schemas.gold_schemas import GoldCase
+from db import (
+    connect_db,
+    close_db,
+    get_db,
+    SessionRepository,
+    FeedbackRepository,
+    GoldDatasetRepository,
+    EvalRepository,
+)
+from evaluation import EvaluationEngine
 
 
 logger = logging.getLogger(__name__)
@@ -61,12 +90,24 @@ def get_current_request(request: Request) -> Request:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Create and close one shared asynchronous LLM runtime per worker."""
+    """Create and close shared asynchronous LLM runtime and MongoDB connection per worker."""
     app.state.llm = LLMRuntime()
+    try:
+        app.state.db = await connect_db()
+        app.state.sessions = SessionRepository(app.state.db)
+        app.state.feedback_repo = FeedbackRepository(app.state.db)
+        logger.info("[Lifespan] MongoDB connection and repositories initialized successfully")
+    except Exception as exc:
+        app.state.db = None
+        app.state.sessions = None
+        app.state.feedback_repo = None
+        logger.warning("[Lifespan] MongoDB initialization skipped/failed: %s (JSONL fallback active)", exc)
+
     try:
         yield
     finally:
         await app.state.llm.close()
+        await close_db()
 
 
 app = FastAPI(title="Medical Voice API", lifespan=lifespan)
@@ -149,6 +190,31 @@ def save_usage_log(entry: dict) -> None:
         logger.warning("[UsageLog] Failed to write log: %s", e)
 
 
+async def persist_session(log: dict, session_repo: Optional[SessionRepository] = None) -> None:
+    """Write session to MongoDB with schema validation, always writing to JSONL fallback or on DB failure."""
+    # Dual-write: Write to JSONL fallback in background thread
+    await asyncio.to_thread(save_usage_log, log)
+
+    if session_repo is not None:
+        try:
+            validated = PipelineSessionOutput.model_validate(log)
+            await session_repo.save_session(
+                validated,
+                meta={
+                    "ip": log.get("ip"),
+                    "user_agent": log.get("user_agent"),
+                    "sso_user": log.get("sso_user"),
+                    "clinician_name": log.get("clinician_name"),
+                    "patient_id": log.get("patient_id"),
+                    "business_unit": log.get("business_unit"),
+                    "history_check": log.get("history_check"),
+                },
+            )
+            logger.info("[Persist] Session %s successfully persisted to MongoDB", log.get("session_id"))
+        except Exception as exc:
+            logger.error("[Persist] MongoDB session write failed: %s (JSONL write preserved)", exc)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Doctor feedback — free-text feedback/complaint/suggestion + thumbs up/down,
 # submitted from the small feedback card at the bottom of the page. Written
@@ -170,6 +236,17 @@ def save_feedback_log(entry: dict) -> None:
         logger.warning("[Feedback] Failed to write feedback log: %s", e)
 
 
+async def persist_feedback(entry: dict, feedback_repo: Optional[FeedbackRepository] = None) -> None:
+    """Dual-write feedback entry to MongoDB and JSONL."""
+    await asyncio.to_thread(save_feedback_log, entry)
+    if feedback_repo is not None:
+        try:
+            await feedback_repo.save(entry)
+            logger.info("[Persist] Feedback successfully persisted to MongoDB")
+        except Exception as exc:
+            logger.error("[Persist] MongoDB feedback write failed: %s (JSONL preserved)", exc)
+
+
 @app.get("/models", summary="Fixed model per pipeline step")
 async def list_models():
     return registry_for_ui()
@@ -177,37 +254,29 @@ async def list_models():
 
 @app.post("/feedback", summary="Submit doctor feedback (thumbs rating and/or free text)")
 async def submit_feedback(
-    request:    Request,
-    rating:     Optional[str] = Form(None, description='"up", "down", or omitted for no rating'),
-    text:       str           = Form("",   description="Free-text feedback, complaint, or enhancement suggestion"),
-    name:       Optional[str] = Form(None, description="Self-reported name of the person giving feedback"),
-    department: Optional[str] = Form(None),
-    language:   Optional[str] = Form(None),
-    session_id: Optional[str] = Form(None, description="The record→analyze session this feedback is about, if any — joins back to that usage-log entry on the dashboard"),
+    request: Request,
+    inp: FeedbackInput = Depends(validate_feedback_input),
 ):
-    text = (text or "").strip()
-    if rating not in (None, "", "up", "down"):
-        raise HTTPException(status_code=400, detail='rating must be "up" or "down"')
-    rating = rating or None
-    if not text and not rating:
-        raise HTTPException(status_code=400, detail="Provide feedback text and/or a thumbs rating.")
-
+    """Validated by FeedbackInput via validate_feedback_input dependency.
+    Dual-writes to MongoDB and JSONL fallback.
+    """
     entry = {
         "timestamp":  datetime.now(timezone.utc).isoformat(),
-        "session_id": session_id,
+        "session_id": inp.session_id,
         "ip":         _get_client_ip(request),
-        "name":       (name or "").strip() or None,
+        "name":       inp.name,
         "sso_user":   _get_client_user(request),
-        "rating":     rating,
-        "text":       text,
-        "department": department or None,
-        "language":   language or None,
+        "rating":     inp.rating,
+        "text":       inp.text,
+        "department": inp.department,
+        "language":   inp.language,
     }
     logger.info(
         "[Feedback] session_id=%s name=%s rating=%s department=%s language=%s text=%r",
         entry["session_id"], entry["name"], entry["rating"], entry["department"], entry["language"], entry["text"],
     )
-    await asyncio.to_thread(save_feedback_log, entry)
+    feedback_repo: Optional[FeedbackRepository] = getattr(request.app.state, "feedback_repo", None)
+    await persist_feedback(entry, feedback_repo)
     return {"status": "ok"}
 
 
@@ -267,15 +336,47 @@ def _read_jsonl(path: Path, limit: int) -> list:
 
 
 @app.get("/admin/usage", summary="Recent /audio/analyze usage log entries, newest first")
-async def admin_usage(limit: int = 500, _auth=Depends(_require_dashboard_auth)):
+async def admin_usage(
+    request: Request,
+    limit: int = 500,
+    department: Optional[str] = None,
+    _auth=Depends(_require_dashboard_auth),
+):
     limit = max(1, min(limit, 5000))
-    return {"entries": _read_jsonl(USAGE_LOG, limit)}
+    session_repo: Optional[SessionRepository] = getattr(request.app.state, "sessions", None)
+    if session_repo is not None:
+        try:
+            docs = await session_repo.list_sessions(limit=limit, department=department)
+            return {"entries": docs, "source": "mongodb"}
+        except Exception as exc:
+            logger.warning("[Dashboard] Failed to read sessions from MongoDB, falling back to JSONL: %s", exc)
+
+    entries = _read_jsonl(USAGE_LOG, limit)
+    if department:
+        entries = [e for e in entries if e.get("department") == department]
+    return {"entries": entries, "source": "jsonl"}
 
 
 @app.get("/admin/feedback", summary="Recent doctor feedback entries, newest first")
-async def admin_feedback(limit: int = 500, _auth=Depends(_require_dashboard_auth)):
+async def admin_feedback(
+    request: Request,
+    limit: int = 500,
+    department: Optional[str] = None,
+    _auth=Depends(_require_dashboard_auth),
+):
     limit = max(1, min(limit, 5000))
-    return {"entries": _read_jsonl(FEEDBACK_LOG, limit)}
+    feedback_repo: Optional[FeedbackRepository] = getattr(request.app.state, "feedback_repo", None)
+    if feedback_repo is not None:
+        try:
+            docs = await feedback_repo.list_recent(limit=limit, department=department)
+            return {"entries": docs, "source": "mongodb"}
+        except Exception as exc:
+            logger.warning("[Dashboard] Failed to read feedback from MongoDB, falling back to JSONL: %s", exc)
+
+    entries = _read_jsonl(FEEDBACK_LOG, limit)
+    if department:
+        entries = [e for e in entries if e.get("department") == department]
+    return {"entries": entries, "source": "jsonl"}
 
 
 @app.get("/dashboard", summary="Analytics dashboard — usage + feedback, for internal review")
@@ -284,32 +385,310 @@ async def serve_dashboard(_auth=Depends(_require_dashboard_auth)):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Enums
+# Health & Observability — /health, /health/live, /admin/status
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class Language(str, Enum):
-    arabic  = "ar"
-    english = "en"
+_APP_START_TIME: float = time.monotonic()
 
 
-class Mode(str, Enum):
-    doctor       = "doctor"
-    conversation = "conversation"
+async def _check_mongo(request: Request) -> dict:
+    """Ping MongoDB and return a structured health sub-check dict."""
+    from db.connection import get_mongo_status
+    try:
+        status = await asyncio.wait_for(get_mongo_status(), timeout=3.0)
+        return {
+            "component": "mongodb",
+            "status": "ok" if status.get("connected") else "degraded",
+            "latency_ms": status.get("latency_ms"),
+            "database": status.get("database"),
+            "pool": {
+                "max": status.get("max_pool_size"),
+                "min": status.get("min_pool_size"),
+            },
+            "detail": status.get("error"),
+        }
+    except asyncio.TimeoutError:
+        return {"component": "mongodb", "status": "timeout", "detail": "ping timed out after 3 s"}
+    except Exception as exc:
+        return {"component": "mongodb", "status": "error", "detail": str(exc)}
 
 
-class Department(str, Enum):
+async def _check_llm(request: Request) -> dict:
+    """Probe LLM reachability by attempting a minimal models-list call.
+
+    We intentionally avoid a real completion call to keep the health check
+    cheap. If the endpoint is unreachable (network/DNS) the SDK raises
+    httpx.ConnectError; other transient errors are treated as degraded rather
+    than completely failed so a single quota spike doesn't fail the probe.
     """
-    Selects which clinical note template/schema the extraction step targets.
-    Each maps 1:1 to a Word template: ER_Clinical_Note_Template.docx,
-    OPD_Clinical_Note_Template.docx, Dental_Clinical_Note_Template.docx.
-    """
-    er        = "er"
-    opd       = "opd"
-    dental    = "dental"
+    llm: Optional[LLMRuntime] = getattr(request.app.state, "llm", None)
+    if llm is None:
+        return {"component": "llm", "status": "unavailable", "detail": "LLMRuntime not initialised"}
 
+    import httpx
+    start = time.perf_counter()
+    try:
+        # Cheapest possible round-trip: list available models (no tokens spent)
+        await asyncio.wait_for(llm.client.models.list(), timeout=5.0)
+        latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        return {"component": "llm", "status": "ok", "latency_ms": latency_ms}
+    except asyncio.TimeoutError:
+        return {"component": "llm", "status": "timeout", "detail": "models.list timed out after 5 s"}
+    except httpx.ConnectError as exc:
+        return {"component": "llm", "status": "unreachable", "detail": str(exc)}
+    except Exception as exc:
+        # Any other error (auth, quota, 4xx) — report degraded, not down;
+        # the endpoint is reachable even if this call failed.
+        latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        return {
+            "component": "llm",
+            "status": "degraded",
+            "latency_ms": latency_ms,
+            "detail": str(exc),
+        }
+
+
+def _check_buffer(request: Request) -> dict:
+    """Return the current write-behind buffer state (synchronous)."""
+    session_repo: Optional[SessionRepository] = getattr(request.app.state, "sessions", None)
+    if session_repo is None:
+        return {"component": "write_buffer", "status": "disabled", "buffered": 0}
+    buffered = len(session_repo._buffer) if hasattr(session_repo, "_buffer") else 0
+    flusher_alive = (
+        session_repo._flush_task is not None
+        and not session_repo._flush_task.done()
+        if hasattr(session_repo, "_flush_task")
+        else False
+    )
+    return {
+        "component": "write_buffer",
+        "status": "ok" if not session_repo._enable_buffer or flusher_alive else "degraded",
+        "buffered": buffered,
+        "buffer_enabled": getattr(session_repo, "_enable_buffer", False),
+        "flusher_alive": flusher_alive,
+    }
+
+
+def _check_disk() -> dict:
+    """Spot-check that the logs directory is writable."""
+    try:
+        probe = LOGS_DIR / ".healthcheck"
+        probe.write_text("ok")
+        probe.unlink()
+        return {"component": "disk", "status": "ok", "logs_dir": str(LOGS_DIR)}
+    except Exception as exc:
+        return {"component": "disk", "status": "error", "detail": str(exc)}
+
+
+@app.get(
+    "/health",
+    summary="Readiness probe — checks MongoDB, LLM, buffer, and disk",
+    tags=["Observability"],
+    response_model=None,
+)
+async def health_check(request: Request):
+    """Concurrent health check across all critical sub-systems.
+
+    Returns HTTP 200 when every sub-system is ``ok``.
+    Returns HTTP 503 when any *critical* sub-system (MongoDB or LLM) is degraded.
+    Non-critical failures (buffer, disk) downgrade ``overall`` to ``degraded``
+    but still return HTTP 200 so the process stays in the load-balancer rotation.
+    """
+    uptime_s = round(time.monotonic() - _APP_START_TIME, 1)
+
+    # Run all async checks concurrently — no sub-system can block another
+    mongo_result, llm_result = await asyncio.gather(
+        _check_mongo(request),
+        _check_llm(request),
+        return_exceptions=False,
+    )
+    buffer_result = _check_buffer(request)
+    disk_result = _check_disk()
+
+    checks = [mongo_result, llm_result, buffer_result, disk_result]
+
+    # Determine overall status
+    critical_statuses = {mongo_result["status"], llm_result["status"]}
+    if "error" in critical_statuses or "unreachable" in critical_statuses or "timeout" in critical_statuses:
+        overall = "unhealthy"
+        http_status = 503
+    elif any(c["status"] not in ("ok",) for c in checks):
+        overall = "degraded"
+        http_status = 200
+    else:
+        overall = "ok"
+        http_status = 200
+
+    body = {
+        "overall": overall,
+        "uptime_seconds": uptime_s,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "checks": checks,
+    }
+
+    return Response(
+        content=json.dumps(body, ensure_ascii=False, separators=(",", ":")),
+        status_code=http_status,
+        media_type="application/json",
+    )
+
+
+@app.get(
+    "/health/live",
+    summary="Liveness probe — fast in-process check (no I/O)",
+    tags=["Observability"],
+    response_model=None,
+)
+async def health_live():
+    """Ultra-lightweight liveness probe for Kubernetes/Docker health checks.
+
+    Does *not* probe MongoDB or LLM — only confirms the process is alive and
+    the event loop is responding. Returns HTTP 200 always.
+    """
+    return Response(
+        content=json.dumps({
+            "status": "alive",
+            "uptime_seconds": round(time.monotonic() - _APP_START_TIME, 1),
+        }, separators=(",", ":")),
+        status_code=200,
+        media_type="application/json",
+    )
+
+
+@app.get(
+    "/admin/status",
+    summary="Detailed system diagnostics (admin-only)",
+    tags=["Admin"],
+)
+async def admin_status(request: Request, _auth=Depends(_require_dashboard_auth)):
+    """Extended diagnostics combining health sub-checks with pool internals,
+    buffer metrics, and JSONL fallback sizes. Requires dashboard credentials.
+    """
+    uptime_s = round(time.monotonic() - _APP_START_TIME, 1)
+
+    mongo_result, llm_result = await asyncio.gather(
+        _check_mongo(request),
+        _check_llm(request),
+    )
+    buffer_result = _check_buffer(request)
+    disk_result = _check_disk()
+
+    # JSONL fallback file sizes for observability
+    jsonl_sizes = {}
+    for name, path in [("usage", USAGE_LOG), ("feedback", FEEDBACK_LOG)]:
+        try:
+            jsonl_sizes[name] = {"path": str(path), "size_bytes": path.stat().st_size if path.exists() else 0}
+        except Exception:
+            jsonl_sizes[name] = {"path": str(path), "size_bytes": None}
+
+    overall_statuses = {mongo_result["status"], llm_result["status"]}
+    if "error" in overall_statuses or "unreachable" in overall_statuses or "timeout" in overall_statuses:
+        overall = "unhealthy"
+    elif any(c["status"] != "ok" for c in [mongo_result, llm_result, buffer_result, disk_result]):
+        overall = "degraded"
+    else:
+        overall = "ok"
+
+    return {
+        "overall": overall,
+        "uptime_seconds": uptime_s,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "checks": [mongo_result, llm_result, buffer_result, disk_result],
+        "jsonl_fallback": jsonl_sizes,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Evaluation Endpoints — Gold cases management, automated evaluation, & reports
+# ═══════════════════════════════════════════════════════════════════════════════
+
+eval_router = APIRouter(prefix="/eval", tags=["Evaluation"])
+
+
+def _get_eval_repos(request: Request):
+    """Retrieve initialized database repositories or raise HTTPException 503."""
+    db = getattr(request.app.state, "db", None)
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database connection is not available")
+    gold_repo = GoldDatasetRepository(db)
+    eval_repo = EvalRepository(db)
+    session_repo = SessionRepository(db)
+    return gold_repo, eval_repo, session_repo
+
+
+@eval_router.post("/gold-cases", summary="Upload a gold case")
+async def create_gold_case(case: GoldCase, request: Request):
+    gold_repo, _, _ = _get_eval_repos(request)
+    case_id = await gold_repo.upsert_case(case)
+    return {"case_id": case_id, "status": "created"}
+
+
+@eval_router.get("/gold-cases", summary="List gold cases")
+async def list_gold_cases(
+    request: Request,
+    department: Optional[str] = None,
+    limit: int = 100,
+):
+    gold_repo, _, _ = _get_eval_repos(request)
+    cases = await gold_repo.list_cases(department=department, limit=limit)
+    return {"cases": cases, "count": len(cases)}
+
+
+@eval_router.post("/gold-cases/import-xlsx", summary="Import gold cases from Excel")
+async def import_xlsx(request: Request, file_path: Optional[str] = None):
+    gold_repo, _, _ = _get_eval_repos(request)
+    target_path = file_path or getattr(Config, "XLSX_PATH", None)
+    if not target_path or not Path(target_path).exists():
+        raise HTTPException(status_code=404, detail=f"Gold dataset Excel file not found at: {target_path}")
+
+    count = await gold_repo.import_from_xlsx(str(target_path))
+    return {"imported": count, "file": str(target_path)}
+
+
+@eval_router.post("/run/{case_id}", summary="Evaluate a session against a gold case")
+async def run_evaluation(case_id: str, session_id: str, request: Request):
+    gold_repo, eval_repo, session_repo = _get_eval_repos(request)
+    engine = EvaluationEngine(
+        gold_repo=gold_repo,
+        eval_repo=eval_repo,
+        session_repo=session_repo,
+    )
+    try:
+        result = await engine.evaluate_session(session_id=session_id, case_id=case_id)
+        return result.to_dict()
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@eval_router.get("/report", summary="Evaluation summary report")
+async def eval_report(request: Request, department: Optional[str] = None):
+    _, eval_repo, _ = _get_eval_repos(request)
+    return await eval_repo.aggregate_report(department=department)
+
+
+@eval_router.get("/runs", summary="Recent evaluation runs")
+async def list_eval_runs(
+    request: Request,
+    department: Optional[str] = None,
+    model_id: Optional[str] = None,
+    limit: int = 100,
+):
+    _, eval_repo, _ = _get_eval_repos(request)
+    runs = await eval_repo.list_recent_runs(department=department, model_id=model_id, limit=limit)
+    return {"runs": runs, "count": len(runs)}
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Enums — now imported from schemas.input_schemas (Phase 2)
+# Language, Mode, Department are imported at the top of this file.
+# The dynamic Specialty enum is retained here only for any legacy callers
+# outside the main endpoints.
+# ═══════════════════════════════════════════════════════════════════════════════
 
 # Built from model.specialty_terms.SPECIALTIES so the two never drift apart.
-Specialty = Enum("Specialty", {s.replace(" ", "_").replace("&", "and"): s for s in SPECIALTIES}, type=str)
+from enum import Enum as _Enum
+Specialty = _Enum("Specialty", {s.replace(" ", "_").replace("&", "and"): s for s in SPECIALTIES}, type=str)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -539,14 +918,15 @@ async def ws_transcribe(websocket: WebSocket):
 )
 async def refine_field_answer(
     runtime: LLMRuntime = Depends(get_llm_runtime),
-    text: str = Form(..., description="Raw transcript of the doctor's spoken answer for one field"),
-    language: Language = Form(Language.english, description="Language the answer was spoken in"),
-    specialty: Optional[Specialty] = Form(None, description="Medical specialty"),
+    inp: RefineFieldInput = Depends(validate_refine_field_input),
 ):
-    if not text or not text.strip():
-        raise HTTPException(status_code=400, detail="text must not be empty")
+    """Validated by RefineFieldInput via validate_refine_field_input dependency.
+    Inline blank-text guard removed — schema enforces it before the body runs.
+    """
+    text            = inp.text
+    language        = inp.language
+    specialty_value = inp.specialty  # already Optional[str], whitespace-stripped
 
-    specialty_value = specialty.value if specialty else None
     try:
         refine_fn = (
             LLMService.refine_ar_transcription_async
@@ -585,63 +965,69 @@ async def refine_field_answer(
     summary="Run refine → translate → extract → questions on a provided transcript",
 )
 async def analyze_transcript(
-    request:    Request,
-    runtime:    LLMRuntime = Depends(get_llm_runtime),
-    text:       str        = Form(...,               description="Raw transcript from live transcription (may include user edits)"),
-    language:   Language   = Form(Language.english,  description="Audio language"),
-    mode:       Mode       = Form(Mode.doctor,        description="Doctor or Conversation mode"),
-    department: Department = Form(Department.opd,     description="Clinical note template to fill: ER, OPD, or Dental"),
-    specialty:  Optional[Specialty] = Form(None,      description="Medical specialty — drives fuzzy term correction and refinement prompt context"),
-    use_history: bool      = Form(False,              description="If true, look up the patient's visit history and factor it into icd10_codes/final_diagnosis"),
-    patient_id: Optional[str] = Form(None,            description="Patient Code (the 'Code' field on the Patient Info card) — required when use_history is true"),
-    business_unit: Optional[BusinessUnit] = Form(None, description="AHJ, AMH or ANC — which business unit's database holds this patient's history. Required when use_history is true"),
-    clinician_name: Optional[str] = Form(None,        description="Self-reported doctor name, from the Patient Info 'Dr' field — best-effort session attribution"),
-    transcription_sec: Optional[float] = Form(None,   description="Client-measured duration of the transcription session (recording start to STT completion) — this endpoint doesn't do transcription itself, so it can only log what the browser measured"),
-    session_id: Optional[str] = Form(None,            description="Client-generated ID for this record→analyze→feedback cycle, so a later feedback submission can be joined back to this exact session on the dashboard"),
+    request: Request,
+    runtime: LLMRuntime = Depends(get_llm_runtime),
+    inp: AnalyzeInput   = Depends(validate_analyze_input),
 ):
+    """Validated by AnalyzeInput via validate_analyze_input dependency.
+
+    All Form parameters are now pre-validated and pre-sanitized by the schema:
+    - text is Unicode-normalized and whitespace-collapsed
+    - use_history cross-field constraint (requires patient_id + business_unit)
+      is enforced before this body runs — the inline guard below is removed
+    - All string fields are stripped of leading/trailing whitespace
+    """
+    # ── Unpack validated fields (all pre-sanitized) ───────────────────────────
+    text              = inp.text
+    language          = inp.language
+    mode              = inp.mode
+    department_value  = inp.department.value
+    specialty_value   = inp.specialty         # Optional[str], already clean
+    use_history       = inp.use_history
+    patient_id        = inp.patient_id
+    session_id        = inp.session_id
+    clinician_name    = inp.clinician_name
+    transcription_sec = inp.transcription_sec
+
+    # Convert to model.patient_history.BusinessUnit for the DB helper
+    # (both are str-enums with identical values; explicit conversion is safer)
+    _bu = _PatientBU(inp.business_unit.value) if inp.business_unit else None
+
     pipeline_start  = time.perf_counter()
     is_arabic       = language == Language.arabic
     is_conversation = mode == Mode.conversation
-    skip_refinement = mode == Mode.doctor  # Doctor mode: transcript goes straight through, no refinement step
-    specialty_value = specialty.value if specialty else None
-    department_value = department.value
+    skip_refinement = mode == Mode.doctor   # Doctor mode: skip LLM refinement step
 
     try:
         extraction_spec = get_model("extraction", None)
         reasoning_spec  = get_model("reasoning",  None)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    
-    # Patient history lookup — only when the doctor opted in. Opting in without
-    # both a patient code and a business unit is a client error (the frontend
-    # blocks it too), since we can't know which database to query.
+
+    # Patient history lookup — only when the doctor opted in.
+    # The cross-field invariant (use_history ⟹ patient_id + business_unit)
+    # is now enforced by AnalyzeInput, so the inline guard is removed here.
     #
     # A lookup that FAILS (DB unreachable, bad credentials, ...) does not abort
     # the analysis: the note is still generated, just without history context,
     # and history_error is passed to the frontend so the doctor is told history
-    # was requested but NOT applied — rather than silently looking like the
-    # patient simply had no history.
+    # was requested but NOT applied.
     patient_history_visits: list = []
     patient_history_text   = ""
     history_error: Optional[str] = None
     if use_history:
-        if not patient_id or not business_unit:
-            raise HTTPException(
-                status_code=400,
-                detail="use_history requires both patient_id (Patient Code) and business_unit",
-            )
         try:
-            patient_history_visits = await asyncio.to_thread(get_patient_visits, patient_id, business_unit)
+            patient_history_visits = await asyncio.to_thread(get_patient_visits, patient_id, _bu)
             patient_history_text   = format_history_for_prompt(patient_history_visits)
             logger.info(
-                f"[Analyze] use_history=true for patient_code={patient_id!r} ({business_unit.value}) — "
-                f"found {len(patient_history_visits)} prior visit(s)"
+                "[Analyze] use_history=true for patient_code=%r (%s) — found %d prior visit(s)",
+                patient_id, inp.business_unit.value, len(patient_history_visits),
             )
         except PatientHistoryError as exc:
             history_error = str(exc)
             logger.error(
-                f"[Analyze] History lookup failed for patient_code={patient_id!r} ({business_unit.value}) — "
-                f"continuing without history: {exc}"
+                "[Analyze] History lookup failed for patient_code=%r (%s) — continuing without history: %s",
+                patient_id, inp.business_unit.value, exc,
             )
 
     # Deterministic fuzzy-matching pass — corrects near-miss specialty terms
@@ -652,26 +1038,27 @@ async def analyze_transcript(
     text = correct_specialty_terms(text, specialty_value)
 
     async def event_stream():
-        # Accumulated outputs — populated as each step completes
+        # Accumulated outputs — populated as each step completes.
+        # clinician_name is already stripped by AnalyzeInput (Phase 2).
         log: dict = {
             "timestamp":          datetime.now(timezone.utc).isoformat(),
             "session_id":         session_id,
             "ip":                 _get_client_ip(request),
             "user_agent":         request.headers.get("user-agent", "unknown"),
-            "clinician_name":     (clinician_name or "").strip() or None,
+            "clinician_name":     clinician_name,   # pre-sanitized by AnalyzeInput
             "sso_user":           _get_client_user(request),
             "language":           language.value,
             "mode":               mode.value,
             "department":         department_value,
             "specialty":          specialty_value,
             "patient_id":         patient_id,
-            "business_unit":      business_unit.value if business_unit else None,
+            "business_unit":      inp.business_unit.value if inp.business_unit else None,
             "use_history":        use_history,
             "history_visit_count": len(patient_history_visits),
             "history_error":      history_error,
             "status":             "ok",
             "total_sec":          None,
-            "transcription_sec":  transcription_sec,  # known immediately — client-measured, not computed by this endpoint
+            "transcription_sec":  transcription_sec,  # client-measured, not computed by this endpoint
             "refinement_sec":     None,
             "translation_sec":    None,
             "extraction_sec":     None,
@@ -777,7 +1164,10 @@ async def analyze_transcript(
                     model_id=extraction_spec.id,
                     meta=meta,
                 )
-                features = extracted.get("json_data", {}) if extracted else {}
+                raw_features = extracted.get("json_data", {}) if extracted else {}
+                # ── Phase 2: coerce LLM output against the department extraction schema ──
+                # Never-fail: returns raw_features unchanged if validation errors occur.
+                features = validate_extraction_output(raw_features, department_value)
                 t_q = time.perf_counter()
                 # Questions derive deterministically from the extracted fields (see QuestionGenerator).
                 questions, _ = QuestionGenerator.generate(extracted_features=features, department=department_value)
@@ -799,7 +1189,10 @@ async def analyze_transcript(
                     model_id=reasoning_spec.id,
                     meta=meta,
                 )
-                data = diagnosis_result.get("json_data", {}) if diagnosis_result else {}
+                raw_data = diagnosis_result.get("json_data", {}) if diagnosis_result else {}
+                # ── Phase 2: coerce LLM diagnosis output against DiagnosisOutput schema ──
+                # Never-fail: returns raw_data unchanged if validation errors occur.
+                data = validate_diagnosis_output(raw_data)
                 return {"data": data, "meta": meta, "diagnosis_sec": round(time.perf_counter() - t0, 3)}
 
             errors: dict = {}
@@ -909,7 +1302,8 @@ async def analyze_transcript(
             if parallel_tasks:
                 await asyncio.gather(*parallel_tasks, return_exceptions=True)
             log["total_sec"] = round(time.perf_counter() - pipeline_start, 3)
-            await asyncio.to_thread(save_usage_log, log)
+            session_repo: Optional[SessionRepository] = getattr(request.app.state, "sessions", None)
+            await persist_session(log, session_repo)
 
     return EventSourceResponse(
         event_stream(),
@@ -929,6 +1323,7 @@ async def analyze_transcript(
 
 app.include_router(router)
 app.include_router(patient_router)
+app.include_router(eval_router)
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=7777)

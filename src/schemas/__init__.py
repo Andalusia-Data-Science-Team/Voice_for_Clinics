@@ -70,7 +70,11 @@ from schemas.validators import (
     sanitize_medical_text,
 )
 
+from schemas.gold_schemas import GoldCase
+
 __all__ = [
+    # ── Gold schemas ───────────────────────────────────────────────────────
+    "GoldCase",
     # ── Input schemas ──────────────────────────────────────────────────────
     "AnalyzeInput",
     "RefineFieldInput",
