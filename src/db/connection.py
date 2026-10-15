@@ -71,9 +71,14 @@ async def _ensure_indexes(db: AsyncIOMotorDatabase) -> None:
     # pipeline_runs collection indexes + TTL
     await db.pipeline_runs.create_index("session_id")
     await db.pipeline_runs.create_index([("session_id", 1), ("step_name", 1)])
-    await db.pipeline_runs.create_index("created_at")
     if ttl_seconds > 0:
         await db.pipeline_runs.create_index("created_at", expireAfterSeconds=ttl_seconds)
+    else:
+        await db.pipeline_runs.create_index("created_at")
+
+    # clinical_notes collection indexes (PH-segregated storage)
+    await db.clinical_notes.create_index("session_id", unique=True, sparse=True)
+    await db.clinical_notes.create_index("created_at")
 
     # feedback collection indexes
     await db.feedback.create_index("session_id")

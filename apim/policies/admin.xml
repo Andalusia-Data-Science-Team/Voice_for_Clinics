@@ -19,22 +19,23 @@
   <inbound>
     <base />
     <!--
-      Check ClinicalAdmin role specifically.
+      Check ClinicalAdmin or ExecutiveStakeholder role specifically.
       The global policy's validate-jwt already verified the JWT is valid and
-      that the user has Doctor OR ClinicalAdmin. Here we check for the
-      stricter ClinicalAdmin-only requirement.
+      that the user has an authorized role. Here we enforce that the user must
+      hold either ClinicalAdmin (full ops) or ExecutiveStakeholder (financial/analytics tracking).
     -->
     <choose>
       <when condition='@{
         var roles = context.Request.Headers.GetValueOrDefault("X-User-Roles","");
-        return !roles.Split(&#39;,&#39;).Any(r => r.Trim() == "ClinicalAdmin");
+        var roleList = roles.Split(&#39;,&#39;).Select(r => r.Trim()).ToList();
+        return !roleList.Contains("ClinicalAdmin") &amp;&amp; !roleList.Contains("ExecutiveStakeholder");
       }'>
         <return-response>
           <set-status code="403" reason="Forbidden" />
           <set-header name="Content-Type" exists-action="override">
             <value>application/json</value>
           </set-header>
-          <set-body>{"detail": "ClinicalAdmin role required for dashboard access"}</set-body>
+          <set-body>{"detail": "ClinicalAdmin or ExecutiveStakeholder role required for dashboard access"}</set-body>
         </return-response>
       </when>
     </choose>

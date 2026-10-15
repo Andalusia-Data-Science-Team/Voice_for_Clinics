@@ -65,6 +65,16 @@ class AuthenticatedUser:
         return "ClinicalAdmin" in self.roles
 
     @property
+    def is_stakeholder(self) -> bool:
+        """True if the user holds ExecutiveStakeholder or FinancialAuditor role."""
+        return any(r in self.roles for r in ("ExecutiveStakeholder", "FinancialAuditor"))
+
+    @property
+    def can_view_dashboard(self) -> bool:
+        """True for ClinicalAdmin or ExecutiveStakeholder roles."""
+        return self.is_admin or self.is_stakeholder
+
+    @property
     def is_doctor(self) -> bool:
         """True for any clinical user (Doctor or ClinicalAdmin)."""
         return "Doctor" in self.roles or self.is_admin
@@ -88,7 +98,7 @@ ANONYMOUS = AuthenticatedUser(
     user_id="00000000-0000-0000-0000-000000000000",
     email="dev@localhost",
     display_name="Dev Mode",
-    roles=("Doctor", "ClinicalAdmin"),
+    roles=("Doctor", "ClinicalAdmin", "ExecutiveStakeholder"),
 )
 
 
@@ -103,11 +113,23 @@ def get_current_user(request: Request) -> AuthenticatedUser:
     Performance: pure header dict lookups — O(1), no I/O, no crypto.
     Called once per request via FastAPI dependency injection.
 
-    In dev mode (APIM_ENABLED=false): returns ANONYMOUS unconditionally.
+    In dev mode (APIM_ENABLED=false): returns ANONYMOUS by default, but allows
+    developer header emulation (e.g. X-User-Roles, X-User-Email) or query param ?role=
+    for testing role gates locally without standing up APIM.
     In prod mode (APIM_ENABLED=true): returns the user from headers,
     or ANONYMOUS with a warning if X-User-ID is missing (APIM misconfigured).
     """
     if not _APIM_ENABLED:
+        # Dev / Staging role emulation support
+        dev_roles = request.headers.get("x-user-roles") or request.query_params.get("role")
+        if dev_roles:
+            roles = tuple(r.strip() for r in dev_roles.split(",") if r.strip())
+            return AuthenticatedUser(
+                user_id=request.headers.get("x-user-id", "dev-emulator-id"),
+                email=request.headers.get("x-user-email", "dev@localhost"),
+                display_name=request.headers.get("x-user-name", "Dev User"),
+                roles=roles,
+            )
         return ANONYMOUS
 
     user_id   = request.headers.get("x-user-id",    "").strip()
@@ -144,16 +166,16 @@ def get_current_user(request: Request) -> AuthenticatedUser:
 
 def require_authenticated(request: Request) -> AuthenticatedUser:
     """
-    Dependency: any authenticated user (Doctor or ClinicalAdmin).
+    Dependency: any authenticated user (Doctor, ClinicalAdmin, ExecutiveStakeholder).
 
     In prod: APIM already enforced this via validate-jwt + required-claims.
     Here we double-check as defence-in-depth.
     """
     user = get_current_user(request)
-    if _APIM_ENABLED and not (user.is_doctor or user.is_admin):
+    if _APIM_ENABLED and not (user.is_doctor or user.is_admin or user.is_stakeholder):
         raise HTTPException(
             status_code=403,
-            detail="Access denied: Doctor or ClinicalAdmin role required",
+            detail="Access denied: valid app role required",
         )
     return user
 
@@ -162,7 +184,6 @@ def require_admin(request: Request) -> AuthenticatedUser:
     """
     Dependency: ClinicalAdmin role required.
 
-    Used by /dashboard, /admin/usage, /admin/feedback.
     In prod: APIM admin.xml already blocked non-admins at the gateway;
     this is the Python-side duplicate check.
     """
@@ -171,6 +192,23 @@ def require_admin(request: Request) -> AuthenticatedUser:
         raise HTTPException(
             status_code=403,
             detail="ClinicalAdmin role required",
+        )
+    return user
+
+
+def require_dashboard_access(request: Request) -> AuthenticatedUser:
+    """
+    Dependency: ClinicalAdmin OR ExecutiveStakeholder role required.
+
+    Used by /dashboard and dashboard analytic endpoints.
+    Allows leadership and financial auditors to access high-level tracking,
+    while restricting standard clinicians to clinical encounter entry.
+    """
+    user = get_current_user(request)
+    if not user.can_view_dashboard:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: ClinicalAdmin or ExecutiveStakeholder role required",
         )
     return user
 

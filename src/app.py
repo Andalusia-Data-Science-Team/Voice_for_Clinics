@@ -7,7 +7,7 @@ import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 import uvicorn
 from sse_starlette.sse import EventSourceResponse
@@ -71,6 +71,13 @@ from db import (
     FeedbackRepository,
     GoldDatasetRepository,
     EvalRepository,
+)
+from core.auth import (
+    get_current_user,
+    require_admin,
+    require_dashboard_access,
+    require_authenticated,
+    AuthenticatedUser,
 )
 from evaluation import EvaluationEngine
 
@@ -195,11 +202,36 @@ def _get_client_user(request: Request) -> Optional[str]:
     return None
 
 
+def sanitize_usage_entry(entry: dict) -> dict:
+    """
+    PHI-Safe Log Sanitizer (Milestone 7 / M7.2):
+    Removes raw transcripts, refined text, and unmasked clinical free-text from
+    JSONL logs. Preserves operational telemetry, latencies, tokens, department mix,
+    and a one-way SHA-256 integrity hash for auditing without leaking patient PHI.
+    """
+    clean = dict(entry)
+    raw_text = clean.pop("transcript", None)
+    clean.pop("refined_text", None)
+    clean.pop("translated_text", None)
+    clean.pop("patient_story", None)
+
+    # Compute deterministic, irreversible integrity hash if raw text was present
+    if raw_text:
+        import hashlib
+        clean["transcript_hash"] = hashlib.sha256(str(raw_text).encode("utf-8")).hexdigest()
+    else:
+        clean["transcript_hash"] = None
+
+    clean["phi_safe"] = True
+    return clean
+
+
 def save_usage_log(entry: dict) -> None:
     try:
+        sanitized = sanitize_usage_entry(entry)
         with USAGE_LOG.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-        logger.info("[UsageLog] Saved entry for %s", entry.get("ip"))
+            f.write(json.dumps(sanitized, ensure_ascii=False) + "\n")
+        logger.info("[UsageLog] Saved PHI-safe entry for %s", sanitized.get("ip"))
     except Exception as e:
         logger.warning("[UsageLog] Failed to write log: %s", e)
 
@@ -315,15 +347,73 @@ async def submit_feedback(
 _dashboard_security = HTTPBasic(auto_error=False)
 
 
-def _require_dashboard_auth(credentials: Optional[HTTPBasicCredentials] = Depends(_dashboard_security)):
+def _require_dashboard_auth(
+    request: Request,
+    credentials: Optional[HTTPBasicCredentials] = Depends(_dashboard_security),
+) -> AuthenticatedUser:
+    """
+    Milestone 7 (M7.1) Integrated Dashboard Auth:
+    - If APIM_ENABLED=true: Enforces Entra ID identity from APIM headers.
+      Allows ClinicalAdmin (full ops) and ExecutiveStakeholder (financial/analytics tracking).
+      Rejects standard Doctor or unauthenticated users with 401/403.
+    - If APIM_ENABLED=false: Supports dev/staging mode. If DASHBOARD_USERNAME/PASSWORD
+      are configured and credentials provided, validates them; otherwise checks emulated headers
+      or query params (?role=ClinicalAdmin or ?role=ExecutiveStakeholder).
+    """
+    apim_enabled = os.getenv("APIM_ENABLED", "false").lower() == "true"
+    if apim_enabled:
+        user = get_current_user(request)
+        if not user.can_view_dashboard:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: ClinicalAdmin or ExecutiveStakeholder role required",
+            )
+        return user
+
+    # Dev / Staging Mode:
     dash_user = getattr(Config, "DASHBOARD_USERNAME", None)
     dash_pass = getattr(Config, "DASHBOARD_PASSWORD", None)
-    if not dash_user or not dash_pass:
-        return  # no credentials configured — dashboard runs unauthenticated, see warning above
-    ok = bool(credentials) and secrets.compare_digest(credentials.username, dash_user) \
-                            and secrets.compare_digest(credentials.password, dash_pass)
-    if not ok:
+
+    # 1. Check if user passed basic auth credentials in dev
+    if credentials and dash_user and dash_pass:
+        ok = secrets.compare_digest(credentials.username, dash_user) and secrets.compare_digest(credentials.password, dash_pass)
+        if ok:
+            return AuthenticatedUser(
+                user_id="dev-basic-auth",
+                email=f"{dash_user}@andalusiagroup.net",
+                display_name=dash_user,
+                roles=("ClinicalAdmin", "ExecutiveStakeholder"),
+            )
         raise HTTPException(status_code=401, detail="Unauthorized", headers={"WWW-Authenticate": "Basic"})
+
+    # 2. Check role emulation in dev (headers or ?role=)
+    dev_roles = request.headers.get("x-user-roles") or request.query_params.get("role")
+    if dev_roles:
+        roles = tuple(r.strip() for r in dev_roles.split(",") if r.strip())
+        user = AuthenticatedUser(
+            user_id=request.headers.get("x-user-id", "dev-emulator-id"),
+            email=request.headers.get("x-user-email", "dev@localhost"),
+            display_name=request.headers.get("x-user-name", "Dev User"),
+            roles=roles,
+        )
+        if not user.can_view_dashboard:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: ClinicalAdmin or ExecutiveStakeholder role required",
+            )
+        return user
+
+    # If neither basic credentials nor role headers were supplied:
+    if dash_user and dash_pass:
+        raise HTTPException(status_code=401, detail="Authentication required", headers={"WWW-Authenticate": "Basic"})
+
+    user = get_current_user(request)
+    if not user.can_view_dashboard:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: ClinicalAdmin or ExecutiveStakeholder role required",
+        )
+    return user
 
 
 def _read_jsonl(path: Path, limit: int) -> list:
@@ -349,26 +439,181 @@ def _read_jsonl(path: Path, limit: int) -> list:
     return entries[:limit]
 
 
+@app.get("/admin/me", summary="Current user profile and dashboard role capabilities")
+async def admin_me(user: AuthenticatedUser = Depends(_require_dashboard_auth)):
+    return {
+        "user_id": user.user_id,
+        "email": user.email,
+        "display_name": user.display_name,
+        "roles": user.roles,
+        "is_admin": user.is_admin,
+        "is_stakeholder": user.is_stakeholder,
+        "can_view_dashboard": user.can_view_dashboard,
+    }
+
+
+@app.get("/admin/financial-summary", summary="Aggregated financial metrics, AI costs, and ROI calculation")
+async def admin_financial_summary(
+    request: Request,
+    days: int = 30,
+    department: Optional[str] = None,
+    auth_user: AuthenticatedUser = Depends(_require_dashboard_auth),
+):
+    """
+    Task 2.2: High-Performance Financial & Observability Aggregation Service
+    Returns pre-aggregated metrics: total AI infrastructure cost, hours saved,
+    net financial savings, net ROI %, department breakdown, and daily burn rate.
+    """
+    from datetime import timedelta
+    rates = {
+        "input_cost_per_m": getattr(Config, "LLM_INPUT_COST_PER_M", 0.27),
+        "output_cost_per_m": getattr(Config, "LLM_OUTPUT_COST_PER_M", 1.10),
+        "stt_cost_per_min": getattr(Config, "STT_COST_PER_MINUTE", 0.006),
+        "clinician_hourly_rate": getattr(Config, "CLINICIAN_HOURLY_RATE_USD", 75.0),
+        "manual_minutes": getattr(Config, "MANUAL_DOCUMENTATION_MINUTES", 8.5),
+        "ai_minutes": getattr(Config, "AI_DOCUMENTATION_MINUTES", 2.0),
+    }
+
+    session_repo: Optional[SessionRepository] = getattr(request.app.state, "sessions", None)
+    if session_repo is not None:
+        try:
+            return await session_repo.get_financial_summary(days=days, department=department, rates=rates)
+        except Exception as exc:
+            logger.warning("[Dashboard] Mongo aggregation pipeline failed, falling back to JSONL calculation: %s", exc)
+
+    # High-performance in-memory stream fallback from JSONL
+    entries = _read_jsonl(USAGE_LOG, limit=5000)
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=days) if days > 0 else None
+
+    tot_sessions = 0
+    success_sessions = 0
+    p_tokens = 0
+    c_tokens = 0
+    audio_sec = 0.0
+    dept_map: Dict[str, Dict[str, Any]] = {}
+    daily_map: Dict[str, Dict[str, Any]] = {}
+
+    for e in entries:
+        ts = e.get("timestamp")
+        if ts and cutoff:
+            try:
+                dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                if dt < cutoff:
+                    continue
+            except Exception:
+                pass
+        dep = e.get("department") or "unknown"
+        if department and dep != department:
+            continue
+
+        tot_sessions += 1
+        if e.get("status") == "ok":
+            success_sessions += 1
+
+        ext_u = e.get("extraction_usage") or {}
+        diag_u = e.get("diagnosis_usage") or {}
+        p_tok = (ext_u.get("prompt_tokens") or 0) + (diag_u.get("prompt_tokens") or 0)
+        c_tok = (ext_u.get("completion_tokens") or 0) + (diag_u.get("completion_tokens") or 0)
+        a_sec = float(e.get("transcription_sec") or 0.0)
+
+        p_tokens += p_tok
+        c_tokens += c_tok
+        audio_sec += a_sec
+
+        cost = ((p_tok / 1_000_000.0) * rates["input_cost_per_m"]
+                + (c_tok / 1_000_000.0) * rates["output_cost_per_m"]
+                + (a_sec / 60.0) * rates["stt_cost_per_min"])
+
+        if dep not in dept_map:
+            dept_map[dep] = {"sessions": 0, "prompt_tokens": 0, "completion_tokens": 0, "cost_usd": 0.0}
+        dept_map[dep]["sessions"] += 1
+        dept_map[dep]["prompt_tokens"] += p_tok
+        dept_map[dep]["completion_tokens"] += c_tok
+        dept_map[dep]["cost_usd"] = round(dept_map[dep]["cost_usd"] + cost, 4)
+
+        date_key = ts[:10] if ts and len(ts) >= 10 else "unknown"
+        if date_key not in daily_map:
+            daily_map[date_key] = {"sessions": 0, "cost_usd": 0.0}
+        daily_map[date_key]["sessions"] += 1
+        daily_map[date_key]["cost_usd"] = round(daily_map[date_key]["cost_usd"] + cost, 4)
+
+    llm_cost = round((p_tokens / 1_000_000.0) * rates["input_cost_per_m"] + (c_tokens / 1_000_000.0) * rates["output_cost_per_m"], 4)
+    stt_cost = round((audio_sec / 60.0) * rates["stt_cost_per_min"], 4)
+    total_ai_cost = round(llm_cost + stt_cost, 4)
+
+    mins_saved = max(0.0, rates["manual_minutes"] - rates["ai_minutes"])
+    hours_saved = round((success_sessions * mins_saved) / 60.0, 2)
+    gross_value = round(hours_saved * rates["clinician_hourly_rate"], 2)
+    net_savings = round(gross_value - total_ai_cost, 2)
+    roi_percent = round((net_savings / total_ai_cost * 100.0) if total_ai_cost > 0 else 0.0, 1)
+
+    return {
+        "period_days": days,
+        "total_sessions": tot_sessions,
+        "successful_sessions": success_sessions,
+        "token_usage": {
+            "prompt_tokens": p_tokens,
+            "completion_tokens": c_tokens,
+            "total_tokens": p_tokens + c_tokens,
+        },
+        "audio_duration_minutes": round(audio_sec / 60.0, 2),
+        "costs": {
+            "llm_cost_usd": llm_cost,
+            "stt_cost_usd": stt_cost,
+            "total_ai_cost_usd": total_ai_cost,
+            "cost_per_session_usd": round(total_ai_cost / tot_sessions, 4) if tot_sessions > 0 else 0.0,
+        },
+        "savings": {
+            "hours_saved": hours_saved,
+            "gross_value_saved_usd": gross_value,
+            "net_savings_usd": net_savings,
+            "net_roi_percent": roi_percent,
+        },
+        "by_department": dept_map,
+        "daily_burn": dict(sorted(daily_map.items())),
+        "source": "jsonl_stream",
+    }
+
+
 @app.get("/admin/usage", summary="Recent /audio/analyze usage log entries, newest first")
 async def admin_usage(
     request: Request,
     limit: int = 500,
     department: Optional[str] = None,
-    _auth=Depends(_require_dashboard_auth),
+    auth_user: AuthenticatedUser = Depends(_require_dashboard_auth),
 ):
     limit = max(1, min(limit, 5000))
     session_repo: Optional[SessionRepository] = getattr(request.app.state, "sessions", None)
+    entries: List[Dict[str, Any]] = []
     if session_repo is not None:
         try:
-            docs = await session_repo.list_sessions(limit=limit, department=department)
-            return {"entries": docs, "source": "mongodb"}
+            entries = await session_repo.list_sessions(limit=limit, department=department)
+            source = "mongodb"
         except Exception as exc:
             logger.warning("[Dashboard] Failed to read sessions from MongoDB, falling back to JSONL: %s", exc)
+            entries = _read_jsonl(USAGE_LOG, limit)
+            source = "jsonl"
+    else:
+        entries = _read_jsonl(USAGE_LOG, limit)
+        source = "jsonl"
 
-    entries = _read_jsonl(USAGE_LOG, limit)
     if department:
         entries = [e for e in entries if e.get("department") == department]
-    return {"entries": entries, "source": "jsonl"}
+
+    # For ExecutiveStakeholder (non-admin), mask individual clinician identifiers (PHI/PII safe)
+    if not auth_user.is_admin:
+        sanitized = []
+        for e in entries:
+            sc = dict(e)
+            sc.pop("clinician_name", None)
+            sc.pop("sso_user", None)
+            sc.pop("doctor_id", None)
+            sc["clinician_id"] = "ANONYMIZED_CLINICIAN"
+            sanitized.append(sc)
+        entries = sanitized
+
+    return {"entries": entries, "source": source}
 
 
 @app.get("/admin/feedback", summary="Recent doctor feedback entries, newest first")
@@ -376,25 +621,41 @@ async def admin_feedback(
     request: Request,
     limit: int = 500,
     department: Optional[str] = None,
-    _auth=Depends(_require_dashboard_auth),
+    auth_user: AuthenticatedUser = Depends(_require_dashboard_auth),
 ):
     limit = max(1, min(limit, 5000))
     feedback_repo: Optional[FeedbackRepository] = getattr(request.app.state, "feedback_repo", None)
+    entries: List[Dict[str, Any]] = []
     if feedback_repo is not None:
         try:
-            docs = await feedback_repo.list_recent(limit=limit, department=department)
-            return {"entries": docs, "source": "mongodb"}
+            entries = await feedback_repo.list_recent(limit=limit, department=department)
+            source = "mongodb"
         except Exception as exc:
             logger.warning("[Dashboard] Failed to read feedback from MongoDB, falling back to JSONL: %s", exc)
+            entries = _read_jsonl(FEEDBACK_LOG, limit)
+            source = "jsonl"
+    else:
+        entries = _read_jsonl(FEEDBACK_LOG, limit)
+        source = "jsonl"
 
-    entries = _read_jsonl(FEEDBACK_LOG, limit)
     if department:
         entries = [e for e in entries if e.get("department") == department]
-    return {"entries": entries, "source": "jsonl"}
+
+    if not auth_user.is_admin:
+        sanitized = []
+        for e in entries:
+            sc = dict(e)
+            sc.pop("sso_user", None)
+            sc.pop("doctor_id", None)
+            sc["name"] = "ANONYMIZED_CLINICIAN"
+            sanitized.append(sc)
+        entries = sanitized
+
+    return {"entries": entries, "source": source}
 
 
 @app.get("/dashboard", summary="Analytics dashboard — usage + feedback, for internal review")
-async def serve_dashboard(_auth=Depends(_require_dashboard_auth)):
+async def serve_dashboard(auth_user: AuthenticatedUser = Depends(_require_dashboard_auth)):
     return FileResponse(Path(__file__).parent / "static" / "dashboard.html")
 
 

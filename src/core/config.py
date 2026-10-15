@@ -120,3 +120,18 @@ class Config:
     PATIENT_DB_UID = os.getenv("PATIENT_DB_UID")
     PATIENT_DB_PWD = os.getenv("PATIENT_DB_PWD")
     PATIENT_DB_DRIVER = os.getenv("PATIENT_DB_DRIVER", "{ODBC Driver 17 for SQL Server}")
+
+    # ── Financial & ROI Observability Rates (M7 Phase 2) ─────────────────────
+    # LLM pricing per 1M tokens in USD (DeepSeek-V3 / Azure AI Foundry rates)
+    LLM_INPUT_COST_PER_M = float(os.getenv("LLM_INPUT_COST_PER_M", "0.27"))    # $0.27 / 1M prompt tokens
+    LLM_OUTPUT_COST_PER_M = float(os.getenv("LLM_OUTPUT_COST_PER_M", "1.10"))  # $1.10 / 1M completion tokens
+
+    # STT Audio processing cost per minute in USD (Munsit / Voxtral rate baseline)
+    STT_COST_PER_MINUTE = float(os.getenv("STT_COST_PER_MINUTE", "0.006"))      # $0.006 / minute ($0.36/hour)
+
+    # Clinician Economic Assumptions
+    CLINICIAN_HOURLY_RATE_USD = float(os.getenv("CLINICIAN_HOURLY_RATE_USD", "75.0"))  # $75/hour baseline
+    MANUAL_DOCUMENTATION_MINUTES = float(os.getenv("MANUAL_DOCUMENTATION_MINUTES", "8.5"))  # 8.5 min manual EHR
+    AI_DOCUMENTATION_MINUTES = float(os.getenv("AI_DOCUMENTATION_MINUTES", "2.0"))      # 2.0 min review with MedVoice
+    CURRENCY_CODE = os.getenv("FINANCIAL_CURRENCY_CODE", "USD")  # USD, SAR, or EGP
+

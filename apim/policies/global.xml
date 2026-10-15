@@ -87,6 +87,7 @@
         <claim name="roles" match="any">
           <value>Doctor</value>
           <value>ClinicalAdmin</value>
+          <value>ExecutiveStakeholder</value>
         </claim>
       </required-claims>
     </validate-jwt>

@@ -18,6 +18,9 @@ Delete from utils/prompt.py: everything from the "ER — extraction" banner down
 plus _history_block, _HISTORY_FIELDS_DOC and _FINAL_DIAGNOSIS_RATIONALE_DOC.
 """
 
+from __future__ import annotations
+
+
 import json
 
 # ── Shared field descriptions ──────────────────────────────────────────────

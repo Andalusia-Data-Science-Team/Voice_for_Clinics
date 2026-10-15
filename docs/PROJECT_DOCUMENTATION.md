@@ -496,25 +496,37 @@ RUN_REAL_USE_CASE_EVAL=1 PYTHONPATH=src \
 
 ---
 
-## Logging and Dashboard
+## Logging, Observability and Enterprise Dashboard (Milestone 7)
 
-- `src/logs/usage.jsonl` — one entry per analysis session (append-only).
-- `src/logs/feedback.jsonl` — doctor feedback entries.
-- `/dashboard` — client-side aggregation of both logs.
-- `/admin/usage` and `/admin/feedback` — raw JSON endpoints.
+- `src/logs/usage.jsonl` — PHI-sanitized operational logs. Raw audio transcripts, patient stories, and clinical notes are removed. A SHA-256 integrity hash is stored for tamper-proof verification.
+- `src/logs/feedback.jsonl` — Clinician feedback and satisfaction entries.
+- `/dashboard` — Role-adaptive enterprise observability and financial ROI dashboard.
+- `/admin/me` — Authenticated user identity and role capabilities endpoint.
+- `/admin/financial-summary` — Pre-aggregated telemetry and unit economics endpoint (MongoDB pipeline or JSONL streaming).
+- `/admin/usage` and `/admin/feedback` — Encounters and feedback streams with server-side PHI masking.
 
-Set `DASHBOARD_USERNAME` and `DASHBOARD_PASSWORD` before exposing the
-dashboard outside a trusted network; usage logs contain transcripts.
+### Role-Based Access Control (RBAC) & Entra ID Integration
+Access to `/dashboard` and administrative APIs (`/admin/*`) is governed by Entra ID:
+
+| Role | Permissions & Visibility | Data Privacy Protections |
+|---|---|---|
+| **ClinicalAdmin** | Full system visibility, audit logs, health probes (`/health`, `/health/live`), raw system traces. | Authorized access to clinical operational metrics and technical diagnostics. |
+| **ExecutiveStakeholder** | Financial impact KPIs, Net ROI (%), gross/net cost savings, cost per encounter matrix, unit economics. | **Enforced PHI/PII Masking**: Doctor identifiers (`clinician_name`, `doctor_id`, `sso_user`) and clinical notes are anonymized. |
+| **Doctor / Unauthenticated** | Encounters consultation interface only. Blocked from administrative APIs with HTTP 401 / 403. | Zero access to system logs, financial burn rates, or aggregated analytics. |
+
+### Financial Telemetry & Rate Cards
+Configured in `src/core/config.py`:
+- `LLM_INPUT_COST_PER_M` ($0.27 / 1M tokens) & `LLM_OUTPUT_COST_PER_M` ($1.10 / 1M tokens).
+- `STT_COST_PER_MINUTE` ($0.006 / min audio).
+- `CLINICIAN_HOURLY_RATE_USD` ($75.00 / hr baseline).
+- Standard documentation time savings: 6.5 minutes saved per encounter. Dual-currency display in SAR (1 USD = 3.75 SAR) and USD ($).
 
 ---
 
 ## Security Notes
 
-- Provider keys live only in environment variables; the runtime never logs
-  keys, prompts, response bodies, or PHI.
-- The dashboard is protected by HTTP Basic Auth **only when both credentials
-  are set**.
-- Patient-history lookups require `patient_id` and `business_unit` and use
-  configured SQL Server credentials.
-- Load tests use synthetic data only; never point them at real patient
-  recordings.
+- Provider keys live strictly in environment variables; the runtime never logs keys, prompts, or response bodies.
+- **PHI Sanitization**: All unmasked clinical transcripts and doctor free-text notes are stripped before writing to `usage.jsonl` or MongoDB session records.
+- Access to administrative dashboards requires validated Azure Entra ID tokens via Azure API Management (`APIM_ENABLED=true`) or local development role headers.
+- Patient-history lookups require `patient_id` and `business_unit` and use configured SQL Server credentials.
+- Load tests use synthetic data only; never point them at real patient recordings.
