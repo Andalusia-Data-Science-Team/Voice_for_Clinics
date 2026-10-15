@@ -101,7 +101,41 @@ Stages:
    department (ER, OPD, or Dental).
 5. **Diagnosis** — ICD-10 recommendations, final diagnosis, and reasoning,
    optionally informed by patient history.
+   A local retrieval-augmented generation (RAG) step ranks Australian
+   ICD-10-AM catalogue entries using BM25-style full-note matching and the
+   existing phrase/code search, then provides a shortlist to the reasoning
+   model. The server accepts only exact catalogue codes on that shortlist,
+   canonicalizes their labels, and excludes other suggestions from
+   recommendations.
 6. **Questions** — generated deterministically from the extracted fields.
+7. **Red-flag phrase check** — a bilingual lexicon checks transcript,
+   refined, and translated text for candidate warning phrases. Matches are
+   sent in an early `routing_signal` SSE event, repeated in the extraction
+   event, and retained in the usage log and persisted session for ER, OPD, and
+   Dental. Common English and Arabic negation cues are labeled `negated`;
+   uncertain or affirmed matches prompt clinician review. This is heuristic,
+   not diagnosis or automated triage. Review original context, and remember
+   that no match does not rule out an urgent condition. The starter lexicon
+   (`src/data/red_flag_lexicon.json`) requires local clinical review.
+
+---
+
+## ICD-10 Catalogue Retrieval (RAG)
+
+The diagnosis step retrieves candidate code/description pairs from the
+Australian ICD-10-AM catalogue loaded from the project CSV. Retrieval combines
+BM25-style term ranking over the complete clinical note with the existing
+phrase and code search, fusing the ranked results before sending the shortlist
+to the reasoning model. This is local retrieval: the catalogue index is built
+in memory and the note is not sent to a separate embedding service.
+
+This version uses lexical retrieval, not dense-vector embeddings. It can rank
+catalogue descriptions containing words from a note more effectively than
+phrase-only search, but cannot reliably bridge different wording such as
+synonyms that do not occur in either the note or catalogue description. If a
+relevant entry is not retrieved, the model cannot select it. A server-side
+allow-list ensures recommendations still cannot contain codes outside the
+retrieved shortlist.
 
 ---
 

@@ -1,0 +1,58 @@
+[
+  {
+    "id": "chest_pain",
+    "label": "Chest pain",
+    "phrases": {
+      "en": ["chest pain", "chest tightness"],
+      "ar": ["ألم في الصدر", "ألم بالصدر", "ضيق في الصدر"]
+    }
+  },
+  {
+    "id": "breathing_difficulty",
+    "label": "Breathing difficulty",
+    "phrases": {
+      "en": ["difficulty breathing", "shortness of breath", "trouble breathing"],
+      "ar": ["ضيق التنفس", "صعوبة التنفس", "صعوبة في التنفس"]
+    }
+  },
+  {
+    "id": "stroke_signs",
+    "label": "Possible stroke symptoms",
+    "phrases": {
+      "en": ["facial droop", "face drooping", "one-sided weakness", "slurred speech"],
+      "ar": ["تدلي الوجه", "ضعف في جهة واحدة", "ضعف في جانب واحد", "ثقل اللسان"]
+    }
+  },
+  {
+    "id": "loss_of_consciousness",
+    "label": "Loss of consciousness",
+    "phrases": {
+      "en": ["loss of consciousness", "lost consciousness", "unresponsive"],
+      "ar": ["فقدان الوعي", "فقد الوعي", "لا يستجيب"]
+    }
+  },
+  {
+    "id": "severe_bleeding",
+    "label": "Severe bleeding",
+    "phrases": {
+      "en": ["severe bleeding", "uncontrolled bleeding"],
+      "ar": ["نزيف شديد", "نزيف حاد", "نزيف لا يتوقف"]
+    }
+  },
+  {
+    "id": "severe_allergic_reaction",
+    "label": "Severe allergic reaction",
+    "phrases": {
+      "en": ["anaphylaxis", "severe allergic reaction"],
+      "ar": ["تأق", "حساسية مفرطة", "صدمة تحسسية"]
+    }
+  },
+  {
+    "id": "seizure",
+    "label": "Seizure",
+    "phrases": {
+      "en": ["seizure", "seizures"],
+      "ar": ["نوبة صرع", "تشنج"]
+    }
+  }
+]

@@ -460,6 +460,13 @@
   .feat-history-caution { margin-top: 8px; padding: 7px 10px; background: var(--amber-light); border: 1px solid #e8d9c5; border-radius: var(--r-sm); font-size: 11.5px; color: var(--amber); line-height: 1.5; }
   .feat-history-error { background: var(--amber-light); border-color: #e8d9c5; }
   .feat-history-error .feat-cell-label { color: var(--amber); }
+  .feat-red-flag {
+    margin-bottom: 12px; padding: 10px 12px; background: var(--red-light);
+    border: 1px solid #e6cfc5; border-radius: var(--r-sm); color: var(--red);
+    font-size: 12px; line-height: 1.5;
+  }
+  .feat-red-flag strong { display: block; margin-bottom: 3px; }
+  .feat-red-flag-negated { background: var(--amber-light); border-color: #e8d9c5; color: var(--amber); }
 
   /* Questions */
   .q-summary { display: flex; gap: 12px; margin-bottom: 18px; }
@@ -1698,6 +1705,7 @@ btnSubmit.addEventListener('click', async () => {
   let translateBuf = '';
   let transBuf     = liveTranscript;   // keep raw for tab toggle
   let sseBuf       = '';
+  let currentRoutingSignal = null;
   let eventReceived = { extraction: false, diagnosis: false };
 
   function finishParallelStepsIfReady() {
@@ -1714,7 +1722,10 @@ btnSubmit.addEventListener('click', async () => {
     const cardId = SSE_EVENT_TO_CARD[ev];
     if (cardId) {
       setCard(cardId, 'error');
-      setBody(cardId, '<div class="err-box">' + esc(message) + '</div>');
+      const alert = ev === 'extraction'
+        ? renderRedFlagSignal(currentRoutingSignal)
+        : '';
+      setBody(cardId, alert + '<div class="err-box">' + esc(message) + '</div>');
     }
     if (ev === 'extraction') {
       setCard('questions', 'error');
@@ -1843,19 +1854,28 @@ btnSubmit.addEventListener('click', async () => {
       setBody('translate', `<div class="xlat-pill">🌐 Translated from Arabic</div><div class="transcript">${esc(translateBuf)}</div>`);
       markAnalysisActive();
 
+    } else if (ev === 'routing_signal') {
+      currentRoutingSignal = d;
+      if (d.matched_signals && d.matched_signals.length) {
+        setCard('extract', 'active');
+        setBody('extract', renderRedFlagSignal(d));
+      }
+
     } else if (ev === 'extraction') {
       eventReceived.extraction = true;
       const dept = d.department || department;
+      const routingSignal = d.routing_signal || currentRoutingSignal;
       patientStoryText      = d.patient_story || transBuf;
       $('extract-subtitle').textContent = '(' + (DEPARTMENT_LABELS[dept] || dept) + ' · ' + (d.model || 'GPT 5.6 Luna') + ')';
 
       if (d.error) {
-        const box = '<div class="err-box">Extraction failed: ' + esc(d.error) + '</div>';
-        setCard('extract', 'error'); setBody('extract', box);
-        setCard('questions', 'error'); setBody('questions', box);
+        const alert = renderRedFlagSignal(routingSignal);
+        const errorBox = '<div class="err-box">Extraction failed: ' + esc(d.error) + '</div>';
+        setCard('extract', 'error'); setBody('extract', alert + errorBox);
+        setCard('questions', 'error'); setBody('questions', errorBox);
       } else {
         setCard('extract', 'done'); setTime('extract', d.extraction_sec);
-        renderFeatures(d.extracted_features, dept);
+        renderFeatures(d.extracted_features, dept, routingSignal);
         btnPrint.disabled = false; // note fields are populated — printable from here on
         setCard('questions', 'done'); setTime('questions', d.question_generation_sec);
         renderQuestions(extractQList(d), department);
@@ -1928,15 +1948,31 @@ function extractQList(d) {
       disappearing. Every field carries data-field="<key>" so the print view
       (buildPrintHTML) can read back any edits made here. Diagnoses live in
       the separate Diagnosis card (renderDiagnosis). ── */
-function renderFeatures(raw, department) {
+function renderRedFlagSignal(signal) {
+  if (!signal || !Array.isArray(signal.matched_signals) || !signal.matched_signals.length) return '';
+  const needsReview = signal.requires_clinician_review;
+  const matches = signal.matched_signals.map(item => {
+    const status = item.status === 'negated' ? 'mentioned as denied' : item.status;
+    return esc(`${item.label} — ${item.matched_phrase} (${status})`);
+  });
+  const title = needsReview
+    ? '⚠ Possible red-flag phrase — clinician review recommended'
+    : 'Red-flag phrase mentioned as denied';
+  const role = needsReview ? 'alert' : 'status';
+  const style = needsReview ? '' : ' feat-red-flag-negated';
+  return `<div class="feat-red-flag${style}" role="${role}"><strong>${title}</strong><div>${matches.join('<br>')}</div><div>${esc(signal.notice || '')}</div></div>`;
+}
+
+function renderFeatures(raw, department, routingSignal) {
+  const redFlagAlert = renderRedFlagSignal(routingSignal);
   let obj = raw;
-  if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch(_) { setBody('extract','<div class="ph">Could not parse features</div>'); return; } }
-  if (!obj || typeof obj !== 'object') { setBody('extract','<div class="ph">No features extracted</div>'); return; }
+  if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch(_) { setBody('extract', redFlagAlert + '<div class="ph">Could not parse features</div>'); return; } }
+  if (!obj || typeof obj !== 'object') { setBody('extract', redFlagAlert + '<div class="ph">No features extracted</div>'); return; }
   const src    = (obj.json_data && typeof obj.json_data === 'object') ? obj.json_data : obj;
   const fields = DEPARTMENT_FIELDS[department] || DEPARTMENT_FIELDS.opd;
   const PLACEHOLDER = 'Not mentioned — click to add';
 
-  let html = '<div class="feat-layout">';
+  let html = redFlagAlert + '<div class="feat-layout">';
 
   // Chief complaint gets a highlighted callout — always shown, even empty, since
   // every department in this build has it as the lead field.
@@ -2187,12 +2223,14 @@ function renderDiagnosis(dx, department) {
   html += pillRowHTML('icd10', 'ICD-10', 'Search code or description (e.g. J18 or asthma)...');
   if (isEr) html += pillRowHTML('differential', 'Differential Dx', 'Search diagnosis...');
 
-  // Unmatched codes warning alert if any raw suggestions were not in Australian registry
+  // Excluded model suggestions are visible for review but are not recommendations.
   const unmatched = toList(dx.icd10_unmatched);
-  if (unmatched.length > 0) {
+  const unmatchedDifferentials = isEr ? toList(dx.differential_unmatched) : [];
+  if (unmatched.length > 0 || unmatchedDifferentials.length > 0) {
+    const excluded = [...unmatched, ...unmatchedDifferentials];
     html += `<div class="icd-unmatched-card">
-      <div class="icd-unmatched-title">⚠️ AI recommended codes not found in official Australian ICD-10-AM:</div>
-      ${unmatched.map(u => `
+      <div class="icd-unmatched-title">⚠️ These model suggestions were excluded because they could not be matched to the Australian ICD-10-AM catalogue. They are not recommendations:</div>
+      ${excluded.map(u => `
         <div class="icd-unmatched-item">
           <span class="icd-unmatched-label">${esc(u)}</span>
           <button type="button" class="btn-replace-icd" onclick="focusIcdSearch('icd10', '${esc(u.replace(/'/g, "\\'"))}')">Search replacement →</button>

@@ -29,9 +29,12 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from core.config import Config
 from model.speech_service import SpeechService
 from model.llm_service import LLMService
+from model.diagnosis import constrain_diagnosis_to_registry
+from model.icd10_registry import get_registry
 from model.question_generator import QuestionGenerator
 from core.model_registry import get_model, registry_for_ui
 from model.specialty_terms import correct_specialty_terms, SPECIALTIES
+from utils.red_flags import detect_red_flags
 from model.patient_history import (
     get_patient_visits,
     format_history_for_prompt,
@@ -1069,6 +1072,7 @@ async def analyze_transcript(
             "refinement_skipped": skip_refinement,
             "translated_text":    None,
             "extracted_features": None,
+            "routing_signal": None,
             "questions":          None,
             "extraction_model":   extraction_spec.id,
             "reasoning_model":    reasoning_spec.id,
@@ -1152,6 +1156,9 @@ async def analyze_transcript(
             # this is what fills the template's "Patient Story" field, verbatim,
             # with no further LLM processing.
             patient_story = final_text
+            routing_signal = detect_red_flags("\n".join((text, refined_text, final_text)))
+            log["routing_signal"] = routing_signal
+            yield {"event": "routing_signal", "data": _sse_json(routing_signal)}
 
             # ── 3. Field extraction ‖ ICD-10 diagnosis — run in parallel ─────────
             async def run_extraction():
@@ -1181,6 +1188,9 @@ async def analyze_transcript(
             async def run_diagnosis():
                 meta: dict = {}
                 t0 = time.perf_counter()
+                catalogue_candidates = get_registry().search_diagnosis_candidates(
+                    final_text
+                )
                 diagnosis_result = await LLMService.recommend_diagnosis_async(
                     translated_text=final_text,
                     runtime=runtime,
@@ -1189,11 +1199,17 @@ async def analyze_transcript(
                     is_conversation=is_conversation,
                     model_id=reasoning_spec.id,
                     meta=meta,
+                    catalogue_candidates=catalogue_candidates,
                 )
                 raw_data = diagnosis_result.get("json_data", {}) if diagnosis_result else {}
                 # ── Phase 2: coerce LLM diagnosis output against DiagnosisOutput schema ──
                 # Never-fail: returns raw_data unchanged if validation errors occur.
                 data = validate_diagnosis_output(raw_data)
+                data = constrain_diagnosis_to_registry(
+                    data,
+                    department_value,
+                    catalogue_candidates,
+                )
                 return {"data": data, "meta": meta, "diagnosis_sec": round(time.perf_counter() - t0, 3)}
 
             errors: dict = {}
@@ -1235,6 +1251,7 @@ async def analyze_transcript(
                         event_data = {
                             "department": department_value,
                             "patient_story": patient_story,
+                            "routing_signal": routing_signal,
                             "extracted_features": extracted_features,
                             "extraction_sec": extraction_sec,
                             "questions": raw_questions,
@@ -1249,6 +1266,7 @@ async def analyze_transcript(
                         logger.error("[Analyze] diagnosis failed: %s", error)
                         event_data = {
                             "department": department_value,
+                            "routing_signal": routing_signal,
                             "model": reasoning_spec.label,
                             "error": str(error),
                             "history_used": bool(patient_history_text),

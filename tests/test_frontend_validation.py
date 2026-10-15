@@ -16,6 +16,7 @@ def test_frontend_icd_components():
 
     # 2. Verify unmatched warning card exists
     assert "icd-unmatched-card" in content, "Missing .icd-unmatched-card in index.html"
+    assert "They are not recommendations" in content
     assert "btn-replace-icd" in content, "Missing .btn-replace-icd in index.html"
     assert "focusIcdSearch" in content, "Missing focusIcdSearch function in index.html"
 

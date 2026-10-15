@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import csv
 import logging
+import math
 import re
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Sequence
@@ -79,9 +81,14 @@ class ICD10Registry:
 
     def __init__(self, csv_path: Optional[Path | str] = None) -> None:
         if csv_path is None:
-            # Default location: project root "Austrilian ICD codes.csv"
-            # src/model/icd10_registry.py -> parent.parent.parent is project root
-            csv_path = Path(__file__).resolve().parent.parent.parent / "Austrilian ICD codes.csv"
+            source_data = (
+                Path(__file__).resolve().parent.parent
+                / "data"
+                / "Austrilian ICD codes.csv"
+            )
+            project_root = Path(__file__).resolve().parent.parent.parent
+            tracked_data = project_root / "Austrilian ICD codes.csv"
+            csv_path = source_data if source_data.is_file() else tracked_data
 
         self._csv_path = Path(csv_path)
         self._entries: list[ICD10Entry] = []
@@ -90,6 +97,9 @@ class ICD10Registry:
         self._code_prefixes: dict[str, list[ICD10Entry]] = {}
         self._inverted_index: dict[str, set[int]] = {}  # token -> set of entry indices
         self._descriptions_lower: list[str] = []
+        self._description_lengths: list[int] = []
+        self._term_frequencies: list[dict[str, int]] = []
+        self._average_description_length = 0.0
 
         self._load_and_index()
 
@@ -104,6 +114,8 @@ class ICD10Registry:
         code_prefixes: dict[str, list[ICD10Entry]] = {}
         inverted_index: dict[str, set[int]] = {}
         descriptions_lower: list[str] = []
+        description_lengths: list[int] = []
+        term_frequencies: list[dict[str, int]] = []
 
         with open(self._csv_path, mode="r", encoding="utf-8-sig", errors="replace") as f:
             reader = csv.reader(f)
@@ -145,7 +157,10 @@ class ICD10Registry:
 
                 # Build inverted word index for description search
                 tokens = tokenize_text(raw_desc)
-                for token in tokens:
+                description_lengths.append(len(tokens))
+                token_counts = Counter(tokens)
+                term_frequencies.append(dict(token_counts))
+                for token in token_counts:
                     if token not in inverted_index:
                         inverted_index[token] = set()
                     inverted_index[token].add(idx)
@@ -156,6 +171,13 @@ class ICD10Registry:
         self._code_prefixes = code_prefixes
         self._inverted_index = inverted_index
         self._descriptions_lower = descriptions_lower
+        self._description_lengths = description_lengths
+        self._term_frequencies = term_frequencies
+        self._average_description_length = (
+            sum(description_lengths) / len(description_lengths)
+            if description_lengths
+            else 0.0
+        )
 
         logger.info(
             "ICD10Registry initialized: loaded %d codes, %d search tokens indexed from %s",
@@ -303,6 +325,129 @@ class ICD10Registry:
                 pass
 
         return results[:limit]
+
+    def search_diagnosis_candidates(
+        self,
+        text: str,
+        limit: int = 80,
+        max_queries: int = 80,
+    ) -> list[tuple[str, str]]:
+        """Retrieve catalogue candidates with BM25 plus phrase-search fusion.
+
+        BM25 ranks each complete note against the catalogue descriptions, while
+        phrase searches preserve stronger exact-phrase and code matches. The
+        two ranked lists are combined with reciprocal-rank fusion.
+        """
+        if limit <= 0 or not text or not text.strip():
+            return []
+
+        generic_terms = {
+            "patient", "reports", "report", "presents", "presented", "complains",
+            "complaint", "history", "today", "states", "noted", "doctor",
+            "symptom", "symptoms", "finding", "findings",
+        }
+        note_tokens = [
+            token for token in tokenize_text(text)
+            if token not in generic_terms
+        ]
+        note_token_counts: dict[str, int] = {}
+        for token in note_tokens:
+            note_token_counts[token] = note_token_counts.get(token, 0) + 1
+
+        bm25_scores: dict[int, float] = {}
+        total_documents = len(self._entries)
+        if note_token_counts and self._average_description_length:
+            k1 = 1.5
+            b = 0.75
+            for token, query_frequency in note_token_counts.items():
+                posting = self._inverted_index.get(token)
+                if not posting:
+                    continue
+                document_frequency = len(posting)
+                inverse_document_frequency = max(
+                    0.0,
+                    (total_documents - document_frequency + 0.5)
+                    / (document_frequency + 0.5),
+                )
+                inverse_document_frequency = math.log1p(inverse_document_frequency)
+                for document_index in posting:
+                    term_frequency = self._term_frequencies[document_index][token]
+                    length_normalizer = 1 - b + b * (
+                        self._description_lengths[document_index]
+                        / self._average_description_length
+                    )
+                    term_score = inverse_document_frequency * (
+                        term_frequency * (k1 + 1)
+                    ) / (term_frequency + k1 * length_normalizer)
+                    bm25_scores[document_index] = (
+                        bm25_scores.get(document_index, 0.0)
+                        + query_frequency * term_score
+                    )
+
+        bm25_ranking = sorted(
+            bm25_scores,
+            key=bm25_scores.get,
+            reverse=True,
+        )
+        fused_scores: dict[str, float] = {}
+        reciprocal_rank_constant = 60
+        for rank, document_index in enumerate(bm25_ranking, start=1):
+            code = self._entries[document_index].code
+            fused_scores[code] = fused_scores.get(code, 0.0) + (
+                1 / (reciprocal_rank_constant + rank)
+            )
+
+        query_phrases: list[str] = []
+        seen_phrases: set[str] = set()
+        for segment in re.split(r"[,.;:!?؟؛\n]+", text or ""):
+            tokens = [
+                token
+                for token in tokenize_text(segment)
+                if token not in generic_terms
+            ]
+            for width in (3, 2, 1):
+                for start in range(max(0, len(tokens) - width + 1)):
+                    phrase = " ".join(tokens[start:start + width])
+                    if phrase in seen_phrases:
+                        continue
+                    seen_phrases.add(phrase)
+                    query_phrases.append(phrase)
+                    if len(query_phrases) >= max_queries:
+                        break
+                if len(query_phrases) >= max_queries:
+                    break
+            if len(query_phrases) >= max_queries:
+                break
+
+        phrase_scores: dict[str, float] = {}
+        for phrase in query_phrases:
+            width = len(phrase.split())
+            hit_limit = 40 if width == 1 else 12
+            for rank, (code, _description) in enumerate(
+                self.search(phrase, limit=hit_limit)
+            ):
+                phrase_scores[code] = phrase_scores.get(code, 0.0) + (
+                    width / (rank + 1)
+                )
+
+        for rank, code in enumerate(
+            sorted(phrase_scores, key=phrase_scores.get, reverse=True),
+            start=1,
+        ):
+            fused_scores[code] = fused_scores.get(code, 0.0) + (
+                1 / (reciprocal_rank_constant + rank)
+            )
+
+        ranked_codes = sorted(
+            fused_scores,
+            key=fused_scores.get,
+            reverse=True,
+        )[:limit]
+        return [
+            (entry.code, entry.description)
+            for code in ranked_codes
+            if (entry := self.lookup_code(code)) is not None
+        ]
 
     def validate_code(self, raw_item: str) -> ValidatedCode:
         """Validate a single raw code or label string against the registry.

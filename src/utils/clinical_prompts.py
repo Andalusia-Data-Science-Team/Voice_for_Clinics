@@ -218,9 +218,9 @@ _HISTORY_DOC = """  - "history_considered": "Yes" if the patient history block g
     diagnosis code(s) and date(s) that influenced your recommendation. If more than one prior
     diagnosis is relevant, name all of them. Otherwise ""."""
 
-_ER_EXTRA_DOC = """  - "differential_diagnoses": A list of short diagnosis NAMES (strings, no codes) that are
-    clinically reasonable alternatives to the leading diagnosis for this presentation — include
-    dangerous conditions that must be excluded, most important first (3-6 items).
+_ER_EXTRA_DOC = """  - "differential_diagnoses": A list of 3-6 clinically reasonable alternatives
+    formatted "<Australian ICD-10-AM code> - <exact catalogue description>", most important first.
+    Select only from the supplied catalogue options; do not invent or substitute diagnoses or codes.
   - "triage_priority": ALWAYS populate this — the patient's triage urgency. If a triage level
     wasn't explicitly stated, infer your best classification from the clinical context (vitals,
     primary survey findings, presentation) using the Emergency Severity Index (1 = most urgent ...
@@ -229,44 +229,111 @@ _ER_EXTRA_DOC = """  - "differential_diagnoses": A list of short diagnosis NAMES
 
 _DIAGNOSIS_EXAMPLES = {
     "er": {
-        "icd10_codes": ["K35.80 - Unspecified acute appendicitis", "R10.31 - Right lower quadrant pain"],
-        "differential_diagnoses": ["Acute appendicitis", "Mesenteric adenitis", "Right ureteric colic",
-                                   "Ovarian torsion", "Crohn's disease flare"],
+        "icd10_codes": [
+            "K35.8 - Acute appendicitis, other and unspecified",
+            "R10.3 - Pain localised to other parts of lower abdomen",
+        ],
+        "differential_diagnoses": [
+            "K35.2 - Acute appendicitis with generalised peritonitis",
+            "I88.0 - Nonspecific mesenteric lymphadenitis",
+            "N23 - Unspecified renal colic",
+            "N83.5 - Torsion of ovary, ovarian pedicle and fallopian tube",
+            "K50.9 - Crohn's disease, unspecified",
+        ],
         "triage_priority": "ESI 3 - Urgent (stable vitals, localized peritoneal signs, needs timely surgical evaluation)",
-        "reasoning": "Two days of progressive RLQ pain with tenderness and guarding at McBurney's point and a positive Rovsing's sign, plus raised WBC, is the classic picture of acute appendicitis; R10.31 is kept as the symptom-level fallback code.",
+        "reasoning": "Progressive RLQ pain with tenderness and guarding supports acute appendicitis. R10.3 records the documented lower-abdominal pain.",
         "history_considered": "No", "history_notes": "",
     },
     "opd": {
-        "icd10_codes": ["J18.9 - Pneumonia, unspecified organism", "J20.9 - Acute bronchitis, unspecified"],
+        "icd10_codes": [
+            "J18.9 - Pneumonia, unspecified",
+            "J20.9 - Acute bronchitis, unspecified",
+        ],
         "reasoning": "Fever with bilateral crackles over a gradually worsening 5-day course, with a chest X-ray ordered, favours pneumonia over simple bronchitis; bronchitis stays as the alternative.",
         "history_considered": "No", "history_notes": "",
     },
     "dental": {
-        "icd10_codes": ["K04.0 - Pulpitis", "K04.4 - Acute apical periodontitis of pulpal origin"],
+        "icd10_codes": [
+            "K04.0 - Pulpitis",
+            "K04.4 - Acute apical periodontitis of pulpal origin",
+        ],
         "reasoning": "Severe pain on chewing localized to tooth 36 with a pre-treatment periapical taken and root canal started is consistent with pulpitis; apical periodontitis is the next most likely.",
         "history_considered": "No", "history_notes": "",
     },
 }
 
 
-def get_diagnosis_prompt(department: str, text: str, is_conversation: bool = False,
-                         patient_history_text: str = "") -> str:
+def get_diagnosis_prompt(
+    department: str,
+    text: str,
+    is_conversation: bool = False,
+    patient_history_text: str = "",
+    catalogue_candidates: list[tuple[str, str]] | None = None,
+) -> str:
     d = _dept(department)
     cfg = _DEPT[d]
     source = "doctor-patient conversation" if is_conversation else "clinical text"
     label = "Conversation" if is_conversation else "Text"
-    code_kind = "ICD-10 (or relevant dental diagnostic)" if d == "dental" else "ICD-10"
+    code_kind = "ICD-10-AM"
     er_doc = f"\n{_ER_EXTRA_DOC}" if d == "er" else ""
-    example = json.dumps({"json_data": _DIAGNOSIS_EXAMPLES[d], "summary": "..."}, indent=2, ensure_ascii=False)
+    if catalogue_candidates is None:
+        candidates_doc = (
+            "No catalogue candidates were supplied. Return an empty "
+            '"icd10_codes" list and do not invent a code or diagnosis.'
+        )
+        example_data = _DIAGNOSIS_EXAMPLES[d]
+    else:
+        candidates_doc = (
+            "For icd10_codes"
+            + (
+                " and differential_diagnoses"
+                if d == "er"
+                else ""
+            )
+            + ", select ONLY from these entries retrieved from the Australian "
+            "ICD-10-AM catalogue. Copy each code and description exactly. Do "
+            "not use medical knowledge to add or substitute codes or diagnosis "
+            "labels. If none fit the evidence, return an empty list."
+        )
+        candidates_doc += "\n" + "\n".join(
+            f"- {code} - {description}"
+            for code, description in catalogue_candidates
+        )
+        example_data = {
+            "icd10_codes": (
+                [f"{catalogue_candidates[0][0]} - {catalogue_candidates[0][1]}"]
+                if catalogue_candidates
+                else []
+            ),
+            "reasoning": "Explain which documented findings support the selected catalogue entry.",
+            "history_considered": "No",
+            "history_notes": "",
+        }
+        if d == "er":
+            example_data.update({
+                "differential_diagnoses": (
+                    [f"{catalogue_candidates[0][0]} - {catalogue_candidates[0][1]}"]
+                    if catalogue_candidates
+                    else []
+                ),
+                "triage_priority": _DIAGNOSIS_EXAMPLES["er"]["triage_priority"],
+            })
+    example = json.dumps(
+        {"json_data": example_data, "summary": "..."},
+        indent=2,
+        ensure_ascii=False,
+    )
     return f"""
 You are {cfg['persona']} acting as a clinical coding and diagnostic-reasoning assistant. Given the
 following {source} from {cfg['visit']}, recommend diagnoses. Think through the case before answering.
 Return a JSON object with two fields:
 - "json_data": A dictionary with exactly these keys:
-  - "icd10_codes": ALWAYS populate this — a list of strings, each formatted "<code> - <description>",
-    containing your recommended {code_kind} codes, ordered from MOST to LEAST likely (the first entry is
-    your leading diagnosis). 1-5 entries. Use ICD-10-AM (Australian Modification) codes where possible.
-    This is your clinical recommendation, not a transcription — never return an empty list if the text describes any clinical presentation at all.
+  - "icd10_codes": A list of strings, each formatted
+    "<code> - <exact catalogue description>", containing your recommended
+    {code_kind} codes, ordered from MOST to LEAST likely (the first entry is
+    your leading diagnosis). Return up to 5 entries, selecting only from the
+    supplied catalogue options. If no supplied entry fits the evidence, return
+    an empty list.
   - "reasoning": ALWAYS populate this — 2-4 sentences explaining WHY the leading code was chosen over
     the alternatives, citing the concrete symptoms, findings, or results from TODAY'S text that support
     it. If history_considered is "Yes", weave in the prior diagnosis/date that reinforced the choice.{er_doc}
@@ -274,8 +341,13 @@ Return a JSON object with two fields:
 - "summary": One short sentence summarizing the recommendation.
 
 Base the recommendation only on what the text supports; do not invent findings.
+The server enforces the supplied catalogue candidate list. Any unlisted code
+or diagnosis will be excluded from the recommendations.
 {_history_block(patient_history_text)}
 {label}: {text}
+
+Catalogue options:
+{candidates_doc}
 
 Example output:
 {example}

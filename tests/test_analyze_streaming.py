@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import pytest
 from starlette.requests import Request
@@ -15,6 +16,7 @@ def _event_name(event: dict) -> str:
 async def test_each_parallel_result_is_sent_without_waiting_for_the_other(monkeypatch, fast_step):
     slow_step_started = asyncio.Event()
     release_slow_step = asyncio.Event()
+    selected_candidates = []
 
     async def extract_features_async(**kwargs):
         if fast_step == "diagnosis":
@@ -26,7 +28,17 @@ async def test_each_parallel_result_is_sent_without_waiting_for_the_other(monkey
         if fast_step == "extraction":
             slow_step_started.set()
             await release_slow_step.wait()
-        return {"json_data": {"icd10_codes": ["R07.9"]}}
+        selected_candidates.extend(kwargs["catalogue_candidates"][:1])
+        code = selected_candidates[0][0]
+        return {
+            "json_data": {
+                "icd10_codes": [
+                    f"{code} - Model-invented diagnosis text",
+                    "FAKE999.00 - Unsupported code",
+                ],
+                "final_diagnosis": "Unsupported diagnosis text",
+            }
+        }
 
     monkeypatch.setattr(app_module.LLMService, "extract_features_async", extract_features_async)
     monkeypatch.setattr(app_module.LLMService, "recommend_diagnosis_async", recommend_diagnosis_async)
@@ -50,25 +62,41 @@ async def test_each_parallel_result_is_sent_without_waiting_for_the_other(monkey
     response = await app_module.analyze_transcript(
         request=request,
         runtime=object(),
-        text="The patient reports chest pain.",
-        language=app_module.Language.english,
-        mode=app_module.Mode.doctor,
-        department=app_module.Department.opd,
-        specialty=None,
-        use_history=False,
-        patient_id=None,
-        business_unit=None,
-        clinician_name=None,
-        transcription_sec=None,
-        session_id="test-session",
+        inp=app_module.AnalyzeInput(
+            text="The patient reports chest pain.",
+            language="en",
+            mode="doctor",
+            department="opd",
+            session_id="test-session",
+        ),
     )
 
     events = response.body_iterator.__aiter__()
     assert _event_name(await anext(events)) == "refinement_skipped"
-    assert _event_name(await asyncio.wait_for(anext(events), timeout=1)) == fast_step
+    routing_event = await asyncio.wait_for(anext(events), timeout=1)
+    assert _event_name(routing_event) == "routing_signal"
+    routing_data = json.loads(routing_event["data"])
+    assert routing_data["requires_clinician_review"] is True
+    fast_event = await asyncio.wait_for(anext(events), timeout=1)
+    assert _event_name(fast_event) == fast_step
+    if fast_step == "extraction":
+        fast_data = json.loads(fast_event["data"])
+        assert fast_data["routing_signal"]["requires_clinician_review"] is True
     await asyncio.wait_for(slow_step_started.wait(), timeout=1)
     assert not release_slow_step.is_set()
 
     release_slow_step.set()
     slow_step = "diagnosis" if fast_step == "extraction" else "extraction"
-    assert _event_name(await asyncio.wait_for(anext(events), timeout=1)) == slow_step
+    slow_event = await asyncio.wait_for(anext(events), timeout=1)
+    assert _event_name(slow_event) == slow_step
+    if slow_step == "extraction":
+        slow_data = json.loads(slow_event["data"])
+        assert slow_data["routing_signal"]["requires_clinician_review"] is True
+    diagnosis_event = fast_event if fast_step == "diagnosis" else slow_event
+    diagnosis_data = json.loads(diagnosis_event["data"])["diagnosis"]
+    expected = f"{selected_candidates[0][0]} - {selected_candidates[0][1]}"
+    assert diagnosis_data["icd10_codes"] == [expected]
+    assert diagnosis_data["final_diagnosis"] == expected
+    assert diagnosis_data["icd10_unmatched"] == [
+        "FAKE999.00 - Unsupported code"
+    ]

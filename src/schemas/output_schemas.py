@@ -93,6 +93,10 @@ class DiagnosisOutput(_OutputBase):
         default_factory=list,
         description="Recommended ICD-10 codes, most-likely first",
     )
+    icd10_unmatched: List[str] = Field(
+        default_factory=list,
+        description="Model suggestions excluded because they did not match the ICD-10-AM catalogue",
+    )
     reasoning: str = Field("", description="Step-by-step clinical reasoning")
     final_diagnosis: Optional[str] = Field(
         None,
@@ -111,18 +115,26 @@ class DiagnosisOutput(_OutputBase):
         None,
         description="ER-only: ranked differential diagnoses",
     )
+    differential_unmatched: Optional[List[str]] = Field(
+        None,
+        description="ER-only: differential suggestions excluded by the ICD-10-AM catalogue",
+    )
     triage_priority: Optional[str] = Field(
         None,
         description="ER-only: triage category (e.g. 'Category 2 – Emergency')",
     )
 
-    @field_validator("icd10_codes", mode="before")
+    @field_validator("icd10_codes", "icd10_unmatched", mode="before")
     @classmethod
     def _coerce_icd10_list(cls, v: Any) -> List[str]:
-        """icd10_codes is List[str] — None must become [] not None."""
+        """Code lists use [] instead of None."""
         return coerce_to_str_list(v)
 
-    @field_validator("differential_diagnoses", mode="before")
+    @field_validator(
+        "differential_diagnoses",
+        "differential_unmatched",
+        mode="before",
+    )
     @classmethod
     def _coerce_differential_list(cls, v: Any) -> Optional[List[str]]:
         """differential_diagnoses is Optional[List[str]] — None passes through."""
@@ -375,6 +387,10 @@ class PipelineSessionOutput(_OutputBase):
     extracted_features: Optional[Dict[str, Any]] = Field(
         None,
         description="Raw extraction dict from LLM (not yet validated against department schema)",
+    )
+    routing_signal: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Lexicon-based candidate red-flag matches for clinician review",
     )
     questions: Optional[List[QuestionItem]] = Field(
         None,

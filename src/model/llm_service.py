@@ -149,12 +149,25 @@ class LLMService:
         is_conversation: bool = False,
         model_id: Optional[str] = None,
         meta: Optional[dict] = None,
+        catalogue_candidates: Optional[list[tuple[str, str]]] = None,
     ):
         """ICD-10 codes + reasoning (ER: + differential diagnoses + triage).
         `model_id` is one of core.model_registry.REASONING_MODELS. Reasoning-
         capable models run with reasoning parameters enabled."""
         model = get_model("reasoning", model_id)
-        prompt = clinical_prompts.get_diagnosis_prompt(department, translated_text, is_conversation, patient_history_text)
+        if catalogue_candidates is None:
+            from model.icd10_registry import get_registry
+
+            catalogue_candidates = get_registry().search_diagnosis_candidates(
+                translated_text
+            )
+        prompt = clinical_prompts.get_diagnosis_prompt(
+            department,
+            translated_text,
+            is_conversation,
+            patient_history_text,
+            catalogue_candidates,
+        )
         return LLMService._call_structured(
             prompt, ExtractedFeatures, api_key, model,
             max_tokens=DIAGNOSIS_MAX_TOKENS, reasoning_effort=REASONING_EFFORT, meta=meta,
@@ -168,10 +181,31 @@ class LLMService:
         return await LLMService._call_structured_async(prompt, ExtractedFeatures, runtime, model, EXTRACTION_MAX_TOKENS, meta=meta)
 
     @staticmethod
-    async def recommend_diagnosis_async(translated_text: str, runtime: LLMRuntime, department: str = "opd", patient_history_text: str = "", is_conversation: bool = False, model_id: Optional[str] = None, meta: Optional[dict] = None):
+    async def recommend_diagnosis_async(
+        translated_text: str,
+        runtime: LLMRuntime,
+        department: str = "opd",
+        patient_history_text: str = "",
+        is_conversation: bool = False,
+        model_id: Optional[str] = None,
+        meta: Optional[dict] = None,
+        catalogue_candidates: Optional[list[tuple[str, str]]] = None,
+    ):
         """Recommend diagnoses through the shared asynchronous runtime."""
         model = get_model("reasoning", model_id)
-        prompt = clinical_prompts.get_diagnosis_prompt(department, translated_text, is_conversation, patient_history_text)
+        if catalogue_candidates is None:
+            from model.icd10_registry import get_registry
+
+            catalogue_candidates = get_registry().search_diagnosis_candidates(
+                translated_text
+            )
+        prompt = clinical_prompts.get_diagnosis_prompt(
+            department,
+            translated_text,
+            is_conversation,
+            patient_history_text,
+            catalogue_candidates,
+        )
         return await LLMService._call_structured_async(prompt, ExtractedFeatures, runtime, model, DIAGNOSIS_MAX_TOKENS, reasoning_effort=REASONING_EFFORT, meta=meta)
 
     # ── Internal: plain text call (refine / translate) ───────────────────
