@@ -71,6 +71,9 @@ markers = [
     "llm: live provider-backed model evaluation",
 ]
 
+[tool.ruff]
+target-version = "py311"
+
 [tool.mypy]
 mypy_path = "src"
 check_untyped_defs = true

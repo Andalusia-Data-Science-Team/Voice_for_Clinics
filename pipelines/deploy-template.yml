@@ -1,0 +1,48 @@
+parameters:
+  - name: environmentName
+    type: string
+  - name: variableGroup
+    type: string
+  - name: imageTag
+    type: string
+  - name: smokeTestBaseUrl
+    type: string
+  - name: envFilePath
+    type: string
+jobs:
+  - deployment: deploy_${{ parameters.environmentName }}
+    environment: ${{ parameters.environmentName }}
+    variables:
+      - group: ${{ parameters.variableGroup }}
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - checkout: none
+            - bash: |
+                set -euo pipefail
+                image='<PLACEHOLDER_REGISTRY_REPOSITORY>:${{ parameters.imageTag }}'
+                container='medvoice'
+                env_file='${{ parameters.envFilePath }}'
+                # The target env file must already exist. Never create or print it.
+                test -r "$env_file"
+                previous_image="$(docker inspect --format '{{.Config.Image}}' "$container" 2>/dev/null || true)"
+                docker pull "$image"
+                docker rm -f "$container" 2>/dev/null || true
+                docker run --detach --name "$container" --env-file "$env_file" --publish '<PLACEHOLDER_HOST_PORT>:7777' "$image"
+                smoke_url='${{ parameters.smokeTestBaseUrl }}/health/live'
+                healthy=false
+                for attempt in $(seq 1 10); do
+                  if curl --fail --silent --show-error "$smoke_url" | grep -q '"status":"alive"'; then healthy=true; break; fi
+                  sleep 5
+                done
+                if [ "$healthy" != true ]; then
+                  echo 'Smoke test failed; restoring the previously running image.' >&2
+                  docker rm -f "$container" 2>/dev/null || true
+                  if [ -n "$previous_image" ]; then
+                    docker pull "$previous_image"
+                    docker run --detach --name "$container" --env-file "$env_file" --publish '<PLACEHOLDER_HOST_PORT>:7777' "$previous_image"
+                  fi
+                  exit 1
+                fi
+              displayName: Pull, deploy, smoke test, and roll back on failure

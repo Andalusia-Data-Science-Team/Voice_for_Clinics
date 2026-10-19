@@ -1,0 +1,103 @@
+# A4 CI/CD: values written as <PLACEHOLDER> must be supplied in Azure DevOps.
+trigger:
+  branches:
+    include: [main]
+pr:
+  branches:
+    include: [main]
+parameters:
+  - name: deployStaging
+    type: boolean
+    default: false
+  - name: deployProduction
+    type: boolean
+    default: false
+variables:
+  pythonVersion: '3.11'
+  ruffVersion: '<PLACEHOLDER_RUFF_VERSION>'
+pool:
+  name: '<PLACEHOLDER_SELF_HOSTED_AGENT_POOL>'
+stages:
+  - stage: CI
+    jobs:
+      - job: lint_and_test
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '$(pythonVersion)'
+          - script: |
+              python -m pip install --upgrade pip
+              python -m pip install -r src/requirements.txt -r requirements-test.txt "ruff==$(ruffVersion)"
+            displayName: Install app and test dependencies only
+          - script: python -m ruff check src tests --select E9,F63,F7,F82
+            displayName: Lint runtime-breaking errors
+          - script: |
+              env -i PATH="$PATH" HOME="$HOME" LLM_PROVIDER=foundry AI_FOUNDRY_ENDPOINT=https://dummy-foundry.invalid/openai/v1 AI_FOUNDRY_KEY=dummy-ci-key AI_FOUNDRY_API_VERSION=2025-01-01-preview python -m pytest --ignore=tests/test_m1_verification.py -k concurrency -v --junitxml=$(Common.TestResultsDirectory)/concurrency.xml
+            displayName: Run concurrency tests with dummy configuration
+          - script: |
+              env -i PATH="$PATH" HOME="$HOME" LLM_PROVIDER=foundry AI_FOUNDRY_ENDPOINT=https://dummy-foundry.invalid/openai/v1 AI_FOUNDRY_KEY=dummy-ci-key AI_FOUNDRY_API_VERSION=2025-01-01-preview python -m pytest --ignore=tests/test_m1_verification.py -v --junitxml=$(Common.TestResultsDirectory)/full.xml
+            displayName: Run full suite with dummy configuration
+          - task: PublishTestResults@2
+            condition: always()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: '$(Common.TestResultsDirectory)/*.xml'
+              failTaskOnFailedTests: true
+  - stage: BuildPush
+    dependsOn: CI
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - job: build_and_push
+        steps:
+          - bash: echo "##vso[task.setvariable variable=shortSha]${BUILD_SOURCEVERSION:0:7}"
+            displayName: Set short commit SHA
+          - task: Docker@2
+            inputs:
+              command: buildAndPush
+              containerRegistry: '<PLACEHOLDER_REGISTRY_SERVICE_CONNECTION>'
+              repository: '<PLACEHOLDER_REGISTRY_REPOSITORY>'
+              dockerfile: Dockerfile
+              buildContext: .
+              tags: |
+                $(Build.BuildId)
+                $(shortSha)
+  - stage: DeployDev
+    dependsOn: BuildPush
+    condition: succeeded()
+    variables:
+      - group: '<PLACEHOLDER_DEV_VARIABLE_GROUP>'
+    jobs:
+      - template: pipelines/deploy-template.yml
+        parameters:
+          environmentName: dev
+          variableGroup: '<PLACEHOLDER_DEV_VARIABLE_GROUP>'
+          imageTag: '$(Build.BuildId)'
+          smokeTestBaseUrl: '$(MEDVOICE_SMOKE_TEST_BASE_URL)'
+          envFilePath: '$(MEDVOICE_ENV_FILE)'
+  - stage: DeployStaging
+    dependsOn: BuildPush
+    condition: and(succeeded(), ${{ eq(parameters.deployStaging, true) }})
+    variables:
+      - group: '<PLACEHOLDER_STAGING_VARIABLE_GROUP>'
+    jobs:
+      - template: pipelines/deploy-template.yml
+        parameters:
+          environmentName: staging
+          variableGroup: '<PLACEHOLDER_STAGING_VARIABLE_GROUP>'
+          imageTag: '$(Build.BuildId)'
+          smokeTestBaseUrl: '$(MEDVOICE_SMOKE_TEST_BASE_URL)'
+          envFilePath: '$(MEDVOICE_ENV_FILE)'
+  - stage: DeployProduction
+    dependsOn: DeployStaging
+    condition: and(succeeded(), ${{ eq(parameters.deployProduction, true) }})
+    # Configure approval checks on the Azure DevOps production Environment in the UI.
+    variables:
+      - group: '<PLACEHOLDER_PRODUCTION_VARIABLE_GROUP>'
+    jobs:
+      - template: pipelines/deploy-template.yml
+        parameters:
+          environmentName: production
+          variableGroup: '<PLACEHOLDER_PRODUCTION_VARIABLE_GROUP>'
+          imageTag: '$(Build.BuildId)'
+          smokeTestBaseUrl: '$(MEDVOICE_SMOKE_TEST_BASE_URL)'
+          envFilePath: '$(MEDVOICE_ENV_FILE)'
