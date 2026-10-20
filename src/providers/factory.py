@@ -41,12 +41,13 @@ def build_llm_provider(provider_name: Optional[str] = None) -> LLMProvider:
         logger.info("[Factory] Instantiating FoundryLLMProvider with shared LLMRuntime")
         return FoundryLLMProvider(LLMRuntime())
 
-    # Extension point for future providers:
-    # elif selected == "openrouter":
-    #     from providers.openrouter_llm import OpenRouterLLMProvider
-    #     return OpenRouterLLMProvider(...)
+    elif selected == "openrouter":
+        from providers.openrouter_llm import OpenRouterLLMProvider
 
-    raise ValueError(f"Unknown LLM_PROVIDER: {selected!r}. Supported options: ['foundry']")
+        logger.info("[Factory] Instantiating OpenRouterLLMProvider")
+        return OpenRouterLLMProvider()
+
+    raise ValueError(f"Unknown LLM_PROVIDER: {selected!r}. Supported options: ['foundry', 'openrouter']")
 
 
 def build_stt_provider(provider_name: Optional[str] = None) -> STTProvider:

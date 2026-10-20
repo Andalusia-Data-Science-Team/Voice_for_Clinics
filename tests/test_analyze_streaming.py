@@ -7,6 +7,10 @@ from starlette.requests import Request
 import app as app_module
 
 
+async def anext(iterator):
+    return await iterator.__anext__()
+
+
 def _event_name(event: dict) -> str:
     return event["event"]
 

@@ -1,4 +1,4 @@
-"""Process-local shared AsyncOpenAI runtime."""
+"""Process-local shared AsyncOpenAI runtime for Azure AI Foundry and resilience."""
 
 from __future__ import annotations
 
@@ -12,8 +12,9 @@ from openai import AsyncOpenAI
 from starlette.requests import Request
 
 from core.config import Config
+from llm.circuit_breaker import CircuitBreaker, CircuitBreakerOpenException
 from llm.limiter import ModelLimiter
-from llm.retry import is_insufficient_quota, is_retryable, retry_delay, run_with_retries
+from llm.retry import is_insufficient_quota, is_retryable, retry_delay, retry_after_seconds, run_with_retries, status_code
 
 logger = logging.getLogger(__name__)
 
@@ -86,9 +87,9 @@ def _build_foundry_client(timeout: httpx.Timeout, limits: httpx.Limits) -> tuple
 
 
 class LLMRuntime:
-    """Own one AsyncOpenAI connection pool and model limiters per process for Azure AI Foundry."""
+    """Own one AsyncOpenAI connection pool, model limiters, and circuit breakers per process for Azure AI Foundry."""
 
-    def __init__(self) -> None:
+    def __init__(self, circuit_breaker: CircuitBreaker | None = None) -> None:
         timeout = httpx.Timeout(Config.LLM_TIMEOUT_S, connect=Config.LLM_CONNECT_TIMEOUT_S)
         limits = httpx.Limits(
             max_connections=Config.LLM_MAX_CONNECTIONS,
@@ -96,6 +97,12 @@ class LLMRuntime:
         )
         self.client, self._auth_method = _build_foundry_client(timeout, limits)
         self.limiter = ModelLimiter()
+        self.circuit_breaker = circuit_breaker or CircuitBreaker(
+            failure_threshold=5,
+            window_s=30.0,
+            recovery_timeout_s=15.0,
+            name="FoundryLLMCircuitBreaker",
+        )
 
     async def close(self) -> None:
         """Close the shared SDK client and its underlying HTTP transport."""
@@ -108,16 +115,29 @@ class LLMRuntime:
         create_kwargs: dict[str, Any],
         key: str | None = None,
     ) -> Any:
-        """Run a completion on Azure AI Foundry with backoff, jitter, and concurrency limits."""
+        """Run a completion on Azure AI Foundry with circuit breaker, backoff, jitter, and adaptive concurrency."""
+        # 1. Check Circuit Breaker
+        await self.circuit_breaker.check_state()
+
         async def attempt() -> Any:
             await self.limiter.acquire(model)
             try:
                 # Remove 'stream' if callers included it; complete() is non-streaming.
                 create_kwargs.pop("stream", None)
-                return await self.client.chat.completions.create(
+                resp = await self.client.chat.completions.create(
                     **create_kwargs,
                     extra_headers=self._headers_for(key),
                 )
+                await self.limiter.record_feedback(model, status_code=200)
+                await self.circuit_breaker.record_success()
+                return resp
+            except BaseException as exc:
+                code = status_code(exc)
+                is_429 = code == 429
+                await self.limiter.record_feedback(model, status_code=code, is_rate_limited=is_429)
+                if not is_insufficient_quota(exc):
+                    await self.circuit_breaker.record_failure(exc)
+                raise
             finally:
                 await self.limiter.release(model)
 
@@ -133,7 +153,10 @@ class LLMRuntime:
         create_kwargs: dict[str, Any],
         key: str | None = None,
     ) -> AsyncIterator[Any]:
-        """Yield an async stream from Azure AI Foundry with concurrency limits and retries."""
+        """Yield an async stream from Azure AI Foundry with circuit breaker, concurrency limits and retries."""
+        # 1. Check Circuit Breaker
+        await self.circuit_breaker.check_state()
+
         max_attempts = min(4, max(1, Config.LLM_MAX_ATTEMPTS))
         deadline = asyncio.get_running_loop().time() + Config.LLM_TOTAL_TIMEOUT_S
         sleep = self._deadline_sleep(deadline)
@@ -166,10 +189,18 @@ class LLMRuntime:
                         emitted = True
                         timeout_scope.reschedule(None)
                         yield content
+
+                    await self.limiter.record_feedback(model, status_code=200)
+                    await self.circuit_breaker.record_success()
                     return
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
+                    code = status_code(exc)
+                    is_429 = code == 429
+                    await self.limiter.record_feedback(model, status_code=code, is_rate_limited=is_429)
+                    if not is_insufficient_quota(exc):
+                        await self.circuit_breaker.record_failure(exc)
                     if emitted or attempt_number >= max_attempts or not is_retryable(exc):
                         raise
                     retry_error = exc

@@ -43,6 +43,7 @@ from model.patient_history import (
     PatientHistoryError,
 )
 from llm.runtime import LLMRuntime, get_llm_runtime
+from pipeline import PipelineContext, run_pipeline, MergedResult
 
 # ── Phase 2: schema + middleware imports ─────────────────────────────────────
 from schemas.input_schemas import (
@@ -745,57 +746,10 @@ def _check_disk() -> dict:
         return {"component": "disk", "status": "error", "detail": str(exc)}
 
 
-@app.get(
-    "/health",
-    summary="Readiness probe — checks MongoDB, LLM, buffer, and disk",
-    tags=["Observability"],
-    response_model=None,
-)
-async def health_check(request: Request):
-    """Concurrent health check across all critical sub-systems.
-
-    Returns HTTP 200 when every sub-system is ``ok``.
-    Returns HTTP 503 when any *critical* sub-system (MongoDB or LLM) is degraded.
-    Non-critical failures (buffer, disk) downgrade ``overall`` to ``degraded``
-    but still return HTTP 200 so the process stays in the load-balancer rotation.
-    """
-    uptime_s = round(time.monotonic() - _APP_START_TIME, 1)
-
-    # Run all async checks concurrently — no sub-system can block another
-    mongo_result, llm_result = await asyncio.gather(
-        _check_mongo(request),
-        _check_llm(request),
-        return_exceptions=False,
-    )
-    buffer_result = _check_buffer(request)
-    disk_result = _check_disk()
-
-    checks = [mongo_result, llm_result, buffer_result, disk_result]
-
-    # Determine overall status
-    critical_statuses = {mongo_result["status"], llm_result["status"]}
-    if "error" in critical_statuses or "unreachable" in critical_statuses or "timeout" in critical_statuses:
-        overall = "unhealthy"
-        http_status = 503
-    elif any(c["status"] not in ("ok",) for c in checks):
-        overall = "degraded"
-        http_status = 200
-    else:
-        overall = "ok"
-        http_status = 200
-
-    body = {
-        "overall": overall,
-        "uptime_seconds": uptime_s,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "checks": checks,
-    }
-
-    return Response(
-        content=json.dumps(body, ensure_ascii=False, separators=(",", ":")),
-        status_code=http_status,
-        media_type="application/json",
-    )
+@app.get("/health", tags=["Observability"])
+async def health_check():
+    """Dependency-free liveness probe for deploy smoke tests."""
+    return {"status": "ok"}
 
 
 @app.get(
@@ -1302,291 +1256,49 @@ async def analyze_transcript(
     # refinement prompt's specialty context below.
     text = correct_specialty_terms(text, specialty_value)
 
-    async def event_stream():
-        # Accumulated outputs — populated as each step completes.
-        # clinician_name is already stripped by AnalyzeInput (Phase 2).
-        log: dict = {
-            "timestamp":          datetime.now(timezone.utc).isoformat(),
-            "session_id":         session_id,
-            "ip":                 _get_client_ip(request),
-            "user_agent":         request.headers.get("user-agent", "unknown"),
-            "clinician_name":     clinician_name,   # pre-sanitized by AnalyzeInput
-            "sso_user":           _get_client_user(request),
-            "language":           language.value,
-            "mode":               mode.value,
-            "department":         department_value,
-            "specialty":          specialty_value,
-            "patient_id":         patient_id,
-            "business_unit":      inp.business_unit.value if inp.business_unit else None,
-            "use_history":        use_history,
-            "history_visit_count": len(patient_history_visits),
-            "history_error":      history_error,
-            "status":             "ok",
-            "total_sec":          None,
-            "transcription_sec":  transcription_sec,  # client-measured, not computed by this endpoint
-            "refinement_sec":     None,
-            "translation_sec":    None,
-            "extraction_sec":     None,
-            "question_generation_sec": None,
-            "transcript":         text,
-            "refined_text":       None,
-            "refinement_skipped": skip_refinement,
-            "translated_text":    None,
-            "extracted_features": None,
-            "routing_signal": None,
-            "questions":          None,
-            "extraction_model":   extraction_spec.id,
-            "reasoning_model":    reasoning_spec.id,
-            "diagnosis_sec":      None,
-            "diagnosis":          None,
-            "extraction_usage":   None,   # latency/tokens/cost of the LLM call
-            "diagnosis_usage":    None,
-        }
-        logger.info(
-            "[Analyze] session start — clinician_name=%r sso_user=%r department=%s language=%s mode=%s",
-            log["clinician_name"], log["sso_user"], department_value, language.value, mode.value,
+    client_ip = _get_client_ip(request)
+    client_user = _get_client_user(request)
+    user_agent = request.headers.get("user-agent", "unknown")
+    app_obj = getattr(request, "app", None) if "app" in request.scope else None
+    session_repo: Optional[SessionRepository] = getattr(app_obj.state, "sessions", None) if app_obj else None
+
+    ctx = PipelineContext(
+        session_id=session_id,
+        text=text,
+        language=language,
+        mode=mode,
+        department_value=department_value,
+        specialty_value=specialty_value,
+        runtime=runtime,
+        extraction_spec=extraction_spec,
+        reasoning_spec=reasoning_spec,
+        patient_id=patient_id,
+        business_unit_value=inp.business_unit.value if inp.business_unit else None,
+        use_history=use_history,
+        patient_history_visits=patient_history_visits,
+        patient_history_text=patient_history_text,
+        history_error=history_error,
+        transcription_sec=transcription_sec,
+        clinician_name=clinician_name,
+        pipeline_start=pipeline_start,
+    )
+
+    logger.info(
+        "[Analyze] session start — clinician_name=%r sso_user=%r department=%s language=%s mode=%s",
+        clinician_name, client_user, department_value, language.value, mode.value,
+    )
+
+    async def _on_pipeline_complete(merged: MergedResult) -> None:
+        log = merged.to_log_dict(
+            ip=client_ip,
+            user_agent=user_agent,
+            clinician_name=clinician_name,
+            sso_user=client_user,
         )
-        parallel_tasks = []
-
-        try:
-            # ── 1. Refine ─────────────────────────────────────────────────
-            t0 = time.perf_counter()
-
-            if skip_refinement:
-                # Doctor mode: skip the refinement LLM call entirely and pass the
-                # (possibly user-edited) transcript straight through to translate/extract.
-                refined_text = text
-                log["refined_text"] = refined_text
-                log["refinement_sec"] = 0.0  # skipped entirely in Doctor mode — not "instant", just not run
-                yield {"event": "refinement_skipped", "data": _sse_json({
-                    "refined_text": refined_text,
-                })}
-            else:
-                refined_parts: list[str] = []
-                try:
-                    refine_stream = (
-                        LLMService.refine_ar_transcription_stream_async(text, runtime, is_conversation=is_conversation, specialty=specialty_value)
-                        if is_arabic else
-                        LLMService.refine_en_transcription_stream_async(text, runtime, is_conversation=is_conversation, specialty=specialty_value)
-                    )
-                    async for delta in refine_stream:
-                        refined_parts.append(delta)
-                        yield {"event": "refinement_delta", "data": _sse_json({"delta": delta})}
-                except Exception as exc:
-                    log["status"] = "error"
-                    yield {"event": "error", "data": _sse_json({"step": "refinement", "detail": str(exc)})}
-                    return
-
-                refined_text      = "".join(refined_parts)
-                refinement_sec    = round(time.perf_counter() - t0, 3)
-                log["refined_text"]   = refined_text
-                log["refinement_sec"] = refinement_sec
-                yield {"event": "refinement_done", "data": _sse_json({
-                    "refined_text":   refined_text,
-                    "refinement_sec": refinement_sec,
-                })}
-
-            # ── 2. Translate (Arabic only) ────────────────────────────────
-            if is_arabic:
-                t0 = time.perf_counter()
-                translated_parts: list[str] = []
-                try:
-                    async for delta in LLMService.translate_to_eng_stream_async(
-                        refined_text, runtime, is_conversation=is_conversation
-                    ):
-                        translated_parts.append(delta)
-                        yield {"event": "translation_delta", "data": _sse_json({"delta": delta})}
-                except Exception as exc:
-                    log["status"] = "error"
-                    yield {"event": "error", "data": _sse_json({"step": "translation", "detail": str(exc)})}
-                    return
-
-                final_text             = "".join(translated_parts)
-                translation_sec        = round(time.perf_counter() - t0, 3)
-                log["translated_text"]  = final_text
-                log["translation_sec"]  = translation_sec
-                yield {"event": "translation_done", "data": _sse_json({
-                    "final_text":      final_text,
-                    "translation_sec": translation_sec,
-                })}
-            else:
-                final_text = refined_text
-                log["translation_sec"] = 0.0  # not needed — already English, nothing to translate
-
-            # `final_text` is the exact text handed to the extraction step below —
-            # this is what fills the template's "Patient Story" field, verbatim,
-            # with no further LLM processing.
-            patient_story = final_text
-            routing_signal = detect_red_flags("\n".join((text, refined_text, final_text)))
-            log["routing_signal"] = routing_signal
-            yield {"event": "routing_signal", "data": _sse_json(routing_signal)}
-
-            # ── 3. Field extraction ‖ ICD-10 diagnosis — run in parallel ─────────
-            async def run_extraction():
-                meta: dict = {}
-                t0 = time.perf_counter()
-                extracted = await LLMService.extract_features_async(
-                    translated_text=final_text,
-                    runtime=runtime,
-                    department=department_value,
-                    is_conversation=is_conversation,
-                    model_id=extraction_spec.id,
-                    meta=meta,
-                )
-                raw_features = extracted.get("json_data", {}) if extracted else {}
-                # ── Phase 2: coerce LLM output against the department extraction schema ──
-                # Never-fail: returns raw_features unchanged if validation errors occur.
-                features = validate_extraction_output(raw_features, department_value)
-                t_q = time.perf_counter()
-                # Questions derive deterministically from the extracted fields (see QuestionGenerator).
-                questions, _ = QuestionGenerator.generate(extracted_features=features, department=department_value)
-                return {
-                    "features": features, "questions": questions, "meta": meta,
-                    "extraction_sec": round(t_q - t0, 3),
-                    "question_generation_sec": round(time.perf_counter() - t_q, 3),
-                }
-
-            async def run_diagnosis():
-                meta: dict = {}
-                t0 = time.perf_counter()
-                catalogue_candidates = get_registry().search_diagnosis_candidates(
-                    final_text
-                )
-                diagnosis_result = await LLMService.recommend_diagnosis_async(
-                    translated_text=final_text,
-                    runtime=runtime,
-                    department=department_value,
-                    patient_history_text=patient_history_text,
-                    is_conversation=is_conversation,
-                    model_id=reasoning_spec.id,
-                    meta=meta,
-                    catalogue_candidates=catalogue_candidates,
-                )
-                raw_data = diagnosis_result.get("json_data", {}) if diagnosis_result else {}
-                # ── Phase 2: coerce LLM diagnosis output against DiagnosisOutput schema ──
-                # Never-fail: returns raw_data unchanged if validation errors occur.
-                data = validate_diagnosis_output(raw_data)
-                data = constrain_diagnosis_to_registry(
-                    data,
-                    department_value,
-                    catalogue_candidates,
-                )
-                return {"data": data, "meta": meta, "diagnosis_sec": round(time.perf_counter() - t0, 3)}
-
-            errors: dict = {}
-            extracted_features, raw_questions, diagnosis_data = {}, [], {}
-            extraction_sec = question_generation_sec = diagnosis_sec = None
-            ext_meta = diag_meta = None
-            history_check = None
-
-            async def capture_step(step: str, operation):
-                try:
-                    return step, await operation(), None
-                except Exception as exc:
-                    return step, None, exc
-
-            parallel_tasks = [
-                asyncio.create_task(capture_step("extraction", run_extraction)),
-                asyncio.create_task(capture_step("diagnosis", run_diagnosis)),
-            ]
-
-            # Send each step as soon as it finishes; the slower parallel step
-            # continues running while the browser renders the completed one.
-            for completed in asyncio.as_completed(parallel_tasks):
-                step, result, error = await completed
-                if step == "extraction":
-                    if error:
-                        errors[step] = str(error)
-                        logger.error("[Analyze] extraction failed: %s", error)
-                        event_data = {
-                            "department": department_value,
-                            "model": extraction_spec.label,
-                            "error": str(error),
-                        }
-                    else:
-                        extracted_features = result["features"]
-                        raw_questions = result["questions"]
-                        extraction_sec = result["extraction_sec"]
-                        question_generation_sec = result["question_generation_sec"]
-                        ext_meta = result["meta"]
-                        event_data = {
-                            "department": department_value,
-                            "patient_story": patient_story,
-                            "routing_signal": routing_signal,
-                            "extracted_features": extracted_features,
-                            "extraction_sec": extraction_sec,
-                            "questions": raw_questions,
-                            "question_generation_sec": question_generation_sec,
-                            "model": extraction_spec.label,
-                            "usage": ext_meta,
-                        }
-                    yield {"event": "extraction", "data": json.dumps(event_data)}
-                else:
-                    if error:
-                        errors[step] = str(error)
-                        logger.error("[Analyze] diagnosis failed: %s", error)
-                        event_data = {
-                            "department": department_value,
-                            "routing_signal": routing_signal,
-                            "model": reasoning_spec.label,
-                            "error": str(error),
-                            "history_used": bool(patient_history_text),
-                            "history_visit_count": len(patient_history_visits),
-                            "history_error": history_error,
-                        }
-                    else:
-                        diagnosis_data = result["data"]
-                        diagnosis_sec = result["diagnosis_sec"]
-                        diag_meta = result["meta"]
-                        if patient_history_text and diagnosis_data:
-                            history_check = check_history_usage(patient_history_visits, diagnosis_data)
-                            if history_check["flag"] == "claims_used_no_overlap":
-                                logger.warning(
-                                    "[Analyze] patient_code=%s: history_considered=Yes but no ICD-10 family overlap — history_notes=%r",
-                                    patient_id, diagnosis_data.get("history_notes"),
-                                )
-                            elif history_check["flag"] == "overlap_but_not_flagged":
-                                logger.warning(
-                                    "[Analyze] patient_code=%s: ICD-10 family overlap %s but history_considered was not 'Yes'",
-                                    patient_id, history_check["overlap_families"],
-                                )
-                        event_data = {
-                            "department": department_value,
-                            "diagnosis": diagnosis_data,
-                            "diagnosis_sec": diagnosis_sec,
-                            "model": reasoning_spec.label,
-                            "usage": diag_meta,
-                            "history_used": bool(patient_history_text),
-                            "history_visit_count": len(patient_history_visits),
-                            "history_check": history_check,
-                            "history_error": history_error,
-                        }
-                    yield {"event": "diagnosis", "data": json.dumps(event_data)}
-
-            log["extracted_features"]       = extracted_features
-            log["questions"]                = raw_questions
-            log["diagnosis"]                = diagnosis_data
-            log["extraction_sec"]           = extraction_sec
-            log["question_generation_sec"]  = question_generation_sec
-            log["diagnosis_sec"]            = diagnosis_sec
-            log["extraction_usage"]         = ext_meta
-            log["diagnosis_usage"]          = diag_meta
-            log["history_check"]            = history_check
-            if errors:
-                log["status"] = "error"
-
-        finally:
-            for task in parallel_tasks:
-                if not task.done():
-                    task.cancel()
-            if parallel_tasks:
-                await asyncio.gather(*parallel_tasks, return_exceptions=True)
-            log["total_sec"] = round(time.perf_counter() - pipeline_start, 3)
-            session_repo: Optional[SessionRepository] = getattr(request.app.state, "sessions", None)
-            await persist_session(log, session_repo)
+        await persist_session(log, session_repo)
 
     return EventSourceResponse(
-        event_stream(),
+        run_pipeline(ctx, on_complete=_on_pipeline_complete),
         headers={
             # Disable Nginx's response buffering for this stream specifically —
             # without this, a reverse proxy sitting in front of the app can

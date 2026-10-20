@@ -67,10 +67,19 @@ def is_retryable(exc: BaseException) -> bool:
 
 
 def retry_after_seconds(exc: BaseException) -> float | None:
-    """Parse a Retry-After header containing seconds or an HTTP date."""
+    """Parse a Retry-After or retry-after-ms header containing seconds, ms, or an HTTP date."""
     headers = getattr(getattr(exc, "response", None), "headers", None)
     if not headers:
         return None
+
+    # Check millisecond header first (Azure AI Foundry standard)
+    ms_val = headers.get("retry-after-ms") or headers.get("Retry-After-Ms")
+    if ms_val:
+        try:
+            return max(0.0, min(float(ms_val) / 1000.0, Config.LLM_RETRY_AFTER_MAX_S))
+        except (ValueError, TypeError):
+            pass
+
     value = headers.get("retry-after") or headers.get("Retry-After")
     if not value:
         return None
@@ -92,6 +101,7 @@ async def run_with_retries(
     *,
     model: str,
     sleep: Callable[[float], Awaitable[None]] | None = None,
+    on_retry: Callable[[int, BaseException | None, float], Awaitable[None] | None] | None = None,
 ) -> T:
     """Run an async operation with bounded exponential retry and jitter.
 
@@ -99,24 +109,29 @@ async def run_with_retries(
     for each attempt, so retry waits never hold a semaphore slot.
     """
     sleeper = sleep or asyncio.sleep
+
     def before_sleep(retry_state) -> None:
         delay = retry_state.next_action.sleep if retry_state.next_action else 0.0
+        exc = retry_state.outcome.exception() if retry_state.outcome else None
         logger.warning(
             "[LLM] retry model=%s attempt=%d status=%s wait_sec=%.3f",
             model,
             retry_state.attempt_number,
-            status_code(retry_state.outcome.exception()) if retry_state.outcome else None,
+            status_code(exc) if exc else None,
             delay,
         )
+        if on_retry is not None:
+            cb_res = on_retry(retry_state.attempt_number, exc, delay)
+            if asyncio.iscoroutine(cb_res):
+                asyncio.create_task(cb_res)
 
     retrying = AsyncRetrying(
         stop=stop_after_attempt(max(1, Config.LLM_MAX_ATTEMPTS)),
-        wait=wait_random_exponential(multiplier=1, max=Config.LLM_BACKOFF_MAX_S),
+        wait=_wait_with_retry_after,
         retry=retry_if_exception(is_retryable),
         reraise=True,
         before_sleep=before_sleep,
     )
-    retrying.wait = _wait_with_retry_after
     retrying.sleep = sleeper
     async for attempt in retrying:
         with attempt:
@@ -131,20 +146,29 @@ async def run_with_retries(
 
 
 def _wait_with_retry_after(retry_state) -> float:
-    """Combine tenacity jitter with a provider Retry-After value."""
-    delay = wait_random_exponential(
-        multiplier=1,
-        max=Config.LLM_BACKOFF_MAX_S,
-    )(retry_state)
+    """Combine tenacity full jitter with a provider Retry-After / retry-after-ms value."""
+    # Full jitter: random between 0 and min(max_backoff, base * 2^(attempt - 1))
+    delay = calculate_backoff_delay(retry_state.attempt_number)
     if retry_state.outcome is not None:
-        delay = max(delay, retry_after_seconds(retry_state.outcome.exception()) or 0.0)
+        exc = retry_state.outcome.exception()
+        if exc is not None:
+            delay = max(delay, retry_after_seconds(exc) or 0.0)
     return delay
 
 
-def calculate_backoff_delay(attempt_number: int, exc: BaseException | None = None) -> float:
-    """Calculate full-jitter exponential backoff combined with Retry-After header."""
-    max_backoff = Config.LLM_BACKOFF_MAX_S
-    high = min(max_backoff, 1.0 * (2 ** max(0, attempt_number - 1)))
+def calculate_backoff_delay(
+    attempt_number: int,
+    exc: BaseException | None = None,
+    base_s: float = 1.0,
+    max_backoff_s: float | None = None,
+) -> float:
+    """Calculate full-jitter exponential backoff:
+    t_wait = min(t_max, t_base * 2^(attempt - 1)) * uniform(0, 1)
+
+    Combined with Retry-After / retry-after-ms header if provided.
+    """
+    max_backoff = max_backoff_s if max_backoff_s is not None else Config.LLM_BACKOFF_MAX_S
+    high = min(max_backoff, base_s * (2 ** max(0, attempt_number - 1)))
     delay = random.uniform(0.0, high)
     if exc is not None:
         delay = max(delay, retry_after_seconds(exc) or 0.0)
@@ -152,5 +176,3 @@ def calculate_backoff_delay(attempt_number: int, exc: BaseException | None = Non
 
 
 retry_delay = calculate_backoff_delay
-
-
