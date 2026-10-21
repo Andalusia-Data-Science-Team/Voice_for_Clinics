@@ -2,7 +2,14 @@
 
 `azure-pipelines.yml` runs on `main` and pull requests to `main`. CI installs `src/requirements.txt` plus `requirements-test.txt`, checks Ruff runtime-error rules, then runs concurrency and full tests with inline dummy Foundry configuration. It never reads or publishes `.env`. `tests/test_m1_verification.py` is explicitly ignored because it loads `src/.env` and calls live Azure infrastructure. A successful main build uses the existing `Dockerfile` and pushes Build ID and short SHA tags.
 
-All dev, staging, and production deployments use `pipelines/deploy-template.yml`; only the environment name and Azure DevOps variable group differ. The template pulls the requested tag, records the existing image, starts with the pre-existing target env file, retries `GET /health/live` ten times, and restores the old image if smoke testing fails. It never creates or prints the env file.
+All dev, staging, and production deployments use `pipelines/deploy-template.yml`; only the environment name and Azure DevOps variable group differ. The template pulls the requested tag, records the existing image, starts with the pre-existing target env file, retries `GET /health/live` (liveness) and `GET /health` (dependency health) ten times, and restores the old image if smoke testing fails. It never creates or prints the env file.
+
+> **Note (A4.3.1):** the smoke test now also calls `GET /health`, which probes
+> Foundry, Munsit and Voxtral (cached 30 s). Only **Foundry** is a hard
+> dependency: `/health` returns 503 only when Foundry is unreachable or its
+> key/token is rejected. A down Munsit/Voxtral is reported as `degraded` and
+> keeps HTTP 200, so an STT outage does **not** fail a deploy.
+> `/health/live` remains the dependency-free liveness probe.
 
 ## Parameters and variables
 

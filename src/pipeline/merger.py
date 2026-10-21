@@ -19,8 +19,6 @@ class ExtractionStepResult:
     question_generation_sec: float = 0.0
     meta: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
-    # Populated when the fallback model (gpt-4.1-mini) was used instead of primary
-    fallback_model_used: Optional[str] = None
 
 
 @dataclass
@@ -53,6 +51,7 @@ class MergedResult:
     
     # Clinical Signals
     routing_signal: Optional[Dict[str, Any]] = None
+    routing_audit: Optional[Dict[str, Any]] = None
     
     # Extraction output
     extracted_features: Dict[str, Any] = field(default_factory=dict)
@@ -89,8 +88,6 @@ class MergedResult:
     # Execution metadata
     status: str = "ok"
     errors: Dict[str, str] = field(default_factory=dict)
-    # Set to the fallback model id (e.g. 'gpt-4.1-mini') when extraction used fallback
-    extraction_fallback_model: Optional[str] = None
 
     def to_log_dict(
         self,
@@ -132,6 +129,7 @@ class MergedResult:
             "translated_text": self.translated_text,
             "extracted_features": self.extracted_features,
             "routing_signal": self.routing_signal,
+            "routing_audit": self.routing_audit,
             "questions": self.questions,
             "extraction_model": self.extraction_model,
             "reasoning_model": self.reasoning_model,
@@ -143,7 +141,6 @@ class MergedResult:
             "tier": self.tier,
             "escalation_reason": self.escalation_reason,
             "validation_report": self.validation_report,
-            "extraction_fallback_model": self.extraction_fallback_model,
         }
 
 
@@ -159,6 +156,7 @@ def merge_step_results(
     translated_text: Optional[str] = None,
     patient_story: str = "",
     routing_signal: Optional[Dict[str, Any]] = None,
+    routing_audit: Optional[Dict[str, Any]] = None,
     specialty: Optional[str] = None,
     patient_id: Optional[str] = None,
     business_unit: Optional[str] = None,
@@ -193,7 +191,6 @@ def merge_step_results(
             extraction_sec = extraction_res.extraction_sec
             question_generation_sec = extraction_res.question_generation_sec
             extraction_usage = extraction_res.meta
-    extraction_fallback_model = extraction_res.fallback_model_used if extraction_res else None
 
     diagnosis_data = {}
     diagnosis_sec = None
@@ -224,6 +221,7 @@ def merge_step_results(
         translated_text=translated_text,
         patient_story=patient_story,
         routing_signal=routing_signal,
+        routing_audit=routing_audit,
         extracted_features=extracted_features,
         questions=questions,
         extraction_model=extraction_model,
@@ -248,5 +246,4 @@ def merge_step_results(
         escalation_reason=escalation_reason,
         status=status,
         errors=errors,
-        extraction_fallback_model=extraction_fallback_model,
     )

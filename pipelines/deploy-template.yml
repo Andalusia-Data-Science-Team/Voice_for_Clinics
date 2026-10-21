@@ -30,10 +30,18 @@ jobs:
                 docker pull "$image"
                 docker rm -f "$container" 2>/dev/null || true
                 docker run --detach --name "$container" --env-file "$env_file" --publish '<PLACEHOLDER_HOST_PORT>:7777' "$image"
-                smoke_url='${{ parameters.smokeTestBaseUrl }}/health/live'
+                # Liveness first (dependency-free), then the dependency health
+                # probe. Only Foundry is a hard dependency: /health returns 200
+                # for "ok" and "degraded" (a down Munsit/Voxtral) and 503 only
+                # when Foundry is unreachable or its key/token is rejected.
+                live_url='${{ parameters.smokeTestBaseUrl }}/health/live'
+                health_url='${{ parameters.smokeTestBaseUrl }}/health'
                 healthy=false
                 for attempt in $(seq 1 10); do
-                  if curl --fail --silent --show-error "$smoke_url" | grep -q '"status":"alive"'; then healthy=true; break; fi
+                  if curl --fail --silent --show-error "$live_url" | grep -q '"status":"alive"' \
+                     && curl --fail --silent --show-error "$health_url" | grep -Eq '"status":"(ok|degraded)"'; then
+                    healthy=true; break
+                  fi
                   sleep 5
                 done
                 if [ "$healthy" != true ]; then

@@ -21,6 +21,14 @@ from pipeline.merger import (
     MergedResult,
     merge_step_results,
 )
+from pipeline.routing import (
+    RoutingDecision,
+    classify_complexity,
+    decision_without_router,
+    fallback_deployment_for_tier,
+    failure_tier,
+    spec_for_tier,
+)
 from pipeline.steps import (
     PipelineContext,
     step_diagnose,
@@ -31,10 +39,6 @@ from pipeline.steps import (
 )
 
 logger = logging.getLogger(__name__)
-
-# SSE event name emitted when all reasoning models fail — the UI shows
-# a graceful "reasoning pending" message instead of crashing.
-_REASONING_PENDING_EVENT = "reasoning_pending"
 
 
 class PipelineOrchestrator:
@@ -78,63 +82,104 @@ class PipelineOrchestrator:
             routing_signal = step_red_flags(ctx)
             yield {"event": "routing_signal", "data": routing_signal}
 
-            # ── 3. Parallel Extraction & Diagnosis (with shared timeout) ──
+            # ── 3. Parallel Extraction & Reasoning (with shared timeout) ──
+            # Extraction always starts immediately. Reasoning starts on the
+            # routed tier: when ROUTER_ENABLED=true the router runs concurrently
+            # with extraction and the tier is chosen when it returns; otherwise
+            # reasoning starts at once on the simple tier.
             timeout_s = getattr(Config, "LLM_TIMEOUT_S", 45.0)
 
             async def _run_extract() -> ExtractionStepResult:
                 return await step_extract(ctx)
 
-            async def _run_diagnose(spec: Optional[Any] = None) -> DiagnosisStepResult:
-                return await step_diagnose(ctx, reasoning_spec=spec)
+            async def _run_diagnose(spec: Optional[Any] = None, fallback: Optional[str] = None) -> DiagnosisStepResult:
+                return await step_diagnose(ctx, reasoning_spec=spec, fallback_deployment=fallback)
 
             extract_task = asyncio.create_task(_run_extract())
-            diagnose_task = asyncio.create_task(_run_diagnose(ctx.reasoning_spec))
-            parallel_tasks = [extract_task, diagnose_task]
+            parallel_tasks = [extract_task]
 
-            try:
-                extraction_res, diagnosis_res = await asyncio.wait_for(
-                    asyncio.gather(extract_task, diagnose_task),
-                    timeout=timeout_s,
+            routing_decision: Optional[RoutingDecision] = None
+            if Config.router_enabled():
+                router_task = asyncio.create_task(
+                    classify_complexity(ctx.runtime, ctx.patient_story, ctx.patient_history_text)
                 )
-            except asyncio.TimeoutError:
-                logger.error("[Pipeline] Extraction || Diagnosis timed out after %ss", timeout_s)
-                if not extract_task.done():
-                    extract_task.cancel()
-                    extraction_res = ExtractionStepResult(error=f"Timeout after {timeout_s}s")
-                else:
-                    try:
-                        if extract_task.cancelled():
-                            extraction_res = ExtractionStepResult(error=f"Timeout after {timeout_s}s")
-                        else:
-                            extraction_res = extract_task.result()
-                    except asyncio.CancelledError:
-                        extraction_res = ExtractionStepResult(error=f"Timeout after {timeout_s}s")
-                    except Exception as exc:
-                        extraction_res = ExtractionStepResult(error=str(exc))
-
-                if not diagnose_task.done():
-                    diagnose_task.cancel()
-                    diagnosis_res = DiagnosisStepResult(error=f"Timeout after {timeout_s}s")
-                else:
-                    try:
-                        if diagnose_task.cancelled():
-                            diagnosis_res = DiagnosisStepResult(error=f"Timeout after {timeout_s}s")
-                        else:
-                            diagnosis_res = diagnose_task.result()
-                    except asyncio.CancelledError:
-                        diagnosis_res = DiagnosisStepResult(error=f"Timeout after {timeout_s}s")
-                    except Exception as exc:
-                        diagnosis_res = DiagnosisStepResult(error=str(exc))
-
-            # ── Emit extraction event ──────────────────────────────────────
-            if extraction_res.error:
-                event_data = {
-                    "department": ctx.department_value,
-                    "model": ctx.extraction_spec.label,
-                    "error": extraction_res.error,
-                }
+                parallel_tasks.append(router_task)
+                try:
+                    routing_decision = await asyncio.wait_for(router_task, timeout=timeout_s)
+                except asyncio.TimeoutError:
+                    logger.error("[Pipeline] Router timed out after %ss; using failure tier", timeout_s)
+                    routing_decision = RoutingDecision(
+                        complexity=failure_tier(),
+                        tier=failure_tier(),
+                        router_deployment=Config.foundry_model_router(),
+                        router_ok=False,
+                    )
+                except Exception as exc:
+                    logger.error("[Pipeline] Router error: %s; using failure tier", exc)
+                    routing_decision = RoutingDecision(
+                        complexity=failure_tier(),
+                        tier=failure_tier(),
+                        router_deployment=Config.foundry_model_router(),
+                        router_ok=False,
+                    )
             else:
-                event_data = {
+                routing_decision = decision_without_router()
+
+            ctx.routing_decision = routing_decision
+            reasoning_spec = spec_for_tier(routing_decision.tier)
+            reasoning_fallback = fallback_deployment_for_tier(routing_decision.tier)
+            diagnose_task = asyncio.create_task(_run_diagnose(reasoning_spec, reasoning_fallback))
+            parallel_tasks.append(diagnose_task)
+
+            # ── Emit each parallel result as soon as it completes ──────────
+            # The extraction and reasoning branches run concurrently; whichever
+            # finishes first is streamed immediately so the UI does not wait for
+            # the slower branch. A shared deadline bounds the whole pair.
+            def _served(meta: Optional[Dict[str, Any]], default: str) -> str:
+                if isinstance(meta, dict) and meta.get("served_deployment"):
+                    return str(meta["served_deployment"])
+                return default
+
+            def _reasoning_label() -> str:
+                if diagnosis_res is not None:
+                    return _served(diagnosis_res.meta, reasoning_spec.foundry_deployment)
+                return reasoning_spec.foundry_deployment
+
+            def _extraction_result_from(task: "asyncio.Task") -> ExtractionStepResult:
+                try:
+                    if task.cancelled():
+                        return ExtractionStepResult(error=f"Timeout after {timeout_s}s")
+                    return task.result()
+                except asyncio.CancelledError:
+                    return ExtractionStepResult(error=f"Timeout after {timeout_s}s")
+                except Exception as exc:
+                    return ExtractionStepResult(error=str(exc))
+
+            def _diagnosis_result_from(task: "asyncio.Task") -> DiagnosisStepResult:
+                try:
+                    if task.cancelled():
+                        return DiagnosisStepResult(error=f"Timeout after {timeout_s}s")
+                    return task.result()
+                except asyncio.CancelledError:
+                    return DiagnosisStepResult(error=f"Timeout after {timeout_s}s")
+                except Exception as exc:
+                    return DiagnosisStepResult(error=str(exc))
+
+            def _build_extraction_event() -> Dict[str, Any]:
+                models_info: Dict[str, Any] = {
+                    "extraction": _served(extraction_res.meta, ctx.extraction_spec.foundry_deployment),
+                    "reasoning": _reasoning_label(),
+                }
+                if routing_decision is not None and routing_decision.router_deployment:
+                    models_info["router"] = routing_decision.router_deployment
+                if extraction_res.error:
+                    return {
+                        "department": ctx.department_value,
+                        "model": ctx.extraction_spec.label,
+                        "models": models_info,
+                        "error": extraction_res.error,
+                    }
+                return {
                     "department": ctx.department_value,
                     "patient_story": ctx.patient_story,
                     "routing_signal": ctx.routing_signal,
@@ -143,11 +188,10 @@ class PipelineOrchestrator:
                     "questions": extraction_res.questions,
                     "question_generation_sec": extraction_res.question_generation_sec,
                     "model": ctx.extraction_spec.label,
+                    "models": models_info,
                     "usage": extraction_res.meta,
                 }
-            yield {"event": "extraction", "data": json.dumps(event_data)}
 
-            # ── Emit diagnosis event ───────────────────────────────────────
             def _build_diagnosis_event(res: DiagnosisStepResult, model_label: str) -> Dict[str, Any]:
                 if res.error:
                     return {
@@ -155,6 +199,9 @@ class PipelineOrchestrator:
                         "routing_signal": ctx.routing_signal,
                         "model": model_label,
                         "error": res.error,
+                        # Additive: the reasoning tier and its fallback both failed.
+                        # The note is still delivered with the extraction result.
+                        "reasoning_pending": True,
                         "history_used": bool(ctx.patient_history_text),
                         "history_visit_count": len(ctx.patient_history_visits),
                         "history_error": ctx.history_error,
@@ -171,7 +218,48 @@ class PipelineOrchestrator:
                     "history_error": ctx.history_error,
                 }
 
-            yield {"event": "diagnosis", "data": json.dumps(_build_diagnosis_event(diagnosis_res, ctx.reasoning_spec.label))}
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + timeout_s
+            pending = {extract_task, diagnose_task}
+            extraction_res: Optional[ExtractionStepResult] = None
+            diagnosis_res: Optional[DiagnosisStepResult] = None
+
+            while pending:
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    break
+                done, pending = await asyncio.wait(
+                    pending, timeout=remaining, return_when=asyncio.FIRST_COMPLETED
+                )
+                if not done:
+                    break
+                for finished in done:
+                    if finished is extract_task:
+                        extraction_res = _extraction_result_from(finished)
+                        yield {"event": "extraction", "data": json.dumps(_build_extraction_event())}
+                    elif finished is diagnose_task:
+                        diagnosis_res = _diagnosis_result_from(finished)
+                        yield {
+                            "event": "diagnosis",
+                            "data": json.dumps(_build_diagnosis_event(diagnosis_res, _reasoning_label())),
+                        }
+
+            # Any branch still running when the shared deadline elapsed is
+            # cancelled and reported as a timeout error, so both events are
+            # always delivered exactly once.
+            if extraction_res is None:
+                if not extract_task.done():
+                    extract_task.cancel()
+                extraction_res = ExtractionStepResult(error=f"Timeout after {timeout_s}s")
+                yield {"event": "extraction", "data": json.dumps(_build_extraction_event())}
+            if diagnosis_res is None:
+                if not diagnose_task.done():
+                    diagnose_task.cancel()
+                diagnosis_res = DiagnosisStepResult(error=f"Timeout after {timeout_s}s")
+                yield {
+                    "event": "diagnosis",
+                    "data": json.dumps(_build_diagnosis_event(diagnosis_res, _reasoning_label())),
+                }
 
             # ── 4. M3 Validation & Escalation (Deliverables 2.2, 2.3, 2.4) ──
             raw_extract_data = extraction_res.features if (extraction_res and not extraction_res.error) else {}
@@ -203,83 +291,99 @@ class PipelineOrchestrator:
                     }),
                 }
             else:
-                # Validation rejected -> Trigger B4.2 one-time router escalation to Sol model
+                # Validation rejected -> one-time escalation to the Sol model.
+                # Precedence (owner): skip the escalation if Sol was already
+                # attempted for this encounter (served OR failed over to Terra).
+                # Bound: one escalation + one fallback hop per reasoning call.
                 rejection_msg = "Validation rejected: schema or ICD-10 resolution failure"
                 if validation_report.schema_rejection:
                     rejection_msg = f"Schema rejection: {validation_report.schema_rejection.reason}"
                 escalation_reason = rejection_msg
-                current_tier = "escalated"
 
-                logger.warning(
-                    "[Pipeline] Validation failure (%s). Escalating reasoning to higher-tier Sol model.",
-                    escalation_reason,
+                sol_deployment = Config.foundry_model_reasoning_complex()
+                terra_deployment = Config.foundry_model_reasoning_complex_fallback()
+                served = diagnosis_res.meta.get("served_deployment") if isinstance(diagnosis_res.meta, dict) else None
+                sol_already_attempted = (
+                    reasoning_spec.foundry_deployment == sol_deployment
+                    or served in (sol_deployment, terra_deployment)
                 )
 
-                sol_spec = get_model("reasoning", escalation=True)
-                escalated_diagnose_task = asyncio.create_task(_run_diagnose(sol_spec))
-                parallel_tasks.append(escalated_diagnose_task)
-
-                try:
-                    escalated_res = await asyncio.wait_for(
-                        escalated_diagnose_task,
-                        timeout=timeout_s,
-                    )
-                    diagnosis_res = escalated_res
-                except asyncio.TimeoutError:
-                    logger.error("[Pipeline] Escalated diagnosis timed out after %ss", timeout_s)
-                    diagnosis_res = DiagnosisStepResult(error=f"Timeout after {timeout_s}s")
-                except Exception as exc:
-                    logger.error("[Pipeline] Escalated diagnosis error: %s", exc)
-                    diagnosis_res = DiagnosisStepResult(error=str(exc))
-
-                # Stream updated diagnosis from escalated tier
-                yield {"event": "diagnosis", "data": json.dumps(_build_diagnosis_event(diagnosis_res, sol_spec.label))}
-
-                # If escalated diagnosis ALSO failed — emit reasoning_pending and
-                # skip re-validation so the UI degrades gracefully without crashing.
-                if diagnosis_res.error:
-                    logger.error(
-                        "[Pipeline] All reasoning models failed (primary + escalated Sol). "
-                        "Emitting %s event.", _REASONING_PENDING_EVENT
+                if sol_already_attempted:
+                    logger.info(
+                        "[Pipeline] Validation failure (%s) but Sol was already attempted "
+                        "this encounter (served=%s); skipping escalation.",
+                        escalation_reason,
+                        served,
                     )
                     yield {
-                        "event": _REASONING_PENDING_EVENT,
+                        "event": "validation_result",
                         "data": json.dumps({
-                            "message": "Diagnosis reasoning could not be completed at this time. "
-                                       "The clinical note extraction is available.",
-                            "primary_error": escalation_reason,
-                            "fallback_error": diagnosis_res.error,
+                            "is_valid": validation_passed,
+                            "tier": "primary",
+                            "escalation_skipped": True,
+                            "escalation_reason": escalation_reason,
+                            "cautions": validation_dict.get("cautions", []),
+                            "missing_fields": validation_dict.get("missing_fields", {}),
+                            "validation_latency_ms": validation_dict.get("metrics", {}).get("validation_latency_ms", 0.0),
+                            "schema_rejection": validation_dict.get("schema_rejection"),
                         }),
                     }
-                    # Skip re-validation — return now, on_complete will still persist the session
-                    return
+                else:
+                    current_tier = "escalated"
 
-                # Re-validate with escalated diagnosis output
-                raw_diag_data_esc = diagnosis_res.diagnosis if (diagnosis_res and not diagnosis_res.error) else {}
-                revalidation_report = ClinicalValidationPipeline.validate(
-                    department=ctx.department_value,
-                    raw_extraction=raw_extract_data,
-                    raw_diagnosis=raw_diag_data_esc,
-                    patient_history=ctx.patient_history_visits,
-                    translated_text=ctx.patient_story,
-                )
-                validation_report = revalidation_report
-                validation_dict = revalidation_report.to_dict()
-                validation_passed = revalidation_report.is_valid
+                    logger.warning(
+                        "[Pipeline] Validation failure (%s). Escalating reasoning to higher-tier Sol model.",
+                        escalation_reason,
+                    )
 
-                yield {
-                    "event": "validation_result",
-                    "data": json.dumps({
-                        "is_valid": validation_passed,
-                        "tier": "escalated",
-                        "model": sol_spec.label,
-                        "escalation_reason": escalation_reason,
-                        "cautions": validation_dict.get("cautions", []),
-                        "missing_fields": validation_dict.get("missing_fields", {}),
-                        "validation_latency_ms": validation_dict.get("metrics", {}).get("validation_latency_ms", 0.0),
-                        "schema_rejection": validation_dict.get("schema_rejection"),
-                    }),
-                }
+                    sol_spec = get_model("reasoning", escalation=True)
+                    escalated_diagnose_task = asyncio.create_task(
+                        _run_diagnose(sol_spec, terra_deployment)
+                    )
+                    parallel_tasks.append(escalated_diagnose_task)
+
+                    try:
+                        escalated_res = await asyncio.wait_for(
+                            escalated_diagnose_task,
+                            timeout=timeout_s,
+                        )
+                        diagnosis_res = escalated_res
+                    except asyncio.TimeoutError:
+                        logger.error("[Pipeline] Escalated diagnosis timed out after %ss", timeout_s)
+                        diagnosis_res = DiagnosisStepResult(error=f"Timeout after {timeout_s}s")
+                    except Exception as exc:
+                        logger.error("[Pipeline] Escalated diagnosis error: %s", exc)
+                        diagnosis_res = DiagnosisStepResult(error=str(exc))
+
+                    # Stream updated diagnosis from escalated tier
+                    yield {"event": "diagnosis", "data": json.dumps(_build_diagnosis_event(diagnosis_res, _served(diagnosis_res.meta, sol_spec.label)))}
+
+                    # Re-validate with escalated diagnosis output
+                    raw_diag_data_esc = diagnosis_res.diagnosis if (diagnosis_res and not diagnosis_res.error) else {}
+                    revalidation_report = ClinicalValidationPipeline.validate(
+                        department=ctx.department_value,
+                        raw_extraction=raw_extract_data,
+                        raw_diagnosis=raw_diag_data_esc,
+                        patient_history=ctx.patient_history_visits,
+                        translated_text=ctx.patient_story,
+                    )
+                    validation_report = revalidation_report
+                    validation_dict = revalidation_report.to_dict()
+                    validation_passed = revalidation_report.is_valid
+
+                    yield {
+                        "event": "validation_result",
+                        "data": json.dumps({
+                            "is_valid": validation_passed,
+                            "tier": "escalated",
+                            "model": sol_spec.label,
+                            "escalation_reason": escalation_reason,
+                            "cautions": validation_dict.get("cautions", []),
+                            "missing_fields": validation_dict.get("missing_fields", {}),
+                            "validation_latency_ms": validation_dict.get("metrics", {}).get("validation_latency_ms", 0.0),
+                            "schema_rejection": validation_dict.get("schema_rejection"),
+                        }),
+                    }
 
         finally:
             for task in parallel_tasks:
@@ -289,12 +393,21 @@ class PipelineOrchestrator:
                 await asyncio.gather(*parallel_tasks, return_exceptions=True)
 
             total_sec = round(time.perf_counter() - ctx.pipeline_start, 3)
-            final_reasoning_model = ctx.reasoning_spec.id
+            final_reasoning_model = reasoning_spec.id
             if current_tier == "escalated":
                 try:
                     final_reasoning_model = get_model("reasoning", escalation=True).id
                 except Exception:
                     final_reasoning_model = "gpt-5.6-sol"
+
+            # Routing audit record (no clinical text) attached to the usage log.
+            routing_audit: Optional[Dict[str, Any]] = None
+            if routing_decision is not None:
+                routing_audit = routing_decision.to_audit_dict()
+                diag_meta = getattr(diagnosis_res, "meta", None)
+                if isinstance(diag_meta, dict) and diag_meta.get("served_deployment"):
+                    routing_audit["served_deployment"] = diag_meta["served_deployment"]
+                    routing_audit["fallback_used"] = bool(diag_meta.get("fallback_used"))
 
             merged = merge_step_results(
                 extraction_res=extraction_res,
@@ -308,6 +421,7 @@ class PipelineOrchestrator:
                 translated_text=ctx.translated_text,
                 patient_story=ctx.patient_story,
                 routing_signal=ctx.routing_signal,
+                routing_audit=routing_audit,
                 specialty=ctx.specialty_value,
                 patient_id=ctx.patient_id,
                 business_unit=ctx.business_unit_value,

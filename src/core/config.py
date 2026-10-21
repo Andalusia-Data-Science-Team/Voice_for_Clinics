@@ -73,6 +73,83 @@ class Config:
     def foundry_deployment_deepseek(cls) -> str:
         return os.getenv("FOUNDRY_DEPLOYMENT_DEEPSEEK", cls.FOUNDRY_DEPLOYMENT_DEEPSEEK)
 
+    # ── Foundry model plan: per-step deployment names ─────────────────────────
+    # Ground truth (owner): all Global Standard deployments. Deployment names are
+    # used exactly as written. Fallback-only and router-only deployments are never
+    # selectable primaries (see core.model_registry.registry_for_ui).
+    FOUNDRY_MODEL_REFINEMENT = os.getenv("FOUNDRY_MODEL_REFINEMENT", "DeepSeek-V3.2")
+    FOUNDRY_MODEL_TRANSLATION = os.getenv("FOUNDRY_MODEL_TRANSLATION", "DeepSeek-V3.2")
+    FOUNDRY_MODEL_EXTRACTION = os.getenv("FOUNDRY_MODEL_EXTRACTION", "gpt-5.6-luna")
+    FOUNDRY_MODEL_EXTRACTION_FALLBACK = os.getenv("FOUNDRY_MODEL_EXTRACTION_FALLBACK", "gpt-4.1-mini")
+    FOUNDRY_MODEL_ROUTER = os.getenv("FOUNDRY_MODEL_ROUTER", "model-router")
+    FOUNDRY_MODEL_REASONING_SIMPLE = os.getenv("FOUNDRY_MODEL_REASONING_SIMPLE", "gpt-5.6-luna")
+    FOUNDRY_MODEL_REASONING_COMPLEX = os.getenv("FOUNDRY_MODEL_REASONING_COMPLEX", "gpt-5.6-sol")
+    FOUNDRY_MODEL_REASONING_SIMPLE_FALLBACK = os.getenv("FOUNDRY_MODEL_REASONING_SIMPLE_FALLBACK", "gpt-4.1-mini")
+    FOUNDRY_MODEL_REASONING_COMPLEX_FALLBACK = os.getenv("FOUNDRY_MODEL_REASONING_COMPLEX_FALLBACK", "gpt-5.6-terra")
+    ROUTER_ENABLED = os.getenv("ROUTER_ENABLED", "false").lower() == "true"
+    ROUTER_FAILURE_TIER = os.getenv("ROUTER_FAILURE_TIER", "complex").lower()
+
+    @classmethod
+    def foundry_model_refinement(cls) -> str:
+        return os.getenv("FOUNDRY_MODEL_REFINEMENT", cls.FOUNDRY_MODEL_REFINEMENT)
+
+    @classmethod
+    def foundry_model_translation(cls) -> str:
+        return os.getenv("FOUNDRY_MODEL_TRANSLATION", cls.FOUNDRY_MODEL_TRANSLATION)
+
+    @classmethod
+    def foundry_model_extraction(cls) -> str:
+        return os.getenv("FOUNDRY_MODEL_EXTRACTION", cls.FOUNDRY_MODEL_EXTRACTION)
+
+    @classmethod
+    def foundry_model_extraction_fallback(cls) -> str:
+        return os.getenv("FOUNDRY_MODEL_EXTRACTION_FALLBACK", cls.FOUNDRY_MODEL_EXTRACTION_FALLBACK)
+
+    @classmethod
+    def foundry_model_router(cls) -> str:
+        return os.getenv("FOUNDRY_MODEL_ROUTER", cls.FOUNDRY_MODEL_ROUTER)
+
+    @classmethod
+    def foundry_model_reasoning_simple(cls) -> str:
+        return os.getenv("FOUNDRY_MODEL_REASONING_SIMPLE", cls.FOUNDRY_MODEL_REASONING_SIMPLE)
+
+    @classmethod
+    def foundry_model_reasoning_complex(cls) -> str:
+        return os.getenv("FOUNDRY_MODEL_REASONING_COMPLEX", cls.FOUNDRY_MODEL_REASONING_COMPLEX)
+
+    @classmethod
+    def foundry_model_reasoning_simple_fallback(cls) -> str:
+        return os.getenv("FOUNDRY_MODEL_REASONING_SIMPLE_FALLBACK", cls.FOUNDRY_MODEL_REASONING_SIMPLE_FALLBACK)
+
+    @classmethod
+    def foundry_model_reasoning_complex_fallback(cls) -> str:
+        return os.getenv("FOUNDRY_MODEL_REASONING_COMPLEX_FALLBACK", cls.FOUNDRY_MODEL_REASONING_COMPLEX_FALLBACK)
+
+    @classmethod
+    def router_enabled(cls) -> bool:
+        return os.getenv("ROUTER_ENABLED", str(cls.ROUTER_ENABLED)).lower() == "true"
+
+    @classmethod
+    def router_failure_tier(cls) -> str:
+        tier = os.getenv("ROUTER_FAILURE_TIER", cls.ROUTER_FAILURE_TIER).lower()
+        return tier if tier in ("simple", "complex") else "complex"
+
+    @classmethod
+    def foundry_quota_tpm(cls, deployment: str) -> Optional[int]:
+        """Return the configured tokens-per-minute quota for a deployment, or None.
+
+        Read from FOUNDRY_QUOTA_TPM__<DEPLOYMENT> (non-alphanumeric -> '_').
+        Unset means unknown; no value is invented.
+        """
+        env_name = "FOUNDRY_QUOTA_TPM__" + re.sub(r"[^A-Za-z0-9]", "_", deployment).upper()
+        raw = os.getenv(env_name)
+        if raw is None or not raw.strip():
+            return None
+        try:
+            return int(raw)
+        except ValueError:
+            return None
+
     # Process-local settings for the shared asynchronous Foundry runtime.
     LLM_BASE_URL = os.getenv("LLM_BASE_URL") or AI_FOUNDRY_ENDPOINT
     LLM_API_KEY = os.getenv("LLM_API_KEY") or AI_FOUNDRY_KEY

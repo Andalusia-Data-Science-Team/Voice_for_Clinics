@@ -171,6 +171,14 @@ class UsageMeta(_OutputBase):
     cost_usd: Optional[float] = Field(None, ge=0.0)
     reasoning_enabled: Optional[bool] = Field(None, description="Whether extended reasoning was active")
     error: Optional[str] = Field(None, description="Populated when the LLM call failed parsing")
+    served_deployment: Optional[str] = Field(
+        None,
+        description="Deployment that actually served the call (primary or fallback)",
+    )
+    fallback_used: Optional[bool] = Field(
+        None,
+        description="True when a single fallback hop served the call",
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -391,6 +399,13 @@ class PipelineSessionOutput(_OutputBase):
     routing_signal: Optional[Dict[str, Any]] = Field(
         None,
         description="Lexicon-based candidate red-flag matches for clinician review",
+    )
+    routing_audit: Optional[Dict[str, Any]] = Field(
+        None,
+        description=(
+            "Routing decision audit record (complexity, reason_codes, tier, "
+            "serving deployment, timings). Never contains clinical text."
+        ),
     )
     questions: Optional[List[QuestionItem]] = Field(
         None,

@@ -89,11 +89,12 @@ async def test_foundry_stream_delegates_to_runtime():
 
 @pytest.mark.asyncio
 async def test_foundry_health_check_success():
+    # The provider adapter keeps its original lightweight models.list() probe.
+    # The faster chat-completion probe used by GET /health lives in app.py
+    # (_probe_foundry) so the adapter contract is unchanged.
     mock_runtime = MagicMock()
     mock_client = MagicMock()
-    mock_models = MagicMock()
-    mock_models.list = AsyncMock(return_value=["model-1"])
-    mock_client.models = mock_models
+    mock_client.models.list = AsyncMock(return_value=MagicMock())
     mock_runtime.client = mock_client
 
     provider = FoundryLLMProvider(mock_runtime)
@@ -109,9 +110,9 @@ async def test_foundry_health_check_success():
 async def test_foundry_health_check_failure():
     mock_runtime = MagicMock()
     mock_client = MagicMock()
-    mock_models = MagicMock()
-    mock_models.list = AsyncMock(side_effect=RuntimeError("Connection refused"))
-    mock_client.models = mock_models
+    mock_client.models.list = AsyncMock(
+        side_effect=RuntimeError("Connection refused")
+    )
     mock_runtime.client = mock_client
 
     provider = FoundryLLMProvider(mock_runtime)

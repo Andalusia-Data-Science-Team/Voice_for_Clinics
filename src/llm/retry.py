@@ -57,10 +57,17 @@ def is_insufficient_quota(exc: BaseException) -> bool:
 
 
 def is_retryable(exc: BaseException) -> bool:
-    """Return whether an exception is safe to retry before output is emitted."""
+    """Return whether an exception is safe to retry before output is emitted.
+
+    Retries are limited to throttling (429), server failures (5xx) and *timeouts*
+    only (tracker A1.3.1: "retry on 429 / 5xx / timeout only"). Plain connection
+    errors such as ``openai.APIConnectionError`` are NOT retried — a dead or
+    unreachable endpoint should not be retried in-place. Cross-deployment
+    fail-over is handled separately, above this layer (``pipeline.fallback``).
+    """
     if is_insufficient_quota(exc):
         return False
-    if isinstance(exc, (openai.APITimeoutError, openai.APIConnectionError, httpx.TimeoutException)):
+    if isinstance(exc, (openai.APITimeoutError, httpx.TimeoutException)):
         return True
     code = status_code(exc)
     return code == 429 or (code is not None and 500 <= code <= 599)
@@ -125,8 +132,11 @@ async def run_with_retries(
             if asyncio.iscoroutine(cb_res):
                 asyncio.create_task(cb_res)
 
+    # Hard cap of 4 attempts (tracker A1.3.1: "max 4 attempts"), matching
+    # LLMRuntime.stream(). LLM_MAX_ATTEMPTS may lower the cap but never raise it.
+    max_attempts = min(4, max(1, Config.LLM_MAX_ATTEMPTS))
     retrying = AsyncRetrying(
-        stop=stop_after_attempt(max(1, Config.LLM_MAX_ATTEMPTS)),
+        stop=stop_after_attempt(max_attempts),
         wait=_wait_with_retry_after,
         retry=retry_if_exception(is_retryable),
         reraise=True,

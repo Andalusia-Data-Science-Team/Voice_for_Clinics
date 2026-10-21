@@ -34,6 +34,22 @@ worker has its own client, pool, and semaphores. Size a limit using Little's
 law: `in_flight ≈ calls/s × latency`; for example, 30 encounters/minute,
 two calls each, and eight seconds of latency imply approximately eight slots.
 
+## Model plan and fallbacks
+
+Per-step deployment names are configured in `core/config.py` (see
+`docs/foundry_models.md` for the full table):
+
+- Refinement and translation → `DeepSeek-V3.2` (no fallback).
+- Extraction → `gpt-5.6-luna`, fallback `gpt-4.1-mini`.
+- Reasoning → routed tier: simple `gpt-5.6-luna` (fallback `gpt-4.1-mini`),
+  complex `gpt-5.6-sol` (fallback `gpt-5.6-terra`).
+- Router (`model-router`) is a complexity classifier only, never a primary.
+
+Fallbacks are a **single hop** on another deployment, layered ABOVE this retry
+layer (`src/pipeline/fallback.py`). They trigger only on 429, 5xx, timeouts,
+connection errors and deployment-not-found (404) — never on 400/401/403/422,
+`insufficient_quota`, content-filter blocks, or schema-invalid output.
+
 ## Retry behavior
 
 The retry policy uses full-jitter exponential backoff. For retry number `r`

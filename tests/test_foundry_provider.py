@@ -41,13 +41,26 @@ from llm.runtime import LLMRuntime
 # ===========================================================================
 
 def test_openrouter_defaults_unchanged():
-    with patch.dict(os.environ, {"LLM_PROVIDER": "openrouter"}):
+    # Design changed (M2 provider abstraction): the model registry is now
+    # Foundry-only and provider switching lives in providers/factory.py. The
+    # registry defaults must therefore be unchanged regardless of LLM_PROVIDER,
+    # and the OpenRouter rollback provider must still be selectable.
+    from providers.factory import build_llm_provider
+    from providers.openrouter_llm import OpenRouterLLMProvider
+
+    with patch.dict(os.environ, {"LLM_PROVIDER": "openrouter", "OPENROUTER_API_KEY": "sk-or-v1-test"}):
         ext = get_model("extraction", None)
         reas = get_model("reasoning", None)
         assert ext.id == DEFAULT_EXTRACTION_MODEL
         assert reas.id == DEFAULT_REASONING_MODEL
-        assert ext.slug == "openai/gpt-5.6-luna"
-        assert reas.slug == "openai/gpt-5.6-luna"
+        # Foundry deployment is the stable slug; there is no OpenRouter slug in
+        # the registry any more.
+        assert ext.slug == "gpt-5.6-luna"
+        assert reas.slug == "gpt-5.6-luna"
+        # The OpenRouter rollback path is selected via the factory.
+        provider = build_llm_provider()
+        assert isinstance(provider, OpenRouterLLMProvider)
+        assert provider.provider_name == "openrouter"
 
 
 def test_foundry_defaults_and_deployments():
@@ -62,11 +75,13 @@ def test_foundry_defaults_and_deployments():
 
 def test_foundry_rejects_models_without_deployment():
     with patch.dict(os.environ, {"LLM_PROVIDER": "foundry"}):
-        # gpt-4o-mini is confirmed not available in Foundry probe
-        with pytest.raises(ValueError, match="no Foundry deployment configured"):
+        # Design changed (M2): unknown models now raise an "Unknown ... model"
+        # error that lists the available ids. The intent — reject models that
+        # are not in the Foundry registry — is unchanged.
+        with pytest.raises(ValueError, match="Unknown extraction model"):
             get_model("extraction", "gpt-4o-mini")
 
-        with pytest.raises(ValueError, match="no Foundry deployment configured"):
+        with pytest.raises(ValueError, match="Unknown reasoning model"):
             get_model("reasoning", "gemini-3.7-flash")
 
 
@@ -229,9 +244,17 @@ def test_runtime_foundry_headers():
 
 
 def test_runtime_openrouter_provider():
+    # Design changed (M2 provider abstraction): LLMRuntime is Foundry-only; the
+    # OpenRouter rollback lives in providers/openrouter_llm.py and is selected
+    # via providers/factory.py, not by LLMRuntime. This test now asserts that
+    # the OpenRouter provider is reachable through the factory instead.
+    from providers.factory import build_llm_provider
+    from providers.openrouter_llm import OpenRouterLLMProvider
+
     with patch.dict(os.environ, {
         "LLM_PROVIDER": "openrouter",
         "OPENROUTER_API_KEY": "sk-or-v1-test",
     }):
-        runtime = LLMRuntime()
-        assert runtime.provider == "openrouter"
+        provider = build_llm_provider()
+        assert isinstance(provider, OpenRouterLLMProvider)
+        assert provider.provider_name == "openrouter"

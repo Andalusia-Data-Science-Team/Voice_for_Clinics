@@ -696,6 +696,7 @@ async def _check_llm(request: Request) -> dict:
     """
     from providers.factory import get_llm
     provider = getattr(request.app.state, "llm_provider", None) or get_llm()
+    started = time.perf_counter()
     try:
         result = await provider.health_check()
         return {
@@ -746,10 +747,127 @@ def _check_disk() -> dict:
         return {"component": "disk", "status": "error", "detail": str(exc)}
 
 
+# ── Dependency health (A7.1.1) ─────────────────────────────────────────────
+# Cached for 30 s so a burst of smoke-test/availability probes does not hammer
+# the providers. The cache stores only status/latency — never secrets.
+_HEALTH_CACHE_TTL_S = 30.0
+_health_cache: Dict[str, Any] = {"at": 0.0, "payload": None}
+
+
+async def _probe_foundry(request: Request) -> dict:
+    """Probe Foundry with a lightweight authenticated completion (no patient data).
+
+    Keep the health-specific probe here rather than changing the provider
+    adapter's existing health_check contract. ``models.list()`` can take longer
+    than the health budget; a tiny chat completion uses the shared runtime,
+    standard timeout/retry policy and the configured extraction deployment.
+    """
+    from providers.factory import get_llm
+    provider = getattr(request.app.state, "llm_provider", None) or get_llm()
+    started = time.perf_counter()
+    try:
+        runtime = getattr(provider, "runtime", None)
+        if runtime is None:
+            return {"component": "foundry", "status": "error", "detail": "runtime_unavailable"}
+        from llm.provider import build_foundry_kwargs
+        deployment = Config.foundry_model_extraction()
+        kwargs = build_foundry_kwargs(
+            deployment,
+            messages=[{"role": "user", "content": "Reply with the single word: ok"}],
+            max_tokens=16,
+        )
+        await runtime.complete(model=deployment, create_kwargs=kwargs)
+        return {
+            "component": "foundry",
+            "status": "ok",
+            "latency_ms": round((time.perf_counter() - started) * 1000.0, 2),
+        }
+    except Exception as exc:
+        return {
+            "component": "foundry",
+            "status": "error",
+            "latency_ms": round((time.perf_counter() - started) * 1000.0, 2),
+            "detail": type(exc).__name__,
+        }
+
+
+async def _probe_stt(request: Request, provider_name: str) -> dict:
+    """Probe an STT provider with a lightweight authenticated call (no audio).
+
+    A failing STT provider is reported as "degraded" (not "error") so it never
+    gates a deploy: only Foundry is a hard dependency for /health (owner decision).
+    """
+    from providers.factory import get_stt
+    provider = getattr(request.app.state, "stt_provider", None) or get_stt()
+    # Only probe the provider that is actually configured; report the other as
+    # not_configured so a single-provider deployment is not failed by the other.
+    active = getattr(provider, "provider_name", os.getenv("STT_PROVIDER", "munsit"))
+    if active != provider_name:
+        return {"component": provider_name, "status": "not_configured"}
+    try:
+        result = await provider.health_check()
+        return {
+            "component": provider_name,
+            "status": "ok" if result.ok else "degraded",
+            "latency_ms": result.latency_ms,
+        }
+    except Exception as exc:
+        return {"component": provider_name, "status": "degraded", "detail": type(exc).__name__}
+
+
+async def _dependency_health(request: Request) -> dict:
+    """Return cached per-dependency health for Foundry, Munsit and Voxtral.
+
+    HTTP gating (owner decision): only Foundry is a hard dependency. Foundry
+    unreachable or its key/token rejected -> ``unhealthy`` (HTTP 503). A Munsit
+    or Voxtral problem is reported as ``degraded`` but keeps HTTP 200, so an STT
+    provider outage does not fail a deploy.
+    """
+    now = time.monotonic()
+    cached = _health_cache.get("payload")
+    if cached is not None and (now - _health_cache.get("at", 0.0)) < _HEALTH_CACHE_TTL_S:
+        return cached
+
+    foundry, munsit, voxtral = await asyncio.gather(
+        _probe_foundry(request),
+        _probe_stt(request, "munsit"),
+        _probe_stt(request, "voxtral"),
+    )
+    checks = [foundry, munsit, voxtral]
+    if foundry["status"] not in ("ok",):
+        overall = "unhealthy"
+    elif any(c["status"] == "degraded" for c in checks):
+        overall = "degraded"
+    else:
+        overall = "ok"
+    payload = {
+        "status": overall,
+        "checks": checks,
+    }
+    _health_cache["at"] = now
+    _health_cache["payload"] = payload
+    return payload
+
+
 @app.get("/health", tags=["Observability"])
-async def health_check():
-    """Dependency-free liveness probe for deploy smoke tests."""
-    return {"status": "ok"}
+async def health_check(request: Request):
+    """Dependency health probe for deploy smoke tests (A7.1.1).
+
+    Returns 200 with per-dependency status for Foundry, Munsit and Voxtral, or
+    503 when Foundry is unreachable or its key/token is rejected. Results are
+    cached for 30 s. No secrets or endpoints appear in the response.
+
+    A Munsit or Voxtral problem is reported as ``degraded`` but keeps HTTP 200,
+    so an STT provider outage does not fail a deploy. /health/live remains the
+    dependency-free liveness probe.
+    """
+    result = await _dependency_health(request)
+    status_code = 200 if result["status"] in ("ok", "degraded") else 503
+    return Response(
+        content=json.dumps(result, separators=(",", ":")),
+        status_code=status_code,
+        media_type="application/json",
+    )
 
 
 @app.get(
@@ -1218,8 +1336,8 @@ async def analyze_transcript(
     skip_refinement = mode == Mode.doctor   # Doctor mode: skip LLM refinement step
 
     try:
-        extraction_spec = get_model("extraction", None)
-        reasoning_spec  = get_model("reasoning",  None)
+        extraction_spec = get_model("extraction", inp.extraction_model)
+        reasoning_spec  = get_model("reasoning",  inp.reasoning_model)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

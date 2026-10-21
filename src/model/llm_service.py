@@ -11,6 +11,7 @@ from core.model_registry import (
     REASONING_EFFORT,
     ModelSpec,
     get_model,
+    spec_for_deployment,
 )
 from llm.provider import build_foundry_kwargs
 from utils import prompt as prompt_utils
@@ -181,6 +182,40 @@ class LLMService:
         return await LLMService._call_structured_async(prompt, ExtractedFeatures, runtime, model, EXTRACTION_MAX_TOKENS, meta=meta)
 
     @staticmethod
+    async def extract_features_with_fallback_async(
+        translated_text: str,
+        runtime: LLMRuntime,
+        department: str = "opd",
+        is_conversation: bool = False,
+        model_id: Optional[str] = None,
+        meta: Optional[dict] = None,
+    ):
+        """Extract clinical fields, with ONE fallback call on the configured
+        fallback deployment if the primary fails after the retry layer is done.
+
+        The fallback is a new call on another deployment (never a retry). Only
+        eligible failures trigger it (see pipeline.fallback.is_fallback_eligible).
+        """
+        from pipeline.fallback import run_with_single_fallback
+
+        primary = get_model("extraction", model_id)
+        fallback_deployment = Config.foundry_model_extraction_fallback()
+        prompt = clinical_prompts.get_extraction_prompt(department, translated_text, is_conversation)
+
+        async def _call(spec: ModelSpec):
+            return await LLMService._call_structured_async(
+                prompt, ExtractedFeatures, runtime, spec, EXTRACTION_MAX_TOKENS, meta=meta
+            )
+
+        return await run_with_single_fallback(
+            lambda: _call(primary),
+            lambda: _call(spec_for_deployment(fallback_deployment)),
+            primary_deployment=primary.foundry_deployment,
+            fallback_deployment=fallback_deployment,
+            meta=meta,
+        )
+
+    @staticmethod
     async def recommend_diagnosis_async(
         translated_text: str,
         runtime: LLMRuntime,
@@ -208,6 +243,58 @@ class LLMService:
         )
         return await LLMService._call_structured_async(prompt, ExtractedFeatures, runtime, model, DIAGNOSIS_MAX_TOKENS, reasoning_effort=REASONING_EFFORT, meta=meta)
 
+    @staticmethod
+    async def recommend_diagnosis_with_fallback_async(
+        translated_text: str,
+        runtime: LLMRuntime,
+        department: str = "opd",
+        patient_history_text: str = "",
+        is_conversation: bool = False,
+        model_id: Optional[str] = None,
+        meta: Optional[dict] = None,
+        catalogue_candidates: Optional[list[tuple[str, str]]] = None,
+        fallback_deployment: Optional[str] = None,
+    ):
+        """Recommend diagnoses with ONE fallback hop on another deployment.
+
+        The fallback deployment defaults to the tier's configured fallback
+        (Luna -> gpt-4.1-mini, Sol -> gpt-5.6-terra). At most one hop.
+        """
+        from pipeline.fallback import run_with_single_fallback
+
+        primary = get_model("reasoning", model_id)
+        if fallback_deployment is None:
+            from pipeline.routing import fallback_deployment_for_tier, tier_for_complexity
+
+            # Infer the tier from the primary deployment name.
+            tier = "complex" if primary.foundry_deployment == Config.foundry_model_reasoning_complex() else "simple"
+            fallback_deployment = fallback_deployment_for_tier(tier)
+        if catalogue_candidates is None:
+            from model.icd10_registry import get_registry
+
+            catalogue_candidates = get_registry().search_diagnosis_candidates(translated_text)
+        prompt = clinical_prompts.get_diagnosis_prompt(
+            department,
+            translated_text,
+            is_conversation,
+            patient_history_text,
+            catalogue_candidates,
+        )
+
+        async def _call(spec: ModelSpec):
+            return await LLMService._call_structured_async(
+                prompt, ExtractedFeatures, runtime, spec, DIAGNOSIS_MAX_TOKENS,
+                reasoning_effort=REASONING_EFFORT, meta=meta,
+            )
+
+        return await run_with_single_fallback(
+            lambda: _call(primary),
+            lambda: _call(spec_for_deployment(fallback_deployment, supports_reasoning=True)),
+            primary_deployment=primary.foundry_deployment,
+            fallback_deployment=fallback_deployment,
+            meta=meta,
+        )
+
     # ── Internal: plain text call (refine / translate) ───────────────────
     @staticmethod
     def _call_text(text: str, api_key: str, prompt_type: str, is_conversation: bool, specialty: Optional[str] = None) -> str:
@@ -217,7 +304,7 @@ class LLMService:
     @staticmethod
     async def _call_text_async(text: str, runtime: LLMRuntime, prompt_type: str, is_conversation: bool, specialty: Optional[str] = None) -> str:
         prompt = LLMService._get_prompt(prompt_type, text, is_conversation, specialty=specialty)
-        deployment = Config.foundry_deployment_deepseek()
+        deployment = LLMService._deployment_for_prompt(prompt_type)
         kwargs = build_foundry_kwargs(
             deployment,
             messages=[{"role": "user", "content": prompt}],
@@ -226,6 +313,17 @@ class LLMService:
         )
         response = await runtime.complete(model=deployment, create_kwargs=kwargs)
         return response.choices[0].message.content.strip() if response.choices and response.choices[0].message.content else text
+
+    @staticmethod
+    def _deployment_for_prompt(prompt_type: str) -> str:
+        """Map a refine/translate prompt type to its configured Foundry deployment.
+
+        Refinement and translation both default to DeepSeek-V3.2 but are
+        independently configurable (FOUNDRY_MODEL_REFINEMENT / _TRANSLATION).
+        """
+        if prompt_type == "translate":
+            return Config.foundry_model_translation()
+        return Config.foundry_model_refinement()
 
     # ── Internal: structured JSON call ───────────────────────────────────
     @staticmethod
@@ -294,7 +392,7 @@ class LLMService:
     @staticmethod
     async def _stream_text_async(text: str, runtime: LLMRuntime, prompt_type: str, is_conversation: bool = False, specialty: Optional[str] = None):
         prompt = LLMService._get_prompt(prompt_type, text, is_conversation, specialty=specialty)
-        deployment = Config.foundry_deployment_deepseek()
+        deployment = LLMService._deployment_for_prompt(prompt_type)
         kwargs = build_foundry_kwargs(
             deployment,
             messages=[{"role": "user", "content": prompt}],

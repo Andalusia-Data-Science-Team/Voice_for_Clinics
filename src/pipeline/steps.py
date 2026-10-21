@@ -18,7 +18,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from llm.runtime import LLMRuntime
 from model.llm_service import LLMService
-from core.model_registry import ModelSpec, get_fallback_extraction_model
+from core.model_registry import ModelSpec
 from model.patient_history import check_history_usage
 from model.question_generator import QuestionGenerator
 from model.icd10_registry import get_registry
@@ -65,6 +65,7 @@ class PipelineContext:
     translation_sec: float = 0.0
     patient_story: str = ""
     routing_signal: Optional[Dict[str, Any]] = None
+    routing_decision: Optional[Any] = None
 
     @property
     def is_arabic(self) -> bool:
@@ -172,84 +173,36 @@ def step_red_flags(ctx: PipelineContext) -> Dict[str, Any]:
 
 
 async def step_extract(ctx: PipelineContext) -> ExtractionStepResult:
-    """Execute clinical feature extraction with automatic fallback to gpt-4.1-mini.
-
-    Primary model: ctx.extraction_spec (e.g. gpt-5.6-luna)
-    Fallback model: FOUNDRY_FALLBACK_EXTRACTION_MODEL (gpt-4.1-mini) — only used
-    when the primary fails after all retries, never shown in UI.
-    """
+    """Execute clinical feature extraction and question generation."""
     meta: Dict[str, Any] = {}
     t0 = time.perf_counter()
-
-    async def _attempt(spec: ModelSpec, is_fallback: bool = False) -> ExtractionStepResult:
-        """Run one extraction attempt with the given spec."""
-        try:
-            extracted = await LLMService.extract_features_async(
-                translated_text=ctx.patient_story,
-                runtime=ctx.runtime,
-                department=ctx.department_value,
-                is_conversation=ctx.is_conversation,
-                model_id=spec.id,
-                meta=meta,
-            )
-            raw_features = extracted.get("json_data", {}) if extracted else {}
-            features = validate_extraction_output(raw_features, ctx.department_value)
-            t_q = time.perf_counter()
-            questions, _ = QuestionGenerator.generate(
-                extracted_features=features,
-                department=ctx.department_value,
-            )
-            if is_fallback:
-                logger.info(
-                    "[Pipeline] Extraction fallback succeeded with model=%s", spec.id
-                )
-            return ExtractionStepResult(
-                features=features,
-                questions=questions,
-                extraction_sec=round(t_q - t0, 3),
-                question_generation_sec=round(time.perf_counter() - t_q, 3),
-                meta=meta,
-                fallback_model_used=spec.id if is_fallback else None,
-            )
-        except Exception as exc:
-            return None, exc  # type: ignore[return-value]
-
-    # ── Primary attempt ────────────────────────────────────────────────────
-    primary_result = await _attempt(ctx.extraction_spec, is_fallback=False)
-    if primary_result is not None and not isinstance(primary_result, tuple):
-        return primary_result
-
-    primary_error = primary_result[1] if isinstance(primary_result, tuple) else Exception("Unknown")
-    logger.warning(
-        "[Pipeline] Primary extraction model=%s failed (%s). Trying fallback.",
-        ctx.extraction_spec.id, primary_error,
-    )
-
-    # ── Fallback attempt (gpt-4.1-mini) ────────────────────────────────────
     try:
-        fallback_spec = get_fallback_extraction_model()
-        if fallback_spec.id == ctx.extraction_spec.id:
-            # Primary IS the fallback model — don't retry the same thing
-            raise ValueError("Primary and fallback extraction model are the same")
-
-        fallback_result = await _attempt(fallback_spec, is_fallback=True)
-        if fallback_result is not None and not isinstance(fallback_result, tuple):
-            return fallback_result
-
-        fallback_error = fallback_result[1] if isinstance(fallback_result, tuple) else Exception("Unknown")
-        logger.error(
-            "[Pipeline] Fallback extraction model=%s also failed: %s",
-            fallback_spec.id, fallback_error,
+        extracted = await LLMService.extract_features_with_fallback_async(
+            translated_text=ctx.patient_story,
+            runtime=ctx.runtime,
+            department=ctx.department_value,
+            is_conversation=ctx.is_conversation,
+            model_id=ctx.extraction_spec.id,
+            meta=meta,
+        )
+        raw_features = extracted.get("json_data", {}) if extracted else {}
+        features = validate_extraction_output(raw_features, ctx.department_value)
+        t_q = time.perf_counter()
+        questions, _ = QuestionGenerator.generate(
+            extracted_features=features,
+            department=ctx.department_value,
         )
         return ExtractionStepResult(
-            error=f"Primary ({ctx.extraction_spec.id}): {primary_error}; Fallback ({fallback_spec.id}): {fallback_error}",
-            extraction_sec=round(time.perf_counter() - t0, 3),
+            features=features,
+            questions=questions,
+            extraction_sec=round(t_q - t0, 3),
+            question_generation_sec=round(time.perf_counter() - t_q, 3),
             meta=meta,
         )
     except Exception as exc:
-        logger.error("[Pipeline] Extraction fallback mechanism failed: %s", exc)
+        logger.error("[Pipeline] Extraction step failed: %s", exc)
         return ExtractionStepResult(
-            error=str(primary_error),
+            error=str(exc),
             extraction_sec=round(time.perf_counter() - t0, 3),
             meta=meta,
         )
@@ -258,8 +211,14 @@ async def step_extract(ctx: PipelineContext) -> ExtractionStepResult:
 async def step_diagnose(
     ctx: PipelineContext,
     reasoning_spec: Optional[ModelSpec] = None,
+    fallback_deployment: Optional[str] = None,
 ) -> DiagnosisStepResult:
-    """Execute ICD-10 differential diagnosis recommendation."""
+    """Execute ICD-10 differential diagnosis recommendation.
+
+    ``fallback_deployment`` selects the single fallback hop for this call
+    (Luna -> gpt-4.1-mini, Sol -> gpt-5.6-terra). When None, the tier's
+    configured fallback is inferred from the primary deployment.
+    """
     spec = reasoning_spec or ctx.reasoning_spec
     meta: Dict[str, Any] = {}
     t0 = time.perf_counter()
@@ -267,7 +226,7 @@ async def step_diagnose(
         catalogue_candidates = get_registry().search_diagnosis_candidates(
             ctx.patient_story
         )
-        diagnosis_result = await LLMService.recommend_diagnosis_async(
+        diagnosis_result = await LLMService.recommend_diagnosis_with_fallback_async(
             translated_text=ctx.patient_story,
             runtime=ctx.runtime,
             department=ctx.department_value,
@@ -276,6 +235,7 @@ async def step_diagnose(
             model_id=spec.id,
             meta=meta,
             catalogue_candidates=catalogue_candidates,
+            fallback_deployment=fallback_deployment,
         )
         raw_data = diagnosis_result.get("json_data", {}) if diagnosis_result else {}
         data = validate_diagnosis_output(raw_data)

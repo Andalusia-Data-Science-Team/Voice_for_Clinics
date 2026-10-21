@@ -90,6 +90,10 @@ class ModelLimiter:
     """
 
     def __init__(self, default_limit: int | None = None) -> None:
+        # An explicitly passed limit must be honoured even when it happens to
+        # equal Config.LLM_LIMIT_DEFAULT; only the "not passed" case may fall
+        # back to the per-model env override (LLM_LIMIT__<MODEL>).
+        self._explicit_limit = default_limit is not None
         self._default_limit = default_limit if default_limit is not None else Config.LLM_LIMIT_DEFAULT
         if self._default_limit < 1:
             raise ValueError("default_limit must be at least 1")
@@ -101,7 +105,7 @@ class ModelLimiter:
         async with self._lock:
             semaphore = self._semaphores.get(model)
             if semaphore is None:
-                limit = Config.llm_model_limit(model) if self._default_limit == Config.LLM_LIMIT_DEFAULT else self._default_limit
+                limit = self._default_limit if self._explicit_limit else Config.llm_model_limit(model)
                 semaphore = DynamicSemaphore(limit)
                 self._semaphores[model] = semaphore
                 self._stats[model] = LimiterStats(

@@ -1,0 +1,35 @@
+DRAFT: pending Clinical Lead sign-off
+=====================================
+
+Complexity criteria for the MedVoice reasoning router.
+
+The router deployment (model-router) is used ONLY as a complexity classifier.
+It must return strict JSON: {"complexity": "simple"|"complex", "reason_codes": [...]}.
+
+These criteria are intentionally GENERIC and STRUCTURAL only. They contain no
+clinical thresholds and no diagnosis-specific rules. A Clinical Lead must review
+and sign off before this file is treated as final.
+
+Classify as "complex" when ANY of the following structural signals is present:
+
+1. MULTIPLE_PROBLEMS
+   The note describes more than one distinct active problem or complaint.
+
+2. RED_FLAG_TERMS
+   The note contains red-flag terms from the project's red-flag lexicon
+   (src/data/red_flag_lexicon.json). Use the lexicon as the source of truth;
+   do not invent new clinical terms here.
+
+3. NOTE_HISTORY_CONFLICT
+   The note conflicts with, or contradicts, the supplied patient history.
+
+4. MISSING_KEY_FIELDS
+   One or more key clinical fields required for a safe recommendation are
+   absent from the note.
+
+Otherwise classify as "simple".
+
+reason_codes must be a subset of:
+  ["MULTIPLE_PROBLEMS", "RED_FLAG_TERMS", "NOTE_HISTORY_CONFLICT", "MISSING_KEY_FIELDS"]
+
+Return ONLY the JSON object. Do not include prose, markdown, or code fences.

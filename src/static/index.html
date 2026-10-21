@@ -1931,30 +1931,17 @@ btnSubmit.addEventListener('click', async () => {
 
       if (d.error) {
         setCard('diagnosis', 'error');
-        setBody('diagnosis', '<div class="err-box">Diagnosis recommendation failed: ' + esc(d.error) + '</div>');
+        if (d.reasoning_pending) {
+          setBody('diagnosis', '<div class="err-box">Reasoning pending — the diagnosis recommendation could not be generated right now. The clinical note fields above are complete; try Analyse again.</div>');
+        } else {
+          setBody('diagnosis', '<div class="err-box">Diagnosis recommendation failed: ' + esc(d.error) + '</div>');
+        }
       } else {
         setCard('diagnosis', 'done'); setTime('diagnosis', d.diagnosis_sec);
         renderDiagnosis(d.diagnosis, dept);
         btnPrint.disabled = false;
       }
 
-      finishParallelStepsIfReady();
-
-    } else if (ev === 'reasoning_pending') {
-      // All reasoning models failed (primary + escalated Sol).
-      // Show a graceful degraded state — extraction is still useful.
-      eventReceived.diagnosis = true;
-      $('diagnosis-subtitle').textContent = '(ICD-10 · unavailable)';
-      setCard('diagnosis', 'error');
-      setBody('diagnosis', `
-        <div class="feat-pending-banner" role="status" aria-live="polite">
-          <span class="feat-pending-icon">⏳</span>
-          <div class="feat-pending-content">
-            <strong>Reasoning pending</strong>
-            <p>${esc(d.message || 'Diagnosis reasoning could not be completed at this time. The clinical note extraction is available above.')}</p>
-            <p style="margin-top:6px;font-size:12px;opacity:0.7;">You may retry using the Analyse button, or add ICD-10 codes manually.</p>
-          </div>
-        </div>`);
       finishParallelStepsIfReady();
 
     } else if (ev === 'validation_result') {

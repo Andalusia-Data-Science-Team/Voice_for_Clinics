@@ -16,7 +16,8 @@ services:
       dockerfile: Dockerfile
     container_name: medvoice
     ports:
-      - "9999:9999"
+      # Host:container — the app listens on 7777 (src/app.py).
+      - "7777:7777"
     depends_on:
       - mongodb
     env_file:

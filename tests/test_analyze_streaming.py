@@ -44,8 +44,18 @@ async def test_each_parallel_result_is_sent_without_waiting_for_the_other(monkey
             }
         }
 
-    monkeypatch.setattr(app_module.LLMService, "extract_features_async", extract_features_async)
-    monkeypatch.setattr(app_module.LLMService, "recommend_diagnosis_async", recommend_diagnosis_async)
+    # The pipeline calls the fallback-wrapped variants (W3/W4): a primary call
+    # plus, on eligible failure, one fallback call on another deployment.
+    monkeypatch.setattr(
+        app_module.LLMService,
+        "extract_features_with_fallback_async",
+        extract_features_async,
+    )
+    monkeypatch.setattr(
+        app_module.LLMService,
+        "recommend_diagnosis_with_fallback_async",
+        recommend_diagnosis_async,
+    )
     monkeypatch.setattr(
         app_module.QuestionGenerator,
         "generate",

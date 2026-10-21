@@ -72,7 +72,7 @@ async def test_parallel_execution_timing_max_not_sum():
             extraction_sec=0.15,
         )
 
-    async def mock_diagnose(c: PipelineContext, reasoning_spec: Optional[ModelSpec] = None) -> DiagnosisStepResult:
+    async def mock_diagnose(c: PipelineContext, reasoning_spec: Optional[ModelSpec] = None, fallback_deployment: Optional[str] = None) -> DiagnosisStepResult:
         await asyncio.sleep(0.15)
         return DiagnosisStepResult(
             diagnosis={
@@ -110,7 +110,7 @@ async def test_timeout_cancellation_and_error_handling():
         await asyncio.sleep(5.0)
         return ExtractionStepResult(features={})
 
-    async def mock_fast_diagnose(c: PipelineContext, reasoning_spec: Optional[ModelSpec] = None) -> DiagnosisStepResult:
+    async def mock_fast_diagnose(c: PipelineContext, reasoning_spec: Optional[ModelSpec] = None, fallback_deployment: Optional[str] = None) -> DiagnosisStepResult:
         await asyncio.sleep(0.02)
         return DiagnosisStepResult(
             diagnosis={"icd10_codes": ["M17.12"]},

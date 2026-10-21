@@ -40,6 +40,7 @@ RUN mkdir -p /app/uploads /app/static /app/logs
 RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
 
-EXPOSE 9999
+# The app listens on 7777 (see src/app.py: uvicorn.run(..., port=7777)).
+EXPOSE 7777
 
 CMD ["python", "app.py"]

@@ -75,6 +75,8 @@ async def validate_analyze_input(
     clinician_name:     Optional[str]  = Form(None,  description="Self-reported doctor name"),
     transcription_sec:  Optional[float]= Form(None,  description="Client-measured transcription duration (seconds)"),
     session_id:         Optional[str]  = Form(None,  description="Client-generated session ID"),
+    extraction_model:   Optional[str]  = Form(None,  description="Optional doctor-selected extraction model id"),
+    reasoning_model:    Optional[str]  = Form(None,  description="Optional doctor-selected reasoning model id"),
 ) -> AnalyzeInput:
     """FastAPI ``Depends`` — parse and validate ``POST /audio/analyze`` form fields.
 
@@ -103,6 +105,8 @@ async def validate_analyze_input(
             clinician_name=_val(clinician_name, None),
             transcription_sec=_val(transcription_sec, None),
             session_id=_val(session_id, None),
+            extraction_model=_val(extraction_model, None),
+            reasoning_model=_val(reasoning_model, None),
         )
     except ValidationError as exc:
         logger.debug("[Middleware] AnalyzeInput validation failed: %s", exc)

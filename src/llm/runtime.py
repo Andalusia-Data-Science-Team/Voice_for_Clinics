@@ -104,6 +104,11 @@ class LLMRuntime:
             name="FoundryLLMCircuitBreaker",
         )
 
+    @property
+    def provider(self) -> str:
+        """Provider name for this runtime (this runtime is Foundry-only)."""
+        return "foundry"
+
     async def close(self) -> None:
         """Close the shared SDK client and its underlying HTTP transport."""
         await self.client.close()
@@ -135,7 +140,12 @@ class LLMRuntime:
                 code = status_code(exc)
                 is_429 = code == 429
                 await self.limiter.record_feedback(model, status_code=code, is_rate_limited=is_429)
-                if not is_insufficient_quota(exc):
+                # Rate limiting (429) is expected under load and is handled by the
+                # limiter + retry layer. It must NOT trip the circuit breaker, or a
+                # burst of throttled requests would pause the whole worker pool
+                # (tracker A1.5.1: 30 parallel analyses all finish). Genuine
+                # backend/connection failures and exhausted quota still count.
+                if not is_429 and not is_insufficient_quota(exc):
                     await self.circuit_breaker.record_failure(exc)
                 raise
             finally:
@@ -199,7 +209,9 @@ class LLMRuntime:
                     code = status_code(exc)
                     is_429 = code == 429
                     await self.limiter.record_feedback(model, status_code=code, is_rate_limited=is_429)
-                    if not is_insufficient_quota(exc):
+                    # A 429 is throttling, not a backend failure: do not trip the
+                    # circuit breaker (see complete() for the rationale).
+                    if not is_429 and not is_insufficient_quota(exc):
                         await self.circuit_breaker.record_failure(exc)
                     if emitted or attempt_number >= max_attempts or not is_retryable(exc):
                         raise

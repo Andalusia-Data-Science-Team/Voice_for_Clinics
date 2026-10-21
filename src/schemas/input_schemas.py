@@ -204,6 +204,23 @@ class AnalyzeInput(_StrictInputBase):
             "later feedback submission can be joined back to this session."
         ),
     )
+    extraction_model: Optional[str] = Field(
+        None,
+        max_length=64,
+        description=(
+            "Optional doctor-selected extraction model id (must be a selectable "
+            "primary in the registry). Blank/None uses the configured default."
+        ),
+    )
+    reasoning_model: Optional[str] = Field(
+        None,
+        max_length=64,
+        description=(
+            "Optional doctor-selected reasoning model id (must be a selectable "
+            "primary). Accepted but unused when ROUTER_ENABLED=true, because the "
+            "router decides the reasoning tier."
+        ),
+    )
 
     # ── Field validators ─────────────────────────────────────────────────────
 
@@ -216,9 +233,15 @@ class AnalyzeInput(_StrictInputBase):
     @field_validator("specialty", mode="before")
     @classmethod
     def _clean_specialty(cls, v: Optional[str]) -> Optional[str]:
-        """Strip whitespace; return None for blank specialty strings."""
+        """Strip whitespace; return None for blank specialty strings.
+
+        Unwraps Enum values first: a ``str`` subclass Enum (like app.Specialty)
+        stringifies to "Specialty.Cardiology", so ``.value`` must be used.
+        """
         if v is None:
             return None
+        if hasattr(v, "value"):
+            v = v.value
         stripped = str(v).strip()
         return stripped if stripped else None
 
@@ -277,8 +300,11 @@ class RefineFieldInput(_StrictInputBase):
     @field_validator("specialty", mode="before")
     @classmethod
     def _clean_specialty(cls, v: Optional[str]) -> Optional[str]:
+        """Strip whitespace; unwrap Enum values to their string value first."""
         if v is None:
             return None
+        if hasattr(v, "value"):
+            v = v.value
         stripped = str(v).strip()
         return stripped if stripped else None
 
