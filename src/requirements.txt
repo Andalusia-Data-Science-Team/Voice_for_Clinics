@@ -30,6 +30,9 @@ starlette==0.45.3
 openai==2.32.0
 motor>=3.3.0
 pymongo>=4.6.0
+# Required at startup: evaluation/__init__.py imports evaluation.importers,
+# which imports openpyxl to read the gold-case .xlsx datasets.
+openpyxl==3.1.5
 tenacity>=8.2
 pytest-asyncio>=0.24
 

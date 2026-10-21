@@ -1,34 +1,66 @@
+# MedVoice — Docker Compose stack (local / dev).
+#
+#   docker compose up -d --build        start (builds the image if needed)
+#   docker compose ps                   status + health
+#   docker compose logs -f medvoice-app follow app logs
+#   docker compose down                 stop (keeps the mongo volume)
+#
+# Configuration comes from src/.env through env_file. That file is never copied
+# into the image and its contents are never printed or logged.
+#
+# The pipeline overrides two values without editing this file:
+#   MEDVOICE_IMAGE     registry image + tag to deploy (default: local build)
+#   MEDVOICE_ENV_FILE  path to the server's existing env file (default: src/.env)
+name: medvoice
 services:
-  mongodb:
+  # ── MongoDB — LOCAL/DEV ONLY ───────────────────────────────────────────────
+  # Deliberately NOT published to the host: the app reaches it over the compose
+  # network at mongodb://medvoice-mongo:27017. Data lives in the named volume.
+  medvoice-mongo:
     image: mongo:7
     container_name: medvoice-mongo
-    ports:
-      - "27017:27017"
     volumes:
       - mongo_data:/data/db
     environment:
       MONGO_INITDB_DATABASE: medvoice
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
 
-  medvoice:
+  # ── MedVoice app ───────────────────────────────────────────────────────────
+  medvoice-app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: medvoice
+    image: ${MEDVOICE_IMAGE:-medvoice-medvoice}
+    container_name: medvoice-app
     ports:
       # Host:container — the app listens on 7777 (src/app.py).
       - "7777:7777"
     depends_on:
-      - mongodb
+      medvoice-mongo:
+        condition: service_healthy
     env_file:
-      - src/.env
+      - ${MEDVOICE_ENV_FILE:-src/.env}
     environment:
-      MONGODB_URI: mongodb://mongodb:27017
+      # Override only the Mongo URI: inside the container "localhost" is the
+      # container itself, so point it at the compose service instead.
+      MONGODB_URI: mongodb://medvoice-mongo:27017
       MONGODB_DATABASE: medvoice
     volumes:
-      - ./src/uploads:/app/uploads        # results appear here on the host
-      - ./src/static:/app/static          # serves index.html
-      - ./src/logs:/app/logs              # serves log files
+      - ./src/uploads:/app/uploads        # uploaded audio (PHI) — host folder
+      - ./src/logs:/app/logs              # usage.jsonl / feedback.jsonl (PHI)
+    healthcheck:
+      # Liveness only (no I/O): an STT outage must not restart the container.
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:7777/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     restart: unless-stopped
 
 volumes:

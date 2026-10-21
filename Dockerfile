@@ -2,8 +2,12 @@
 FROM python:3.11-slim
 
 # System dependencies
+#   ffmpeg      — audio decoding/transcoding (speech_service)
+#   libsndfile1 — soundfile/librosa backend for WAV/PCM handling
+#   unixodbc-dev— pyodbc build/runtime for patient-history SQL Server access
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    libsndfile1 \
     build-essential \
     ca-certificates \
     curl \

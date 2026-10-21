@@ -41,9 +41,15 @@ running this test. Run against a staging environment whenever possible.
 
 from __future__ import annotations
 
+import csv
+import io
+import math
 import os
 import random
+import struct
+import threading
 import time
+import wave
 from typing import Any
 from uuid import uuid4
 
@@ -231,6 +237,75 @@ def _failure_category(error: BaseException) -> str:
 def _percentile(entry: Any, percentile: float) -> int:
     """Return a percentile, or zero when a metric has no samples."""
     return entry.get_response_time_percentile(percentile) if entry.num_requests else 0
+
+
+# ── Per-session CSV (A5.2.1) ───────────────────────────────────────────────
+# One row per session: first partial, final transcript, first SSE event, total
+# time. Written to LOCUST_SESSION_CSV (default: locust_sessions.csv).
+_SESSION_CSV_PATH = os.getenv("LOCUST_SESSION_CSV", "locust_sessions.csv")
+_session_csv_lock = threading.Lock()
+_session_csv_header_written = False
+
+
+def _write_session_row(row: dict[str, Any]) -> None:
+    """Append one per-session row to the CSV, writing the header once."""
+    global _session_csv_header_written
+    fields = [
+        "session_id", "language", "mode",
+        "first_partial", "final_transcript", "first_sse_event", "total_sec",
+    ]
+    with _session_csv_lock:
+        write_header = not _session_csv_header_written
+        with open(_SESSION_CSV_PATH, "a", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fields)
+            if write_header:
+                writer.writeheader()
+                _session_csv_header_written = True
+            writer.writerow({k: row.get(k, "") for k in fields})
+
+
+# ── Synthetic WAV (A5.1.1) ─────────────────────────────────────────────────
+def _synthetic_wav_bytes(seconds: float, sample_rate: int = 16000) -> bytes:
+    """Return a synthetic 16-bit mono WAV tone (no speech, no PHI)."""
+    frames = int(seconds * sample_rate)
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        samples = b"".join(
+            struct.pack("<h", int(3000 * math.sin(2 * math.pi * 440 * i / sample_rate)))
+            for i in range(frames)
+        )
+        wav.writeframes(samples)
+    return buf.getvalue()
+
+
+def _wav_to_pcm_chunks(wav_bytes: bytes, chunk_ms: int = 100) -> tuple[list[bytes], int]:
+    """Decode a WAV into float32 little-endian PCM chunks and its sample rate."""
+    with wave.open(io.BytesIO(wav_bytes), "rb") as wav:
+        sample_rate = wav.getframerate()
+        n_channels = wav.getnchannels()
+        sampwidth = wav.getsampwidth()
+        raw = wav.readframes(wav.getnframes())
+
+    # Convert to mono float32.
+    if sampwidth == 2:
+        import array
+        ints = array.array("h")
+        ints.frombytes(raw)
+        if n_channels > 1:
+            ints = array.array("h", ints[0::n_channels])
+        floats = [s / 32768.0 for s in ints]
+    else:
+        floats = [0.0] * (len(raw) // max(1, sampwidth))
+
+    samples_per_chunk = max(1, int(sample_rate * chunk_ms / 1000))
+    chunks: list[bytes] = []
+    for start in range(0, len(floats), samples_per_chunk):
+        piece = floats[start:start + samples_per_chunk]
+        chunks.append(struct.pack(f"<{len(piece)}f", *piece))
+    return chunks, sample_rate
 
 
 @events.quitting.add_listener
@@ -429,3 +504,130 @@ class MedVoiceAnalyzeUser(HttpUser):
                     response.failure(failure_reason)
                 else:
                     response.success()
+
+    @task
+    def stream_wav_and_analyze(self) -> None:
+        """A5.1.1/A5.2.1: stream a synthetic WAV over the WebSocket in real
+        time, then read SSE until "done", and write one per-session CSV row.
+
+        The WAV is a synthetic tone (or an approved file via LOCUST_WAV_FILE);
+        never PHI. Runs for both languages.
+        """
+        language = self.language_override or random.choices(
+            self.language_names, weights=self.language_weights, k=1
+        )[0]
+        mode = self.mode_override or random.choices(
+            self.mode_names, weights=self.mode_weights, k=1
+        )[0]
+        session_id = f"locust-{uuid4().hex}"
+
+        wav_path = os.getenv("LOCUST_WAV_FILE", "").strip()
+        if wav_path and os.path.exists(wav_path):
+            with open(wav_path, "rb") as fh:
+                wav_bytes = fh.read()
+        else:
+            wav_bytes = _synthetic_wav_bytes(
+                float(os.getenv("LOCUST_WAV_SECONDS", "3")),
+                int(os.getenv("LOCUST_WAV_SAMPLE_RATE", "16000")),
+            )
+        chunks, sample_rate = _wav_to_pcm_chunks(
+            wav_bytes, int(os.getenv("LOCUST_WAV_CHUNK_MS", "100"))
+        )
+
+        ws_url = self.host.replace("http://", "ws://").replace("https://", "wss://")
+        ws_url = ws_url.rstrip("/") + "/ws/transcribe"
+
+        first_partial = ""
+        final_transcript = ""
+        first_sse_event = ""
+        started = time.perf_counter()
+        failure_reason: str | None = None
+
+        try:
+            import websocket  # websocket-client
+
+            ws = websocket.create_connection(
+                ws_url, timeout=float(os.getenv("LOCUST_WS_TIMEOUT", "60"))
+            )
+            try:
+                ws.send(json.dumps({"sampleRate": sample_rate, "language": language}))
+                chunk_interval = float(os.getenv("LOCUST_WAV_CHUNK_MS", "100")) / 1000.0
+                for chunk in chunks:
+                    ws.send_binary(chunk)
+                    time.sleep(chunk_interval)  # real-time pacing
+                ws.send(json.dumps({"cmd": "done"}))
+
+                while True:
+                    message = ws.recv()
+                    if not message:
+                        break
+                    try:
+                        payload = json.loads(message)
+                    except Exception:
+                        continue
+                    mtype = payload.get("type")
+                    if mtype == "interim" and not first_partial:
+                        first_partial = payload.get("text", "")
+                    elif mtype == "delta":
+                        final_transcript += payload.get("text", "")
+                    elif mtype == "done":
+                        break
+                    elif mtype == "error":
+                        failure_reason = "WS error event"
+                        break
+            finally:
+                try:
+                    ws.close()
+                except Exception:
+                    pass
+        except Exception as exc:
+            failure_reason = _failure_category(exc)
+
+        # The analyze SSE contract has no generic "done" event; consume until
+        # the response closes so diagnosis/validation are included in the run.
+        saw_extraction = False
+        try:
+            with self.client.post(
+                self.analyze_path,
+                data={
+                    "text": final_transcript or SYNTHETIC_TRANSCRIPTS[language]["short"],
+                    "language": language,
+                    "mode": mode,
+                    "department": self.department,
+                    "use_history": "false",
+                    "session_id": session_id,
+                    "clinician_name": "locust-load-test",
+                },
+                name="POST /audio/analyze (ws-session)",
+                stream=True,
+                timeout=self.analyze_timeout,
+                catch_response=True,
+            ) as response:
+                if response.status_code != 200:
+                    failure_reason = failure_reason or f"HTTP {response.status_code}"
+                else:
+                    for raw_line in response.iter_lines(decode_unicode=False):
+                        line = (raw_line or b"").decode("utf-8", errors="replace").strip()
+                        if line.startswith("event:"):
+                            name = line.removeprefix("event:").strip()
+                            if not first_sse_event:
+                                first_sse_event = name
+                            if name == "extraction":
+                                saw_extraction = True
+                    if not saw_extraction:
+                        failure_reason = failure_reason or "SSE stream ended without extraction"
+                response.success() if not failure_reason else response.failure(failure_reason)
+        except Exception as exc:
+            failure_reason = failure_reason or _failure_category(exc)
+
+        total_sec = round(time.perf_counter() - started, 3)
+        _write_session_row({
+            "session_id": session_id,
+            "language": language,
+            "mode": mode,
+            "first_partial": first_partial,
+            "final_transcript": final_transcript,
+            "first_sse_event": first_sse_event,
+            "total_sec": total_sec,
+        })
+        _fire_sse_metric(self.environment, "WS session total", total_sec * 1000)

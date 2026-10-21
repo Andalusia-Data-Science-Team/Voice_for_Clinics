@@ -1,3 +1,17 @@
+# A4.2 / A4.3 — shared deploy template for dev, staging and production.
+#
+# Deploys the same Docker Compose stack that developers run locally
+# (docker-compose.yml). Only the environment name, variable group and image tag
+# differ between environments.
+#
+# The target server must already have:
+#   - Docker Engine + the Compose v2 plugin (`docker compose`)
+#   - the project checkout (docker-compose.yml) at $(MEDVOICE_COMPOSE_DIR)
+#   - the environment file at $(MEDVOICE_ENV_FILE) — pre-provisioned, never
+#     created, copied or printed by this pipeline
+#
+# Placeholders that cannot be known from the repository:
+#   <PLACEHOLDER_REGISTRY_REPOSITORY>  registry/repository for the image
 parameters:
   - name: environmentName
     type: string
@@ -21,36 +35,61 @@ jobs:
             - checkout: none
             - bash: |
                 set -euo pipefail
+
                 image='<PLACEHOLDER_REGISTRY_REPOSITORY>:${{ parameters.imageTag }}'
-                container='medvoice'
                 env_file='${{ parameters.envFilePath }}'
+                compose_dir='$(MEDVOICE_COMPOSE_DIR)'
+                project='medvoice'
+                app_container='medvoice-app'
+
                 # The target env file must already exist. Never create or print it.
                 test -r "$env_file"
-                previous_image="$(docker inspect --format '{{.Config.Image}}' "$container" 2>/dev/null || true)"
-                docker pull "$image"
-                docker rm -f "$container" 2>/dev/null || true
-                docker run --detach --name "$container" --env-file "$env_file" --publish '<PLACEHOLDER_HOST_PORT>:7777' "$image"
-                # Liveness first (dependency-free), then the dependency health
-                # probe. Only Foundry is a hard dependency: /health returns 200
-                # for "ok" and "degraded" (a down Munsit/Voxtral) and 503 only
-                # when Foundry is unreachable or its key/token is rejected.
-                live_url='${{ parameters.smokeTestBaseUrl }}/health/live'
-                health_url='${{ parameters.smokeTestBaseUrl }}/health'
+                test -f "$compose_dir/docker-compose.yml"
+
+                cd "$compose_dir"
+
+                # Record the image the stack is running right now so we can roll
+                # back to it if the smoke test fails.
+                previous_image="$(docker inspect --format '{{.Config.Image}}' "$app_container" 2>/dev/null || true)"
+                echo "Previous image: ${previous_image:-<none>}"
+
+                # Pull the new tag, then bring the stack up with the server's
+                # existing env file. --no-build guarantees the server never
+                # builds; it only runs the pulled image.
+                export MEDVOICE_IMAGE="$image"
+                export MEDVOICE_ENV_FILE="$env_file"
+
+                docker compose -p "$project" pull medvoice-app
+                docker compose -p "$project" up -d --no-build
+
+                # Wait for the compose healthcheck (liveness only) to report
+                # healthy. An STT outage must not fail a deploy, so the
+                # dependency probe below accepts "ok" or "degraded".
                 healthy=false
-                for attempt in $(seq 1 10); do
-                  if curl --fail --silent --show-error "$live_url" | grep -q '"status":"alive"' \
-                     && curl --fail --silent --show-error "$health_url" | grep -Eq '"status":"(ok|degraded)"'; then
-                    healthy=true; break
-                  fi
+                for attempt in $(seq 1 24); do
+                  state="$(docker inspect --format '{{.State.Health.Status}}' "$app_container" 2>/dev/null || echo unknown)"
+                  if [ "$state" = "healthy" ]; then healthy=true; break; fi
                   sleep 5
                 done
-                if [ "$healthy" != true ]; then
+
+                live_url='${{ parameters.smokeTestBaseUrl }}/health/live'
+                health_url='${{ parameters.smokeTestBaseUrl }}/health'
+                smoke=false
+                if [ "$healthy" = true ] \
+                   && curl --fail --silent --show-error "$live_url" | grep -q '"status":"alive"' \
+                   && curl --fail --silent --show-error "$health_url" | grep -Eq '"status":"(ok|degraded)"'; then
+                  smoke=true
+                fi
+
+                if [ "$smoke" != true ]; then
                   echo 'Smoke test failed; restoring the previously running image.' >&2
-                  docker rm -f "$container" 2>/dev/null || true
                   if [ -n "$previous_image" ]; then
-                    docker pull "$previous_image"
-                    docker run --detach --name "$container" --env-file "$env_file" --publish '<PLACEHOLDER_HOST_PORT>:7777' "$previous_image"
+                    export MEDVOICE_IMAGE="$previous_image"
+                    docker compose -p "$project" pull medvoice-app || true
+                    docker compose -p "$project" up -d --no-build
                   fi
                   exit 1
                 fi
-              displayName: Pull, deploy, smoke test, and roll back on failure
+
+                echo "Deploy of $image succeeded and passed the smoke test."
+              displayName: Pull, deploy with Compose, smoke test, and roll back on failure

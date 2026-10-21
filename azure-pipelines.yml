@@ -32,11 +32,17 @@ stages:
           - script: python -m ruff check src tests --select E9,F63,F7,F82
             displayName: Lint runtime-breaking errors
           - script: |
-              env -i PATH="$PATH" HOME="$HOME" LLM_PROVIDER=foundry AI_FOUNDRY_ENDPOINT=https://dummy-foundry.invalid/openai/v1 AI_FOUNDRY_KEY=dummy-ci-key AI_FOUNDRY_API_VERSION=2025-01-01-preview python -m pytest --ignore=tests/test_m1_verification.py -k concurrency -v --junitxml=$(Common.TestResultsDirectory)/concurrency.xml
-            displayName: Run concurrency tests with dummy configuration
+              env -i PATH="$PATH" HOME="$HOME" PYTHON_DOTENV_DISABLED=1 LLM_PROVIDER=foundry AI_FOUNDRY_ENDPOINT=https://dummy-foundry.invalid/openai/v1 AI_FOUNDRY_KEY=dummy-ci-key AI_FOUNDRY_API_VERSION=2025-01-01-preview python -m pytest --ignore=tests/test_m1_verification.py -k concurrency -v --junitxml=$(Common.TestResultsDirectory)/concurrency-foundry.xml
+            displayName: Concurrency tests (LLM_PROVIDER=foundry)
           - script: |
-              env -i PATH="$PATH" HOME="$HOME" LLM_PROVIDER=foundry AI_FOUNDRY_ENDPOINT=https://dummy-foundry.invalid/openai/v1 AI_FOUNDRY_KEY=dummy-ci-key AI_FOUNDRY_API_VERSION=2025-01-01-preview python -m pytest --ignore=tests/test_m1_verification.py -v --junitxml=$(Common.TestResultsDirectory)/full.xml
-            displayName: Run full suite with dummy configuration
+              env -i PATH="$PATH" HOME="$HOME" PYTHON_DOTENV_DISABLED=1 LLM_PROVIDER=foundry AI_FOUNDRY_ENDPOINT=https://dummy-foundry.invalid/openai/v1 AI_FOUNDRY_KEY=dummy-ci-key AI_FOUNDRY_API_VERSION=2025-01-01-preview python -m pytest --ignore=tests/test_m1_verification.py -v --junitxml=$(Common.TestResultsDirectory)/full-foundry.xml
+            displayName: Full suite (LLM_PROVIDER=foundry)
+          - script: |
+              env -i PATH="$PATH" HOME="$HOME" PYTHON_DOTENV_DISABLED=1 LLM_PROVIDER=openrouter OPENROUTER_API_KEY=dummy-ci-key python -m pytest --ignore=tests/test_m1_verification.py -v --junitxml=$(Common.TestResultsDirectory)/full-openrouter.xml
+            displayName: Full suite (LLM_PROVIDER=openrouter)
+          - script: |
+              env -i PATH="$PATH" HOME="$HOME" PYTHON_DOTENV_DISABLED=1 python -m pytest --ignore=tests/test_m1_verification.py -v --junitxml=$(Common.TestResultsDirectory)/full-default.xml
+            displayName: Full suite (LLM_PROVIDER unset — default)
           - task: PublishTestResults@2
             condition: always()
             inputs:
@@ -66,6 +72,8 @@ stages:
     condition: succeeded()
     variables:
       - group: '<PLACEHOLDER_DEV_VARIABLE_GROUP>'
+      - name: MEDVOICE_COMPOSE_DIR
+        value: '<PLACEHOLDER_DEV_COMPOSE_DIR>'
     jobs:
       - template: pipelines/deploy-template.yml
         parameters:
@@ -79,6 +87,8 @@ stages:
     condition: and(succeeded(), ${{ eq(parameters.deployStaging, true) }})
     variables:
       - group: '<PLACEHOLDER_STAGING_VARIABLE_GROUP>'
+      - name: MEDVOICE_COMPOSE_DIR
+        value: '<PLACEHOLDER_STAGING_COMPOSE_DIR>'
     jobs:
       - template: pipelines/deploy-template.yml
         parameters:
@@ -93,6 +103,8 @@ stages:
     # Configure approval checks on the Azure DevOps production Environment in the UI.
     variables:
       - group: '<PLACEHOLDER_PRODUCTION_VARIABLE_GROUP>'
+      - name: MEDVOICE_COMPOSE_DIR
+        value: '<PLACEHOLDER_PRODUCTION_COMPOSE_DIR>'
     jobs:
       - template: pipelines/deploy-template.yml
         parameters:

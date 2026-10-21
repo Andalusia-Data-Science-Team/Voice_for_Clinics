@@ -429,3 +429,82 @@ source. No teammate source file is modified except the three documented one-line
 - Provider: set `LLM_PROVIDER=openrouter` (rollback path preserved and tested).
 - Routing: `ROUTER_ENABLED=false` (default) → deterministic Luna reasoning.
 - Full source rollback: restore from `/home/ai/Workspace/MedVoice_backup_20261020_135345`.
+
+---
+
+# Finishing pass — Docker Compose, CI/CD, final verification (2026-10-21)
+
+## 8.0 Safety
+
+- Fresh backup (excludes `.venv`): `/home/ai/Workspace/MedVoice_backup_20261021_163647` (354M).
+- Manifest (relative path, size, sha256; excludes `.venv`, `__pycache__`, logs, env files):
+  `/home/ai/Workspace/MedVoice_manifest_20261021_163809.txt` (374 files).
+- Env-file hygiene: `src/.env.bak.20261021_123159` was inside the project; moved to
+  `<backup>/_env_backups/src.env.bak.20261021_123159`. `.gitignore` and `.dockerignore`
+  both already cover `.env*` by pattern. `foundry-probe/.env` is an active subproject
+  config (not a backup copy) and is already ignored; left in place.
+- Baseline tests: 396 passed, 2 skipped.
+
+## 8.1 How the app runs (evidence)
+
+- Start: `python app.py` → `uvicorn.run("app:app", host="0.0.0.0", port=7777)` (`src/app.py:1438`).
+- Working dir: `src`. Python 3.11 (`requires-python = ">=3.11"`).
+- MongoDB via Motor (`src/db/connection.py:29`), env `MONGODB_URI` (default `mongodb://localhost:27017`).
+- Redis/Celery: only Key Vault secret names in `src/core/azure_identity.py`; nothing launches them.
+- SQL Server via pyodbc for patient history (`src/model/patient_history.py`), driver `{ODBC Driver 17 for SQL Server}`.
+- STT: Munsit `wss://api.munsit.com/api/v1/listen` and Voxtral (Mistral realtime).
+- Writable paths: `UPLOAD_FOLDER` (default `uploads`), `src/logs/usage.jsonl`, `src/logs/feedback.jsonl` (PHI).
+- System packages: ffmpeg, libsndfile1, unixODBC + msodbcsql17.
+
+## 8.2 Docker Compose
+
+- `Dockerfile`: added `libsndfile1`; kept Python 3.11, non-root `appuser`, `EXPOSE 7777`, `CMD ["python","app.py"]`.
+- `docker-compose.yml`: services `medvoice-app` and `medvoice-mongo`; project name `medvoice`;
+  app publishes `7777:7777`; `env_file: ${MEDVOICE_ENV_FILE:-src/.env}`; `image: ${MEDVOICE_IMAGE:-medvoice-medvoice}`;
+  volumes `./src/uploads` and `./src/logs`; healthcheck = `GET /health/live` (liveness only).
+- Mongo is **not** published to the host (27017 is taken by an unrelated container); the app
+  reaches it over the compose network at `mongodb://medvoice-mongo:27017` via the compose
+  `environment` override. Named volume `mongo_data`.
+- Packaging defect fixed: `openpyxl` was imported at startup (`evaluation/__init__.py`) but
+  declared nowhere; added to `src/requirements.txt` and `pyproject.toml`.
+- Build: succeeded (background + log polling). Image `medvoice-medvoice`.
+- Stack: `docker compose up -d` → both healthy. Endpoints verified: `/health/live` 200,
+  `/health` 200 (`status: ok`), `/models` 200 (Luna + Sol only), `/` 200 (UI).
+- Live checks (synthetic only): EN doctor ER, EN conversation OPD, AR doctor, AR conversation,
+  `POST /audio/refine-field`, `POST /feedback` — all HTTP 200 with correct SSE event order.
+- Logs: no transcript text, no secrets. `usage.jsonl` stores `transcript_hash`, not raw text;
+  `phi_safe=true`. MongoDB persisted sessions and feedback (no "requires authentication").
+- Restart and down/up cycles verified; data persisted (5 sessions). Stack left running healthy.
+
+## 8.3 CI/CD
+
+- `azure-pipelines.yml`: CI now runs the concurrency and full suites in a clean env
+  (`env -i`, `PYTHON_DOTENV_DISABLED=1`) for three provider configs (unset, openrouter, foundry);
+  BuildPush unchanged; deploy stages add `MEDVOICE_COMPOSE_DIR`.
+- `pipelines/deploy-template.yml`: rewritten to deploy the same `docker-compose.yml` on the
+  target server — pull tag, record previous image, `docker compose up -d --no-build` with the
+  server env file, wait for the compose healthcheck, smoke test `/health/live` + `/health`
+  (accepts `ok`/`degraded`), roll back to the previous image on failure.
+- YAML validated (all three files parse). CI simulated locally: compileall OK (ruff unavailable),
+  concurrency 28 passed, full suite 396 passed / 2 skipped in all three configs.
+- Docs updated: `docs/cicd.md` and `docs/MANUAL_STEPS_AR.md` (new "تشغيل المشروع بالدوكر كومبوس" section).
+
+## 8.4 Tests
+
+- Full suite (only M1 ignored, after installing `mongomock-motor`): **415 passed, 2 skipped**.
+- The three `mongomock_motor` tests: 19 passed (PyPI was reachable this time).
+- M1 verification script: 5/6 PASS; M1.1 #2 (VNet isolation) is an infrastructure item (FAIL/OPEN).
+- Smoke script (`scripts/smoke_test_deployments.py`) completed: 7/9 roles PASS, 0 content-filter
+  blocks. Two FAILs are harness issues, not deployment outages:
+  - extraction/Luna: profile omits `response_format` → free-form prose, script expects JSON.
+  - router: script sends `json_object` without the word "json" in the message → HTTP 400.
+  Details recorded in `docs/foundry_models.md`.
+
+## 8.5 Open decisions (not changed)
+
+- Retry on connection errors; 429 in the circuit breaker.
+- `LLM_TOTAL_TIMEOUT_S=300`.
+- MongoDB credentials (local compose uses an unauthenticated dev Mongo; production needs auth).
+- Clinical Lead sign-off on `src/prompts/routing_criteria.txt`.
+- Data residency (all deployments Global Standard).
+- Provider-abstraction overlap between `src/providers` and the foundry branch in `src/llm/runtime.py`.

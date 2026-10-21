@@ -43,6 +43,7 @@ dependencies = [
     "tenacity>=8.2",
     "motor>=3.3.0",
     "pymongo>=4.6.0",
+    "openpyxl==3.1.5",
 ]
 
 [project.optional-dependencies]

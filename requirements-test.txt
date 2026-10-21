@@ -1,0 +1,5 @@
+# Test-only dependencies; application dependencies remain in src/requirements.txt.
+pytest==8.3.4
+pytest-asyncio>=0.24
+mongomock-motor>=0.0.30
+openpyxl

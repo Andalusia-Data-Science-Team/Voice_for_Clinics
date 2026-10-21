@@ -26,6 +26,20 @@ class Config:
     LLM_PROVIDER = os.getenv("LLM_PROVIDER", "foundry").lower()
     STT_PROVIDER = os.getenv("STT_PROVIDER", "munsit").lower()
 
+    # ── Private STT endpoint (Phase 3, VNet-secured) ──────────────────────────
+    # When set, Munsit traffic is routed through the private endpoint instead of
+    # the public wss://api.munsit.com host. Unset means "use the public host".
+    PRIVATE_STT_ENDPOINT = os.getenv("PRIVATE_STT_ENDPOINT")
+    PRIVATE_STT_KEY = os.getenv("PRIVATE_STT_KEY")
+
+    @classmethod
+    def private_stt_endpoint(cls) -> Optional[str]:
+        return os.getenv("PRIVATE_STT_ENDPOINT") or cls.PRIVATE_STT_ENDPOINT
+
+    @classmethod
+    def private_stt_key(cls) -> Optional[str]:
+        return os.getenv("PRIVATE_STT_KEY") or cls.PRIVATE_STT_KEY
+
     # ── Azure AI Foundry settings ─────────────────────────────────────────────
     AI_FOUNDRY_ENDPOINT = (
         os.getenv("AI_FOUNDRY_ENDPOINT")
@@ -197,6 +211,21 @@ class Config:
     PATIENT_DB_UID = os.getenv("PATIENT_DB_UID")
     PATIENT_DB_PWD = os.getenv("PATIENT_DB_PWD")
     PATIENT_DB_DRIVER = os.getenv("PATIENT_DB_DRIVER", "{ODBC Driver 17 for SQL Server}")
+    # When true, connect to HCMS with the workload's Managed Identity instead of
+    # classic UID/PWD (see model/patient_history.py). Defaults to false.
+    USE_MANAGED_IDENTITY_SQL = os.getenv("USE_MANAGED_IDENTITY_SQL", "false").lower() == "true"
+
+    @classmethod
+    def patient_db_uid(cls) -> Optional[str]:
+        return os.getenv("PATIENT_DB_UID") or cls.PATIENT_DB_UID
+
+    @classmethod
+    def patient_db_pwd(cls) -> Optional[str]:
+        return os.getenv("PATIENT_DB_PWD") or cls.PATIENT_DB_PWD
+
+    @classmethod
+    def use_managed_identity_sql(cls) -> bool:
+        return os.getenv("USE_MANAGED_IDENTITY_SQL", str(cls.USE_MANAGED_IDENTITY_SQL)).lower() == "true"
 
     # ── Financial & ROI Observability Rates (M7 Phase 2) ─────────────────────
     # LLM pricing per 1M tokens in USD (DeepSeek-V3 / Azure AI Foundry rates)
