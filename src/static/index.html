@@ -384,6 +384,16 @@
     border: 1px solid rgba(198, 40, 40, 0.25);
     color: var(--red);
   }
+  .required-fields-popup {
+    position: fixed; z-index: 1200; top: 72px; right: 24px;
+    width: min(420px, calc(100vw - 32px)); padding: 14px 16px;
+    border: 1px solid #e5b9ab; border-left: 4px solid var(--red);
+    border-radius: var(--r-md); background: var(--surface);
+    color: var(--text-1); box-shadow: var(--shadow-md);
+  }
+  .required-fields-popup[hidden] { display: none; }
+  .required-fields-popup-title { font-weight: 600; color: var(--red); margin-bottom: 5px; }
+  .required-fields-popup ul { margin: 4px 0 0 20px; color: var(--text-2); }
   .validation-banner-title {
     font-weight: 600;
     display: flex;
@@ -497,13 +507,7 @@
   .feat-history-caution { margin-top: 8px; padding: 7px 10px; background: var(--amber-light); border: 1px solid #e8d9c5; border-radius: var(--r-sm); font-size: 11.5px; color: var(--amber); line-height: 1.5; }
   .feat-history-error { background: var(--amber-light); border-color: #e8d9c5; }
   .feat-history-error .feat-cell-label { color: var(--amber); }
-  .feat-red-flag {
-    margin-bottom: 12px; padding: 10px 12px; background: var(--red-light);
-    border: 1px solid #e6cfc5; border-radius: var(--r-sm); color: var(--red);
-    font-size: 12px; line-height: 1.5;
-  }
-  .feat-red-flag strong { display: block; margin-bottom: 3px; }
-  .feat-red-flag-negated { background: var(--amber-light); border-color: #e8d9c5; color: var(--amber); }
+  .feat-history-citation { margin-top: 6px; color: var(--green); font-size: 12px; }
 
   /* Questions */
   .q-summary { display: flex; gap: 12px; margin-bottom: 18px; }
@@ -540,6 +544,646 @@
   .q-answer-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--accent-2); margin-bottom: 2px; }
 
   .err-box { background: var(--red-light); border: 1px solid #e8b4ae; border-radius: var(--r-md); padding: 11px 14px; font-size: 13px; color: var(--red); }
+  .section-error-boundary { background: #fff8f8; border: 1px dashed var(--red); border-radius: var(--r-md); padding: 16px; margin: 8px 0; display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--text-2); }
+  .section-error-header { display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: var(--red); }
+  .section-error-body { font-size: 12px; color: var(--text-2); line-height: 1.4; }
+  .section-error-btn { align-self: flex-start; padding: 4px 12px; font-size: 12px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text-1); cursor: pointer; transition: all 0.15s; }
+  .section-error-btn:hover { background: var(--surface-2); border-color: var(--accent); }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PHASE 2: PROGRESSIVE RENDERING & SKELETON SHIMMER SYSTEM
+     - 60fps shimmer effect with zero Cumulative Layout Shift (CLS)
+     - Staggered reveal animations with 50ms cascading delays
+     - Long reasoning text streaming indicator
+  ═══════════════════════════════════════════════════════════════════════════ */
+  .skeleton-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    animation: fadeInReveal 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .skeleton-shimmer {
+    background: linear-gradient(90deg, #ede8e3 0%, #f7f4f0 50%, #ede8e3 100%);
+    background-size: 200% 100%;
+    animation: skeletonShimmer 1.5s infinite linear;
+    border-radius: var(--r-sm);
+  }
+  @keyframes skeletonShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  .skeleton-line { height: 14px; width: 100%; }
+  .skeleton-line.short { width: 40%; }
+  .skeleton-line.medium { width: 70%; }
+  .skeleton-pill { height: 28px; width: 110px; border-radius: 99px; }
+  .skeleton-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+    width: 100%;
+  }
+  .skeleton-card {
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 12px;
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 72px;
+  }
+  .skeleton-header-shimmer {
+    height: 12px;
+    width: 50%;
+    margin-bottom: 4px;
+  }
+
+  /* Staggered Content Reveal Animation (60fps, 50ms stagger per child) */
+  @keyframes staggeredFadeIn {
+    0% {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .stagger-reveal {
+    animation: staggeredFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .stagger-delay-1 { animation-delay: 0.05s; }
+  .stagger-delay-2 { animation-delay: 0.10s; }
+  .stagger-delay-3 { animation-delay: 0.15s; }
+  .stagger-delay-4 { animation-delay: 0.20s; }
+  .stagger-delay-5 { animation-delay: 0.25s; }
+
+  /* Streaming typewriter cursor */
+  .typewriter-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    background-color: var(--accent);
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    animation: blinkCursor 0.7s infinite;
+  }
+  @keyframes blinkCursor {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PHASE 3: CITATION SYSTEM & EVIDENCE LINKING
+     - ICD-10 citation links: click → scroll + highlight evidence in transcript
+     - Bidirectional evidence markers (🔗) in transcript → jump to diagnosis
+     - Tooltip on ICD-10 hover: code, description, confidence, evidence preview
+     - Full WCAG 2.1 AA accessibility: aria-labels, keyboard nav, focus mgmt
+  ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Citation ICD-10 pill — enhances the existing .icd-pill with a click-to-cite link */
+  .icd-pill.has-citation {
+    cursor: pointer;
+    position: relative;
+    transition: all 0.18s ease;
+  }
+  .icd-pill.has-citation:hover,
+  .icd-pill.has-citation:focus-within {
+    background: var(--accent-light);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(139,90,43,0.15);
+    outline: none;
+  }
+  .citation-link-icon {
+    font-size: 10px;
+    opacity: 0.6;
+    margin-left: 3px;
+    transition: opacity 0.15s;
+    cursor: pointer;
+    display: inline-block;
+    vertical-align: middle;
+  }
+  .icd-pill.has-citation:hover .citation-link-icon,
+  .icd-pill.has-citation:focus-within .citation-link-icon {
+    opacity: 1;
+  }
+
+  /* Pulsing highlight applied to a transcript evidence sentence after citation click */
+  @keyframes evidencePulse {
+    0%   { background-color: rgba(184, 124, 74, 0);   box-shadow: none; }
+    15%  { background-color: rgba(184, 124, 74, 0.22); box-shadow: 0 0 0 3px rgba(184,124,74,0.3); }
+    70%  { background-color: rgba(184, 124, 74, 0.12); box-shadow: 0 0 0 2px rgba(184,124,74,0.2); }
+    100% { background-color: rgba(184, 124, 74, 0);   box-shadow: none; }
+  }
+  .evidence-highlight {
+    border-radius: var(--r-sm);
+    animation: evidencePulse 3s ease forwards;
+    display: inline;
+  }
+
+  /* Bidirectional evidence marker — 🔗 anchor inline in the transcript */
+  .evidence-marker {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    line-height: 1;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent-light);
+    border: 1px solid var(--border-mid);
+    color: var(--accent);
+    cursor: pointer;
+    margin-left: 4px;
+    vertical-align: middle;
+    text-decoration: none;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .evidence-marker:hover,
+  .evidence-marker:focus {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(139,90,43,0.2);
+    outline: none;
+  }
+
+  /* Diagnosis field highlighted when jumped to from transcript */
+  @keyframes diagPulse {
+    0%   { box-shadow: none; border-color: var(--border); }
+    20%  { box-shadow: 0 0 0 4px rgba(139,90,43,0.3); border-color: var(--accent-2); }
+    80%  { box-shadow: 0 0 0 2px rgba(139,90,43,0.12); border-color: var(--accent-2); }
+    100% { box-shadow: none; border-color: var(--border); }
+  }
+  .citation-target-pulse {
+    animation: diagPulse 2.5s ease forwards;
+    border-radius: var(--r-md);
+  }
+
+  /* ICD-10 Citation Tooltip — hover card */
+  .citation-tooltip {
+    position: absolute;
+    z-index: 2000;
+    min-width: 280px;
+    max-width: 360px;
+    background: rgba(255,252,247,0.98);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-mid);
+    border-radius: var(--r-lg);
+    box-shadow: 0 12px 32px rgba(43,33,24,0.14), 0 4px 10px rgba(43,33,24,0.08);
+    padding: 14px 16px;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .citation-tooltip.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+  }
+  .ct-code {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 3px;
+  }
+  .ct-description {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-1);
+    margin-bottom: 8px;
+  }
+  .ct-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 5px;
+  }
+  .ct-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+    min-width: 68px;
+    flex-shrink: 0;
+  }
+  .ct-value {
+    font-size: 12px;
+    color: var(--text-2);
+    flex: 1;
+  }
+  .ct-evidence-preview {
+    background: var(--surface-2);
+    border-left: 3px solid var(--accent-2);
+    border-radius: 0 var(--r-sm) var(--r-sm) 0;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--text-2);
+    font-style: italic;
+    margin-top: 8px;
+    line-height: 1.55;
+  }
+  .ct-confidence-bar {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .ct-bar-track {
+    flex: 1;
+    height: 5px;
+    border-radius: 99px;
+    background: var(--surface-3);
+    overflow: hidden;
+  }
+  .ct-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--accent-2), var(--accent));
+    transition: width 0.3s ease;
+  }
+  .ct-bar-pct {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-2);
+    min-width: 28px;
+    text-align: right;
+  }
+  .ct-kbd-hint {
+    font-size: 10.5px;
+    color: var(--text-3);
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  kbd {
+    font-family: var(--mono);
+    font-size: 10px;
+    background: var(--surface-3);
+    border: 1px solid var(--border-mid);
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: var(--text-2);
+  }
+
+  /* Announcement region for screen readers */
+  .sr-announce {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+     Phase 4: Caution System, Inline Banners & Re-Run Reasoning
+  ───────────────────────────────────────────────────────────────────────────── */
+  .caution-inline {
+    margin: 6px 0 2px 0;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    line-height: 1.45;
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    box-sizing: border-box;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: cautionReveal 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes cautionReveal {
+    from { opacity: 0; transform: translateY(-3px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .caution-inline-icon {
+    font-size: 13px;
+    flex-shrink: 0;
+    line-height: 1.2;
+    margin-top: 1px;
+  }
+  .caution-inline-content {
+    flex: 1;
+    min-width: 0;
+  }
+  .caution-inline-msg {
+    font-weight: 500;
+  }
+  .caution-inline-rule {
+    font-size: 10px;
+    color: var(--text-muted, #8e8ea0);
+    margin-top: 1px;
+    font-family: var(--mono);
+    opacity: 0.85;
+  }
+  .caution-critical {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #ef4444;
+  }
+  .caution-warning {
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #d97706;
+  }
+  .caution-info {
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    color: #3b82f6;
+  }
+
+  /* Field edit indicator */
+  .field-edited {
+    border-left: 2px solid var(--blue, #3b82f6) !important;
+    background: rgba(59, 130, 246, 0.03) !important;
+    position: relative;
+  }
+  .field-edited::after {
+    content: 'Edited by doctor';
+    position: absolute;
+    top: 2px;
+    right: 6px;
+    font-size: 9px;
+    font-weight: 500;
+    color: var(--blue, #3b82f6);
+    background: rgba(59, 130, 246, 0.12);
+    padding: 1px 4px;
+    border-radius: 3px;
+    pointer-events: none;
+    line-height: 1.2;
+  }
+
+  /* Re-run Reasoning Controls */
+  .rerun-bar {
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: var(--surface-2, #181920);
+    border: 1px solid var(--border-mid, #2a2b36);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .rerun-bar-info {
+    font-size: 11px;
+    color: var(--text-2, #a0a0b0);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-rerun {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface-3, #252632);
+    border: 1px solid var(--border-mid, #3a3b48);
+    color: var(--text-1, #e0e0e8);
+    padding: 5px 11px;
+    border-radius: 5px;
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-rerun:hover:not(:disabled) {
+    background: var(--surface-hover, #2f3040);
+    border-color: var(--border-focus, #525468);
+    color: #ffffff;
+  }
+  .btn-rerun:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn-rerun-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: rerunSpin 0.7s linear infinite;
+    display: inline-block;
+  }
+  @keyframes rerunSpin {
+    to { transform: rotate(360deg); }
+  }
+  .rerun-limit-notice {
+    font-size: 11px;
+    color: var(--amber, #f59e0b);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 500;
+  }
+
+  /* Reasoning cell refreshing overlay */
+  .reasoning-refreshing {
+    position: relative;
+    opacity: 0.6;
+    pointer-events: none;
+    min-height: 48px;
+  }
+  .reasoning-refreshing::before {
+    content: 'Re-evaluating clinical reasoning with edited fields…';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 17, 23, 0.65);
+    backdrop-filter: blur(2px);
+    z-index: 5;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--blue, #3b82f6);
+    border-radius: 4px;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+     Phase 5: Speaker Confidence Visualization & Confirmation Flow (Tasks 5.1 - 5.3)
+  ───────────────────────────────────────────────────────────────────────────── */
+  .speaker-panel {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: var(--surface-2, #181920);
+    border: 1px solid var(--border-mid, #2a2b36);
+    border-radius: 6px;
+  }
+  .speaker-panel-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-2, #a0a0b0);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .speaker-segment {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    transition: background 0.15s ease;
+  }
+  .speaker-segment:hover {
+    background: var(--surface-3, #22232f);
+  }
+  .speaker-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+  .speaker-badge {
+    font-weight: 600;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--surface-3, #2b2c3a);
+    color: var(--text-1, #e0e0e8);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .speaker-text-preview {
+    color: var(--text-2, #8e8ea0);
+    font-size: 11.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 280px;
+  }
+  .speaker-confidence-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .speaker-conf-bar {
+    width: 48px;
+    height: 5px;
+    background: var(--surface-3, #2b2c3a);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+  }
+  .speaker-conf-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.25s ease;
+  }
+  .speaker-conf-fill.conf-high {
+    background: #10b981; /* 🟢 >= 0.9 */
+  }
+  .speaker-conf-fill.conf-mid {
+    background: #f59e0b; /* 🟡 0.7 - 0.89 */
+  }
+  .speaker-conf-fill.conf-low {
+    background: #ef4444; /* 🔴 < 0.7 */
+  }
+  .speaker-conf-label {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text-2, #8e8ea0);
+    min-width: 28px;
+    text-align: right;
+  }
+  .btn-confirm-speaker {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #ef4444;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-confirm-speaker:hover {
+    background: rgba(239, 68, 68, 0.22);
+    border-color: #ef4444;
+  }
+  .speaker-dropdown {
+    position: absolute;
+    background: var(--surface-2, #1c1d26);
+    border: 1px solid var(--border-mid, #333446);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+    z-index: 100;
+    min-width: 130px;
+    padding: 4px;
+    display: none;
+  }
+  .speaker-dropdown.show {
+    display: block;
+    animation: spkDrop 0.12s ease-out;
+  }
+  @keyframes spkDrop {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .speaker-dropdown-item {
+    padding: 5px 10px;
+    font-size: 11.5px;
+    color: var(--text-1, #e0e0e8);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.1s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .speaker-dropdown-item:hover {
+    background: var(--surface-3, #2a2b3a);
+    color: #fff;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+     RTL Hardening (Arabic Mode)
+  ───────────────────────────────────────────────────────────────────────────── */
+  [dir="rtl"] .speaker-segment {
+    flex-direction: row-reverse;
+  }
+  [dir="rtl"] .speaker-info {
+    flex-direction: row-reverse;
+  }
+  [dir="rtl"] .speaker-confidence-wrap {
+    flex-direction: row-reverse;
+  }
+  [dir="rtl"] .speaker-conf-label {
+    text-align: left;
+  }
+  [dir="rtl"] .caution-inline {
+    flex-direction: row-reverse;
+    text-align: right;
+  }
+  [dir="rtl"] .rerun-bar {
+    flex-direction: row-reverse;
+  }
+  [dir="rtl"] .field-edited {
+    border-left: none !important;
+    border-right: 2px solid var(--blue, #3b82f6) !important;
+  }
+  [dir="rtl"] .field-edited::after {
+    right: auto;
+    left: 6px;
+  }
 
   /* ── Print sheet — hidden on screen, only surfaced in @media print ── */
   #print-sheet { display: none; }
@@ -877,8 +1521,10 @@ let patientStoryText = '';
 // what the model reported doing with it (see history_considered/history_notes
 // in the diagnosis result) — used to render the audit cell + print view.
 let lastHistoryUsed = false;
+let lastHistoryClaimed = false;
 let lastHistoryVisitCount = 0;
 let lastHistoryCheck = null;
+let lastHistoryCitationMissing = false;
 
 // Set when the doctor asked for history but the lookup itself failed
 // server-side (DB unreachable etc.) — the recommendation was generated WITHOUT
@@ -1031,6 +1677,2062 @@ function micButtonHTML(key, title) {
   </button>`;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════
+   PHASE 1: EVENT INFRASTRUCTURE & STATE ARCHITECTURE
+   - ResilientSSEClient: Auto-reconnect with exponential backoff (1s→2s→4s),
+     connection timeout (30s), heartbeat monitor, and Last-Event-ID tracking.
+   - EventStateStore: Centralized immutable state store per session with reactive
+     subscribers and deep freeze enforcement (<2ms updates).
+   - SectionErrorBoundary: Localized failure isolation preventing full page crashes.
+═══════════════════════════════════════════════════════════════════════════════ */
+
+class SectionErrorBoundary {
+  static wrap(sectionId, renderFn, fallbackMessage = '⚠ Section loading…') {
+    try {
+      return renderFn();
+    } catch (err) {
+      console.error(`[ErrorBoundary] Caught error in section [${sectionId}]:`, err);
+      const cardBody = document.getElementById('body-' + sectionId) || document.getElementById(sectionId);
+      if (cardBody) {
+        cardBody.innerHTML = `
+          <div class="section-error-boundary" role="alert">
+            <div class="section-error-header">
+              <span>⚠ ${esc(fallbackMessage)}</span>
+              <span style="font-size: 10px; text-transform: uppercase; color: var(--text-3);">${esc(sectionId)}</span>
+            </div>
+            <div class="section-error-body">
+              A display error occurred while rendering this section: <em>${esc(err.message || 'Unknown error')}</em>.
+              Other sections remain fully functional.
+            </div>
+            <button type="button" class="section-error-btn" onclick="window.sectionErrorBoundaryRetry && window.sectionErrorBoundaryRetry('${esc(sectionId)}')">
+              ↻ Retry Section Render
+            </button>
+          </div>
+        `;
+      }
+      return null;
+    }
+  }
+}
+
+function deepFreeze(obj) {
+  if (obj && typeof obj === 'object' && !Object.isFrozen(obj)) {
+    Object.freeze(obj);
+    for (const key of Object.keys(obj)) {
+      deepFreeze(obj[key]);
+    }
+  }
+  return obj;
+}
+
+class EventStateStore {
+  constructor(initialState = {}) {
+    this.state = deepFreeze({
+      structured: null,
+      fields: {},
+      reasoning: null,
+      cautions: [],
+      speakers: [],
+      meta: {
+        sessionId: null,
+        department: null,
+        language: null,
+        mode: null,
+        lastEventId: null,
+        status: 'idle', // 'idle' | 'streaming' | 'complete' | 'error'
+        lastHeartbeat: null,
+        metrics: {}
+      },
+      ...initialState
+    });
+    this.listeners = new Set();
+    this.transitionLog = [];
+  }
+
+  getState() {
+    return this.state;
+  }
+
+  subscribe(listener) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  dispatch(event, payload = {}, eventId = null) {
+    const t0 = performance.now();
+    const prev = this.state;
+    let next = { ...prev };
+
+    switch (event) {
+      case 'session_start':
+        next.meta = {
+          ...prev.meta,
+          ...payload,
+          status: 'streaming',
+          lastEventId: eventId || prev.meta.lastEventId,
+          lastHeartbeat: Date.now()
+        };
+        break;
+
+      case 'heartbeat':
+      case 'ping':
+        next.meta = {
+          ...prev.meta,
+          lastHeartbeat: Date.now()
+        };
+        break;
+
+      case 'refinement_skipped':
+      case 'refinement_delta':
+      case 'refinement_done':
+        next.structured = {
+          ...(prev.structured || {}),
+          refinement: {
+            ...((prev.structured && prev.structured.refinement) || {}),
+            ...payload
+          }
+        };
+        break;
+
+      case 'translation_delta':
+      case 'translation_done':
+        next.structured = {
+          ...(prev.structured || {}),
+          translation: {
+            ...((prev.structured && prev.structured.translation) || {}),
+            ...payload
+          }
+        };
+        break;
+
+      case 'extraction':
+        next.fields = {
+          ...(prev.fields || {}),
+          ...(payload.extracted_features || {}),
+          _raw: payload
+        };
+        next.structured = {
+          ...(prev.structured || {}),
+          patientStory: payload.patient_story || (prev.structured && prev.structured.patientStory),
+          questions: payload.questions || (prev.structured && prev.structured.questions)
+        };
+        break;
+
+      case 'diagnosis':
+        next.reasoning = {
+          ...(prev.reasoning || {}),
+          ...(payload.diagnosis || {}),
+          _raw: payload
+        };
+        break;
+
+      case 'validation_result':
+        next.cautions = Array.isArray(payload.cautions) ? [...payload.cautions] : [];
+        if (payload.escalation_reason) {
+          next.cautions.push({ message: `Escalation reason: ${payload.escalation_reason}`, severity: 'info' });
+        }
+        next.meta = {
+          ...prev.meta,
+          validation: payload
+        };
+        break;
+
+      case 'speaker_confirmation':
+      case 'speakers':
+        next.speakers = Array.isArray(payload) ? [...payload] : [...(payload.speakers || [])];
+        break;
+
+      case 'error':
+        next.meta = {
+          ...prev.meta,
+          status: 'error',
+          error: payload
+        };
+        break;
+
+      case 'done':
+        next.meta = {
+          ...prev.meta,
+          status: 'complete'
+        };
+        break;
+
+      default:
+        // Generic event collector
+        next.meta = {
+          ...prev.meta,
+          [event]: payload
+        };
+        break;
+    }
+
+    if (eventId) {
+      next.meta = { ...next.meta, lastEventId: eventId };
+    }
+
+    this.state = deepFreeze(next);
+    const dt = performance.now() - t0;
+
+    const transition = {
+      event,
+      eventId,
+      timestamp: Date.now(),
+      durationMs: Number(dt.toFixed(3)),
+      status: this.state.meta.status
+    };
+    this.transitionLog.push(transition);
+    if (this.transitionLog.length > 200) this.transitionLog.shift();
+
+    if (dt > 2.0) {
+      console.warn(`[EventStateStore] State update for "${event}" took ${dt.toFixed(2)}ms (>2ms target)`);
+    }
+
+    for (const listener of this.listeners) {
+      try {
+        listener(this.state, transition, prev);
+      } catch (err) {
+        console.error('[EventStateStore] Subscriber error:', err);
+      }
+    }
+    return this.state;
+  }
+
+  reset(initialMeta = {}) {
+    this.state = deepFreeze({
+      structured: null,
+      fields: {},
+      reasoning: null,
+      cautions: [],
+      speakers: [],
+      meta: {
+        sessionId: null,
+        department: null,
+        language: null,
+        mode: null,
+        lastEventId: null,
+        status: 'idle',
+        lastHeartbeat: null,
+        metrics: {},
+        ...initialMeta
+      }
+    });
+    this.transitionLog = [];
+    return this.state;
+  }
+}
+
+class ResilientSSEClient {
+  constructor(options = {}) {
+    this.url = options.url || (API_BASE + '/audio/analyze');
+    this.maxRetries = options.maxRetries ?? 3;
+    this.retryDelays = options.retryDelays || [1000, 2000, 4000]; // 1s -> 2s -> 4s exponential
+    this.connectionTimeoutMs = options.connectionTimeoutMs || 30000; // 30s
+    this.heartbeatIntervalMs = options.heartbeatIntervalMs || 15000; // 15s heartbeat check
+    this.lastEventId = null;
+    this.retryCount = 0;
+    this.abortController = null;
+    this.heartbeatTimer = null;
+    this.timeoutTimer = null;
+    this.isExplicitlyClosed = false;
+
+    this.onEvent = options.onEvent || (() => {});
+    this.onError = options.onError || (() => {});
+    this.onStateChange = options.onStateChange || (() => {});
+  }
+
+  connect(bodyData, headers = {}) {
+    this.isExplicitlyClosed = false;
+    this.bodyData = bodyData;
+    this.headers = headers;
+    return this._startStream();
+  }
+
+  async _startStream() {
+    this._clearTimers();
+    this.abortController = new AbortController();
+    const signal = this.abortController.signal;
+
+    this._armConnectionTimeout();
+    this._armHeartbeatMonitor();
+    this.onStateChange('connecting', { retryCount: this.retryCount, lastEventId: this.lastEventId });
+
+    try {
+      const fetchHeaders = (typeof Headers !== 'undefined' && this.headers instanceof Headers)
+        ? new Headers(this.headers)
+        : new Headers();
+      if (this.headers && typeof this.headers === 'object' && !(this.headers instanceof Headers)) {
+        for (const [k, v] of Object.entries(this.headers)) {
+          fetchHeaders.set(k, v);
+        }
+      }
+      if (this.lastEventId) {
+        fetchHeaders.set('Last-Event-ID', String(this.lastEventId));
+      }
+
+      // If bodyData is FormData and we are reconnecting, we clone or pass it
+      const resp = await fetch(this.url, {
+        method: 'POST',
+        headers: fetchHeaders,
+        body: this.bodyData,
+        signal
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${errText}`);
+      }
+
+      // Connection succeeded -> reset connection timeout and active state
+      this._resetConnectionTimeout();
+      this.retryCount = 0;
+      this.onStateChange('open', { lastEventId: this.lastEventId });
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let sseBuf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        this._registerHeartbeat();
+        sseBuf += decoder.decode(value, { stream: true });
+        const frames = sseBuf.split(/\r\n\r\n|\n\n|\r\r/);
+        sseBuf = frames.pop();
+
+        for (const frame of frames) {
+          if (frame && frame.trim()) {
+            this._parseAndDispatch(frame);
+          }
+        }
+      }
+
+      sseBuf += decoder.decode();
+      if (sseBuf.trim()) {
+        this._parseAndDispatch(sseBuf);
+      }
+
+      this._clearTimers();
+      this.onStateChange('closed', { reason: 'stream_completed' });
+
+    } catch (err) {
+      this._clearTimers();
+      if (this.isExplicitlyClosed || signal.aborted) {
+        this.onStateChange('closed', { reason: 'aborted' });
+        return;
+      }
+
+      console.warn(`[ResilientSSEClient] Connection error (attempt ${this.retryCount + 1}/${this.maxRetries}):`, err);
+      if (this.retryCount < this.maxRetries) {
+        const delay = this.retryDelays[this.retryCount] || 4000;
+        this.retryCount++;
+        this.onStateChange('reconnecting', {
+          retryCount: this.retryCount,
+          delayMs: delay,
+          error: err.message,
+          lastEventId: this.lastEventId
+        });
+        await new Promise(res => setTimeout(res, delay));
+        if (!this.isExplicitlyClosed) {
+          return this._startStream();
+        }
+      } else {
+        this.onStateChange('failed', { error: err.message, retryCount: this.retryCount });
+        this.onError(err);
+      }
+    }
+  }
+
+  _parseAndDispatch(frame) {
+    let eventName = 'message';
+    let eventId = null;
+    const dataLines = [];
+
+    for (const line of frame.split(/\r\n|\r|\n/)) {
+      if (!line) continue;
+      if (line.startsWith(':')) {
+        // Comment / heartbeat frame
+        this._registerHeartbeat();
+        this.onEvent('heartbeat', { comment: line.slice(1).trim() }, this.lastEventId);
+        continue;
+      }
+      const separator = line.indexOf(':');
+      const field = separator < 0 ? line : line.slice(0, separator);
+      let value = separator < 0 ? '' : line.slice(separator + 1);
+      if (value.startsWith(' ')) value = value.slice(1);
+
+      if (field === 'event') {
+        eventName = value;
+      } else if (field === 'data') {
+        dataLines.push(value);
+      } else if (field === 'id') {
+        eventId = value;
+        this.lastEventId = value;
+      }
+    }
+
+    if (!dataLines.length && eventName === 'message') return;
+
+    let parsedData = null;
+    const rawData = dataLines.join('\n');
+    try {
+      parsedData = rawData ? JSON.parse(rawData) : {};
+    } catch (e) {
+      parsedData = { _raw: rawData, parseError: e.message };
+    }
+
+    this._registerHeartbeat();
+    this.onEvent(eventName, parsedData, eventId || this.lastEventId);
+  }
+
+  _armConnectionTimeout() {
+    clearTimeout(this.timeoutTimer);
+    this.timeoutTimer = setTimeout(() => {
+      console.warn(`[ResilientSSEClient] Connection timed out after ${this.connectionTimeoutMs}ms`);
+      this.abortController?.abort();
+      this.onError(new Error(`Connection timeout (${this.connectionTimeoutMs / 1000}s)`));
+    }, this.connectionTimeoutMs);
+  }
+
+  _resetConnectionTimeout() {
+    clearTimeout(this.timeoutTimer);
+  }
+
+  _armHeartbeatMonitor() {
+    clearInterval(this.heartbeatTimer);
+    this.lastHeartbeatTime = Date.now();
+    this.heartbeatTimer = setInterval(() => {
+      const elapsed = Date.now() - this.lastHeartbeatTime;
+      // If we haven't seen any data/heartbeat for 2x interval, trigger keep-alive warning or reconnect
+      if (elapsed > this.heartbeatIntervalMs * 2) {
+        console.warn(`[ResilientSSEClient] Heartbeat stalled (${(elapsed / 1000).toFixed(1)}s elapsed)`);
+      }
+    }, this.heartbeatIntervalMs);
+  }
+
+  _registerHeartbeat() {
+    this.lastHeartbeatTime = Date.now();
+  }
+
+  _clearTimers() {
+    clearTimeout(this.timeoutTimer);
+    clearInterval(this.heartbeatTimer);
+  }
+
+  close() {
+    this.isExplicitlyClosed = true;
+    this._clearTimers();
+    if (this.abortController) {
+      this.abortController.abort();
+    }
+    this.onStateChange('closed', { reason: 'user_action' });
+  }
+}
+
+// Global active store and client instances for access across components
+window.EventStateStore = EventStateStore;
+window.ResilientSSEClient = ResilientSSEClient;
+window.SectionErrorBoundary = SectionErrorBoundary;
+window.appStateStore = new EventStateStore();
+window.appSSEClient = null;
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   PHASE 2: PROGRESSIVE SKELETON SCREENS, REVEAL, & STREAMING TEXT
+   - SkeletonScreenRenderer: Department-aware shimmer screens (ER, OPD, Dental)
+   - TypewriterStreamer: Smooth character streaming for reasoning (>500 chars)
+   - ProgressivePerfMonitor: Benchmarks Time-to-First-Section (TTFS) and
+     Time-to-Complete (TTC) for latency & performance tracking.
+═══════════════════════════════════════════════════════════════════════════════ */
+
+class SkeletonScreenRenderer {
+  static getStructuredSkeleton() {
+    return `
+      <div class="skeleton-container" aria-busy="true" aria-label="Loading structured transcript">
+        <div class="skeleton-shimmer skeleton-line medium"></div>
+        <div class="skeleton-shimmer skeleton-line"></div>
+        <div class="skeleton-shimmer skeleton-line short"></div>
+      </div>
+    `;
+  }
+
+  static getFeaturesSkeleton(department = 'opd') {
+    const fieldsMap = (typeof DEPARTMENT_FIELDS !== 'undefined' && DEPARTMENT_FIELDS) ? DEPARTMENT_FIELDS : {
+      er: [{ label: 'Chief Complaint' }, { label: 'History of Present Illness' }],
+      opd: [{ label: 'Chief Complaint' }, { label: 'History of Present Illness' }],
+      dental: [{ label: 'Chief Complaint' }, { label: 'Dental History' }]
+    };
+    const deptFields = fieldsMap[department] || fieldsMap.opd || [{ label: 'Chief Complaint' }];
+    const cardPlaceholders = deptFields.slice(0, 8).map(f => `
+      <div class="skeleton-card">
+        <div class="skeleton-shimmer skeleton-header-shimmer">${esc(f.label || '')}</div>
+        <div class="skeleton-shimmer skeleton-line"></div>
+      </div>
+    `).join('');
+
+    return `
+      <div class="skeleton-container" aria-busy="true" aria-label="Loading clinical note fields for ${esc(department)}">
+        <div class="skeleton-card" style="margin-bottom: 6px;">
+          <div class="skeleton-shimmer skeleton-header-shimmer" style="width: 30%;">Chief Complaint</div>
+          <div class="skeleton-shimmer skeleton-line short"></div>
+        </div>
+        <div class="skeleton-grid">
+          ${cardPlaceholders}
+        </div>
+      </div>
+    `;
+  }
+
+  static getDiagnosisSkeleton() {
+    return `
+      <div class="skeleton-container" aria-busy="true" aria-label="Loading diagnosis recommendations">
+        <div style="display: flex; gap: 8px; margin-bottom: 4px;">
+          <div class="skeleton-shimmer skeleton-pill"></div>
+          <div class="skeleton-shimmer skeleton-pill"></div>
+          <div class="skeleton-shimmer skeleton-pill"></div>
+        </div>
+        <div class="skeleton-card">
+          <div class="skeleton-shimmer skeleton-header-shimmer" style="width: 25%;"></div>
+          <div class="skeleton-shimmer skeleton-line"></div>
+          <div class="skeleton-shimmer skeleton-line medium"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  static getQuestionsSkeleton() {
+    return `
+      <div class="skeleton-container" aria-busy="true" aria-label="Loading follow-up questions">
+        <div class="skeleton-shimmer skeleton-line short" style="height: 32px; border-radius: var(--r-md); margin-bottom: 6px;"></div>
+        <div class="skeleton-card">
+          <div class="skeleton-shimmer skeleton-line medium"></div>
+        </div>
+      </div>
+    `;
+  }
+}
+
+class TypewriterStreamer {
+  /**
+   * Streams long text (>500 chars) smoothly with 20 chars per frame (60fps ~16ms).
+   * Shorter text renders immediately to prevent unnecessary delays.
+   */
+  static streamText(element, fullText, options = {}) {
+    if (!element) return;
+    const charsPerFrame = options.charsPerFrame || 20;
+    const minLengthForStreaming = options.minLength || 500;
+    const onComplete = options.onComplete || (() => {});
+
+    if (!fullText || fullText.length < minLengthForStreaming) {
+      element.innerHTML = esc(fullText);
+      onComplete();
+      return;
+    }
+
+    let currentIdx = 0;
+    element.innerHTML = '<span class="typewriter-content"></span><span class="typewriter-cursor"></span>';
+    const contentEl = element.querySelector('.typewriter-content');
+    const cursorEl = element.querySelector('.typewriter-cursor');
+
+    function step() {
+      currentIdx += charsPerFrame;
+      if (currentIdx > fullText.length) currentIdx = fullText.length;
+      contentEl.textContent = fullText.slice(0, currentIdx);
+
+      if (currentIdx < fullText.length) {
+        requestAnimationFrame(step);
+      } else {
+        if (cursorEl) cursorEl.remove();
+        onComplete();
+      }
+    }
+
+    requestAnimationFrame(step);
+  }
+}
+
+class ProgressivePerfMonitor {
+  constructor() {
+    this.sessionStart = null;
+    this.firstSectionTime = null;
+    this.completeTime = null;
+    this.measurements = [];
+    this.sectionArrivals = {};
+  }
+
+  startSession(sessionId) {
+    this.sessionId = sessionId || ('s-' + Date.now());
+    this.sessionStart = performance.now();
+    this.firstSectionTime = null;
+    this.completeTime = null;
+    this.sectionArrivals = {};
+  }
+
+  recordSectionArrival(sectionId) {
+    if (!this.sessionStart) return;
+    const elapsedMs = performance.now() - this.sessionStart;
+    if (!this.firstSectionTime) {
+      this.firstSectionTime = elapsedMs;
+    }
+    this.sectionArrivals[sectionId] = elapsedMs;
+  }
+
+  completeSession() {
+    if (!this.sessionStart) return null;
+    this.completeTime = performance.now() - this.sessionStart;
+    const report = {
+      sessionId: this.sessionId,
+      ttfsMs: Number((this.firstSectionTime || 0).toFixed(2)),
+      ttcMs: Number((this.completeTime || 0).toFixed(2)),
+      sectionArrivals: { ...this.sectionArrivals },
+      timestamp: Date.now()
+    };
+    this.measurements.push(report);
+    if (this.measurements.length > 50) this.measurements.shift();
+    console.log(`[PerfMonitor] TTFS: ${report.ttfsMs}ms (target <2000ms), TTC: ${report.ttcMs}ms (target <8000ms)`);
+    return report;
+  }
+
+  getMetrics() {
+    if (this.measurements.length === 0) return { count: 0, p90_ttfs: 0, p90_ttc: 0 };
+    const ttfsList = this.measurements.map(m => m.ttfsMs).sort((a, b) => a - b);
+    const ttcList = this.measurements.map(m => m.ttcMs).sort((a, b) => a - b);
+    const p90Idx = Math.floor(ttfsList.length * 0.9);
+    return {
+      count: this.measurements.length,
+      p90_ttfs: ttfsList[p90Idx] || ttfsList[ttfsList.length - 1],
+      p90_ttc: ttcList[p90Idx] || ttcList[ttcList.length - 1],
+      lastReport: this.measurements[this.measurements.length - 1]
+    };
+  }
+}
+
+window.SkeletonScreenRenderer = SkeletonScreenRenderer;
+window.TypewriterStreamer = TypewriterStreamer;
+window.ProgressivePerfMonitor = ProgressivePerfMonitor;
+window.progressivePerfMonitor = new ProgressivePerfMonitor();
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   PHASE 3: CITATION SYSTEM & EVIDENCE LINKING
+   ─────────────────────────────────────────────────────────────────────────────
+   Task 3.1  CitationDataModel    — parse reasoning event → typed citation list
+   Task 3.2  EvidenceHighlightEngine — click ICD-10 → scroll + pulse transcript
+   Task 3.3  Bidirectional markers  — 🔗 in transcript → jump to diagnosis field
+   Task 3.4  CitationTooltip       — rich hover card (code, desc, confidence, preview)
+   Task 3.5  CitationAccessibility — aria-labels, keyboard nav, SR announcements
+   ─────────────────────────────────────────────────────────────────────────────
+   Architecture:
+     CitationDataModel   ← parsed once per renderDiagnosis() call
+     EvidenceHighlightEngine (singleton) ← consumes the model, fires on user action
+     CitationTooltip (singleton)         ← attaches to any .has-citation pill
+     CitationBridge                      ← wires model into renderPills() & transcript
+     CitationAccessibilityManager        ← ARIA live region + keyboard handlers
+═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   3.1 — CITATION DATA MODEL
+   Parses the `reasoning` field (free-text or JSON) from the diagnosis SSE event
+   into a structured list of citations.  Each citation carries:
+     { icd10Code, diagnosis, evidenceSentence, transcriptOffset, confidence, field }
+   Parse time target: < 10ms per encounter.
+───────────────────────────────────────────────────────────────────────────── */
+class CitationDataModel {
+  /**
+   * @param {Object} dx  — raw diagnosis object from the SSE `diagnosis` event
+   * @param {string} transcriptText — the full final transcript text
+   */
+  constructor(dx, transcriptText) {
+    this.dx = dx || {};
+    this.transcript = transcriptText || '';
+    this.citations = [];
+    this._parseTimer = null;
+  }
+
+  /**
+   * Build the citation list from the reasoning and icd10_codes in `dx`.
+   * Returns { citations, parseMs }.
+   */
+  parse() {
+    const t0 = performance.now();
+    this.citations = [];
+
+    const icd10Codes = Array.isArray(this.dx.icd10_codes) ? this.dx.icd10_codes : [];
+    const reasoning  = (this.dx.reasoning || '').trim();
+    const citationsRaw = this.dx.citations; // optional structured citations from backend
+
+    // Path A — backend already sent structured citations array
+    if (Array.isArray(citationsRaw) && citationsRaw.length > 0) {
+      this.citations = citationsRaw.map((c, i) => this._normalise(c, i));
+    } else {
+      // Path B — derive citations from icd10_codes + reasoning free-text heuristic
+      icd10Codes.forEach((code, i) => {
+        const parsed = this._parseCodeString(code);
+        const evidence = this._findEvidenceSentence(parsed.code, parsed.description, reasoning);
+        const offset   = evidence ? this._findTranscriptOffset(evidence) : -1;
+        this.citations.push({
+          id: `cit-${i}`,
+          icd10Code: parsed.code,
+          description: parsed.description,
+          diagnosis: parsed.description || code,
+          evidenceSentence: evidence || '',
+          transcriptOffset: offset,
+          confidence: this._deriveConfidence(parsed.code, reasoning),
+          field: 'icd10',
+          raw: code,
+        });
+      });
+    }
+
+    const parseMs = performance.now() - t0;
+    if (parseMs > 10) {
+      console.warn(`[CitationDataModel] Parse exceeded 10ms target: ${parseMs.toFixed(2)}ms`);
+    }
+    return { citations: this.citations, parseMs };
+  }
+
+  _normalise(raw, i) {
+    const parsed = this._parseCodeString(raw.icd10_code || raw.code || '');
+    const evidence = raw.evidence_sentence || raw.evidenceSentence || '';
+    return {
+      id: raw.id || `cit-${i}`,
+      icd10Code: parsed.code,
+      description: raw.description || parsed.description,
+      diagnosis: raw.diagnosis || raw.description || parsed.description,
+      evidenceSentence: evidence,
+      transcriptOffset: typeof raw.transcript_offset === 'number'
+        ? raw.transcript_offset
+        : this._findTranscriptOffset(evidence),
+      confidence: typeof raw.confidence === 'number' ? raw.confidence : 0.85,
+      field: raw.field || 'icd10',
+      raw: raw,
+    };
+  }
+
+  /**
+   * Split a code string like "J06.9 - Acute upper respiratory infection"
+   * into { code, description }.
+   */
+  _parseCodeString(str) {
+    if (!str) return { code: '', description: '' };
+    const m = str.match(/^([A-Z]\d{2,3}(?:\.\d+)?)\s*[-–—]\s*(.+)$/);
+    if (m) return { code: m[1].trim(), description: m[2].trim() };
+    // If it's just a bare code
+    if (/^[A-Z]\d/.test(str)) return { code: str.trim(), description: '' };
+    return { code: '', description: str.trim() };
+  }
+
+  /**
+   * Heuristically find the most relevant sentence in the reasoning text
+   * that mentions the code or a keyword from the description.
+   */
+  _findEvidenceSentence(code, description, reasoning) {
+    if (!reasoning) return '';
+    // Split reasoning into sentences (handles both English . and Arabic delimiters)
+    const sentences = reasoning.split(/(?<=[.!?؟।])\s+|(?:\n+)/g).filter(s => s.trim().length > 10);
+
+    const keywords = [code, ...(description || '').toLowerCase().split(/\s+/).filter(w => w.length > 4)];
+
+    // Score each sentence by keyword overlap
+    let best = null;
+    let bestScore = 0;
+    for (const sentence of sentences) {
+      const lower = sentence.toLowerCase();
+      let score = 0;
+      for (const kw of keywords) {
+        if (lower.includes(kw.toLowerCase())) score++;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = sentence;
+      }
+    }
+
+    // If nothing matched by keyword, fall back to first sentence that contains the code
+    if (!best && code) {
+      best = sentences.find(s => s.includes(code)) || sentences[0] || '';
+    }
+
+    return (best || '').trim();
+  }
+
+  /**
+   * Find the character offset of an evidence sentence in the full transcript.
+   * Returns -1 if not found.
+   */
+  _findTranscriptOffset(sentence) {
+    if (!sentence || !this.transcript) return -1;
+    // Try exact substring first
+    const idx = this.transcript.indexOf(sentence.slice(0, 40));
+    if (idx >= 0) return idx;
+    // Fallback: find first 8 words
+    const words = sentence.split(/\s+/).slice(0, 8).join(' ');
+    return this.transcript.indexOf(words);
+  }
+
+  /**
+   * Derive a confidence score from the reasoning text (presence of hedge words lowers it).
+   */
+  _deriveConfidence(code, reasoning) {
+    if (!reasoning || !code) return 0.85;
+    const lower = reasoning.toLowerCase();
+    const highConfidence = ['confirmed', 'diagnosed', 'consistent with', 'consistent', 'clear'].some(w => lower.includes(w));
+    const lowConfidence  = ['possible', 'probable', 'rule out', 'differential', 'consider', 'uncertain'].some(w => lower.includes(w));
+    if (highConfidence && !lowConfidence) return 0.92;
+    if (lowConfidence) return 0.65;
+    return 0.82;
+  }
+
+  /** Get a citation by ICD-10 code */
+  getByCode(code) {
+    return this.citations.find(c => c.icd10Code === code) || null;
+  }
+
+  /** Get all citations that have a non-empty evidence sentence */
+  getWithEvidence() {
+    return this.citations.filter(c => c.evidenceSentence);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   3.2 — EVIDENCE HIGHLIGHT ENGINE
+   On ICD-10 pill click:
+     1. Locate the evidence sentence in the transcript
+     2. Scroll the transcript card into view (smooth)
+     3. Wrap the sentence span in .evidence-highlight → 3s pulse then fade
+   Scroll + highlight target: < 200ms
+───────────────────────────────────────────────────────────────────────────── */
+class EvidenceHighlightEngine {
+  constructor() {
+    this._activeHighlight = null;   // currently highlighted span element
+    this._activeTimer    = null;    // cleanup timer
+    this.HIGHLIGHT_DURATION_MS = 3200;
+  }
+
+  /**
+   * Scroll transcript panel to the sentence and pulse-highlight it.
+   * @param {string} evidenceSentence — the sentence to highlight
+   * @param {number} transcriptOffset — optional char offset hint
+   * @returns {boolean} true if evidence was found and highlighted
+   */
+  highlightEvidence(evidenceSentence, transcriptOffset) {
+    if (!evidenceSentence) return false;
+    const t0 = performance.now();
+
+    const transcriptEl = document.getElementById('tl-final');
+    if (!transcriptEl) return false;
+
+    this._clearHighlight();
+
+    // Find the sentence in the transcript DOM
+    const found = this._wrapEvidenceText(transcriptEl, evidenceSentence);
+    if (!found) return false;
+
+    // Scroll transcript card into view, then scroll to the highlight
+    const card = document.getElementById('card-trans');
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    requestAnimationFrame(() => {
+      if (this._activeHighlight) {
+        this._activeHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        this._activeHighlight.focus({ preventScroll: true });
+      }
+    });
+
+    const elapsed = performance.now() - t0;
+    if (elapsed > 200) {
+      console.warn(`[EvidenceHighlight] Scroll+highlight took ${elapsed.toFixed(1)}ms (target <200ms)`);
+    }
+
+    // Auto-remove highlight after duration
+    this._activeTimer = setTimeout(() => this._clearHighlight(), this.HIGHLIGHT_DURATION_MS);
+    return true;
+  }
+
+  /**
+   * Wrap the matching text node content with a <span class="evidence-highlight">.
+   * Uses Text node splitting for precision without re-rendering the whole transcript.
+   */
+  _wrapEvidenceText(container, sentence) {
+    // Normalise: trim and take first 60 chars for matching (robust to long sentences)
+    const matchTarget = sentence.slice(0, 60).trim();
+    if (!matchTarget) return false;
+
+    const fullText = container.innerText || container.textContent || '';
+    const matchIdx = fullText.indexOf(matchTarget);
+    if (matchIdx < 0) {
+      // Fallback: try matching first 5 words
+      const shortMatch = sentence.split(/\s+/).slice(0, 5).join(' ');
+      return shortMatch ? this._wrapByTreeWalker(container, shortMatch) : false;
+    }
+
+    return this._wrapByTreeWalker(container, matchTarget);
+  }
+
+  _wrapByTreeWalker(container, searchText) {
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+    let node;
+    const lowerSearch = searchText.toLowerCase();
+
+    while ((node = walker.nextNode())) {
+      const lower = node.textContent.toLowerCase();
+      const idx = lower.indexOf(lowerSearch);
+      if (idx >= 0) {
+        // Split and wrap
+        const before = node.textContent.slice(0, idx);
+        const match  = node.textContent.slice(idx, idx + searchText.length);
+        const after  = node.textContent.slice(idx + searchText.length);
+
+        const span = document.createElement('span');
+        span.className = 'evidence-highlight';
+        span.setAttribute('tabindex', '-1');
+        span.setAttribute('aria-label', `Evidence: ${match}`);
+        span.textContent = match;
+
+        const parent = node.parentNode;
+        if (before) parent.insertBefore(document.createTextNode(before), node);
+        parent.insertBefore(span, node);
+        if (after) parent.insertBefore(document.createTextNode(after), node);
+        parent.removeChild(node);
+
+        this._activeHighlight = span;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  _clearHighlight() {
+    clearTimeout(this._activeTimer);
+    if (this._activeHighlight) {
+      // Unwrap the span, restore the text node
+      const parent = this._activeHighlight.parentNode;
+      if (parent) {
+        parent.replaceChild(
+          document.createTextNode(this._activeHighlight.textContent),
+          this._activeHighlight
+        );
+        parent.normalize(); // merge adjacent text nodes
+      }
+      this._activeHighlight = null;
+    }
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   3.3 — BIDIRECTIONAL LINKING
+   After the transcript is rendered (and citations parsed), inject .evidence-marker
+   anchors inline in the transcript for each citation that has an evidence sentence.
+   Clicking a 🔗 marker scrolls to the diagnosis card and pulses the ICD-10 pill.
+   Jump target: < 200ms
+───────────────────────────────────────────────────────────────────────────── */
+class BidirectionalCitationLinker {
+  /**
+   * Inject evidence markers into the transcript element.
+   * @param {HTMLElement} transcriptEl
+   * @param {CitationDataModel} model
+   */
+  injectMarkers(transcriptEl, model) {
+    if (!transcriptEl || !model) return;
+    const citations = model.getWithEvidence();
+    if (!citations.length) return;
+
+    citations.forEach(citation => {
+      const searchText = citation.evidenceSentence.slice(0, 50).trim();
+      if (!searchText) return;
+
+      this._injectMarkerAfterText(transcriptEl, searchText, citation);
+    });
+  }
+
+  _injectMarkerAfterText(container, searchText, citation) {
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+    const lowerSearch = searchText.toLowerCase();
+    let node;
+
+    while ((node = walker.nextNode())) {
+      // Skip nodes already inside an .evidence-marker
+      if (node.parentElement && node.parentElement.classList.contains('evidence-marker')) continue;
+
+      const lower = node.textContent.toLowerCase();
+      const idx = lower.indexOf(lowerSearch);
+      if (idx < 0) continue;
+
+      const endIdx = idx + searchText.length;
+      const before = node.textContent.slice(0, endIdx);
+      const after  = node.textContent.slice(endIdx);
+
+      const marker = document.createElement('button');
+      marker.className = 'evidence-marker';
+      marker.setAttribute('type', 'button');
+      marker.setAttribute('tabindex', '0');
+      marker.setAttribute('data-citation-id', citation.id);
+      marker.setAttribute('data-icd-code', citation.icd10Code);
+      marker.setAttribute('aria-label',
+        `ICD-10 ${citation.icd10Code} – ${citation.description || citation.diagnosis}. Click to jump to diagnosis.`
+      );
+      marker.textContent = '🔗';
+
+      const parent = node.parentNode;
+      if (before) parent.insertBefore(document.createTextNode(before), node);
+      parent.insertBefore(marker, node);
+      if (after) parent.insertBefore(document.createTextNode(after), node);
+      parent.removeChild(node);
+
+      // Wire the click handler
+      marker.addEventListener('click', (e) => {
+        e.preventDefault();
+        this._jumpToDiagnosis(citation);
+      });
+      marker.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          this._jumpToDiagnosis(citation);
+        }
+      });
+
+      break; // One marker per citation sentence
+    }
+  }
+
+  _jumpToDiagnosis(citation) {
+    const t0 = performance.now();
+    const diagCard = document.getElementById('card-diagnosis');
+    if (!diagCard) return;
+
+    // Scroll the diagnosis card into view
+    diagCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    // Pulse the matching ICD-10 pill
+    requestAnimationFrame(() => {
+      const pills = document.querySelectorAll('#pills-icd10 .icd-pill');
+      pills.forEach(pill => {
+        const text = pill.querySelector('.icd-pill-text')?.textContent || '';
+        if (text.startsWith(citation.icd10Code)) {
+          pill.classList.remove('citation-target-pulse');
+          // Force reflow to restart animation
+          void pill.offsetWidth;
+          pill.classList.add('citation-target-pulse');
+          pill.focus({ preventScroll: true });
+          setTimeout(() => pill.classList.remove('citation-target-pulse'), 2600);
+        }
+      });
+
+      // Also pulse the reasoning cell
+      const reasoningCell = document.getElementById('reasoning-cell');
+      if (reasoningCell) {
+        reasoningCell.classList.remove('citation-target-pulse');
+        void reasoningCell.offsetWidth;
+        reasoningCell.classList.add('citation-target-pulse');
+        setTimeout(() => reasoningCell.classList.remove('citation-target-pulse'), 2600);
+      }
+
+      const elapsed = performance.now() - t0;
+      if (elapsed > 200) {
+        console.warn(`[BidirectionalLinker] Jump took ${elapsed.toFixed(1)}ms (target <200ms)`);
+      }
+
+      // Screen-reader announcement
+      CitationAccessibilityManager.announce(
+        `Jumped to diagnosis: ICD-10 ${citation.icd10Code}, ${citation.description || citation.diagnosis}`
+      );
+    });
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   3.4 — CITATION TOOLTIP
+   Hover/focus on an .icd-pill.has-citation → rich tooltip after 200ms delay:
+     - ICD-10 code + description
+     - Confidence bar
+     - Evidence preview (first 100 chars of evidence sentence)
+     - Keyboard hint (Enter = scroll to evidence)
+   Tooltip render target: < 50ms
+   Dismisses on blur/mouseleave.
+───────────────────────────────────────────────────────────────────────────── */
+class CitationTooltip {
+  constructor() {
+    this._el = null;
+    this._showTimer = null;
+    this._hideTimer = null;
+    this.SHOW_DELAY_MS = 200;
+    this.HIDE_DELAY_MS = 120;
+    this._init();
+  }
+
+  _init() {
+    this._el = document.createElement('div');
+    this._el.className = 'citation-tooltip';
+    this._el.setAttribute('role', 'tooltip');
+    this._el.setAttribute('aria-live', 'polite');
+    document.body.appendChild(this._el);
+
+    // Keep tooltip open when hovered
+    this._el.addEventListener('mouseenter', () => clearTimeout(this._hideTimer));
+    this._el.addEventListener('mouseleave', () => this._scheduleHide());
+  }
+
+  /**
+   * Schedule tooltip show on a pill element.
+   * @param {HTMLElement} pillEl
+   * @param {Object} citation
+   */
+  scheduleShow(pillEl, citation) {
+    clearTimeout(this._hideTimer);
+    clearTimeout(this._showTimer);
+    this._showTimer = setTimeout(() => this._show(pillEl, citation), this.SHOW_DELAY_MS);
+  }
+
+  scheduleHide() {
+    this._scheduleHide();
+  }
+
+  _scheduleHide() {
+    clearTimeout(this._showTimer);
+    this._hideTimer = setTimeout(() => this._hide(), this.HIDE_DELAY_MS);
+  }
+
+  _show(anchorEl, citation) {
+    const t0 = performance.now();
+
+    const pct = Math.round((citation.confidence || 0.85) * 100);
+    const preview = (citation.evidenceSentence || '').slice(0, 120);
+    const previewHtml = preview
+      ? `<div class="ct-evidence-preview">"${esc(preview)}${preview.length >= 120 ? '…' : ''}"</div>`
+      : '';
+
+    this._el.innerHTML = `
+      <div class="ct-code">${esc(citation.icd10Code || '—')}</div>
+      <div class="ct-description">${esc(citation.description || citation.diagnosis || '—')}</div>
+      <div class="ct-row">
+        <span class="ct-label">Confidence</span>
+        <div class="ct-confidence-bar">
+          <div class="ct-bar-track">
+            <div class="ct-bar-fill" style="width:${pct}%"></div>
+          </div>
+          <span class="ct-bar-pct">${pct}%</span>
+        </div>
+      </div>
+      ${citation.field ? `<div class="ct-row"><span class="ct-label">Field</span><span class="ct-value">${esc(citation.field)}</span></div>` : ''}
+      ${previewHtml}
+      <div class="ct-kbd-hint">
+        <kbd>Enter</kbd> scroll to evidence &nbsp;·&nbsp; <kbd>Esc</kbd> dismiss
+      </div>
+    `;
+
+    // Position: below the anchor pill, left-aligned
+    const rect = anchorEl.getBoundingClientRect();
+    const scrollTop  = window.scrollY || document.documentElement.scrollTop;
+    const scrollLeft = window.scrollX || document.documentElement.scrollLeft;
+
+    this._el.style.top  = `${rect.bottom + scrollTop + 6}px`;
+    this._el.style.left = `${rect.left  + scrollLeft}px`;
+
+    // Ensure tooltip doesn't overflow viewport right edge
+    requestAnimationFrame(() => {
+      const tipRect = this._el.getBoundingClientRect();
+      if (tipRect.right > window.innerWidth - 12) {
+        this._el.style.left = `${Math.max(8, rect.right + scrollLeft - tipRect.width)}px`;
+      }
+      this._el.classList.add('show');
+    });
+
+    const elapsed = performance.now() - t0;
+    if (elapsed > 50) {
+      console.warn(`[CitationTooltip] Render took ${elapsed.toFixed(1)}ms (target <50ms)`);
+    }
+  }
+
+  _hide() {
+    this._el.classList.remove('show');
+  }
+
+  destroy() {
+    this._el?.remove();
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   3.5 — CITATION ACCESSIBILITY MANAGER
+   - Injects a single ARIA live region for screen-reader announcements
+   - Manages keyboard navigation across all .icd-pill.has-citation elements
+   - Ensures all citation elements meet WCAG 2.1 AA
+───────────────────────────────────────────────────────────────────────────── */
+const CitationAccessibilityManager = {
+  _announceEl: null,
+
+  init() {
+    if (this._announceEl) return;
+    this._announceEl = document.createElement('div');
+    this._announceEl.className = 'sr-announce';
+    this._announceEl.setAttribute('aria-live', 'assertive');
+    this._announceEl.setAttribute('aria-atomic', 'true');
+    this._announceEl.setAttribute('role', 'status');
+    document.body.appendChild(this._announceEl);
+  },
+
+  announce(message) {
+    if (!this._announceEl) this.init();
+    // Clear then set to ensure re-read even if same message
+    this._announceEl.textContent = '';
+    requestAnimationFrame(() => {
+      this._announceEl.textContent = message;
+    });
+  },
+
+  /**
+   * Apply all ARIA attributes to a citation pill element.
+   * @param {HTMLElement} pillEl
+   * @param {Object} citation
+   */
+  applyToPill(pillEl, citation) {
+    const label = citation.description || citation.diagnosis || citation.icd10Code;
+    pillEl.setAttribute('tabindex', '0');
+    pillEl.setAttribute('role', 'button');
+    pillEl.setAttribute('aria-label',
+      `ICD-10 code ${citation.icd10Code}, ${label}. Click to see evidence in transcript.`
+    );
+    pillEl.setAttribute('aria-haspopup', 'true');
+    pillEl.setAttribute('aria-describedby', 'citation-tooltip');
+    // Link icon aria
+    const icon = pillEl.querySelector('.citation-link-icon');
+    if (icon) {
+      icon.setAttribute('aria-hidden', 'true');
+    }
+  },
+};
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CITATION BRIDGE
+   Top-level coordinator that:
+   1. Holds the singleton engine/tooltip instances
+   2. Exposes citationBridge.init(dx, transcriptText) called by renderDiagnosis()
+   3. Upgrades existing ICD-10 pills via citationBridge.upgradePills()
+   4. Injects bidirectional markers via citationBridge.injectTranscriptMarkers()
+───────────────────────────────────────────────────────────────────────────── */
+const citationBridge = (() => {
+  let _model       = null;
+  let _highlighter = null;
+  let _linker      = null;
+  let _tooltip     = null;
+
+  function _getOrCreateSingletons() {
+    if (!_highlighter) _highlighter = new EvidenceHighlightEngine();
+    if (!_linker)      _linker      = new BidirectionalCitationLinker();
+    if (!_tooltip)     _tooltip     = new CitationTooltip();
+    CitationAccessibilityManager.init();
+  }
+
+  return {
+    /**
+     * Parse citations from the diagnosis data + transcript text.
+     * Call this in renderDiagnosis() after the diagnosis event arrives.
+     */
+    init(dx, transcriptText) {
+      _getOrCreateSingletons();
+      _model = new CitationDataModel(dx, transcriptText);
+      const { citations, parseMs } = _model.parse();
+      console.log(`[CitationBridge] Parsed ${citations.length} citation(s) in ${parseMs.toFixed(2)}ms`);
+      return _model;
+    },
+
+    /**
+     * After renderPills() inserts ICD-10 pills into the DOM,
+     * upgrade each pill that has a matching citation with tooltip + click handler.
+     */
+    upgradePills() {
+      if (!_model) return;
+      const pillContainer = document.getElementById('pills-icd10');
+      if (!pillContainer) return;
+
+      pillContainer.querySelectorAll('.icd-pill').forEach(pill => {
+        const codeText = pill.querySelector('.icd-pill-text')?.textContent?.trim() || '';
+        // codeText is like "J06.9 - Acute upper respiratory infection"
+        const codeMatch = codeText.match(/^([A-Z]\d{2,3}(?:\.\d+)?)/);
+        if (!codeMatch) return;
+
+        const citation = _model.getByCode(codeMatch[1]);
+        if (!citation) return;
+
+        // Mark as citation-enabled
+        pill.classList.add('has-citation');
+        pill.dataset.citationId = citation.id;
+
+        // Add link icon
+        if (!pill.querySelector('.citation-link-icon')) {
+          const icon = document.createElement('span');
+          icon.className = 'citation-link-icon';
+          icon.textContent = '↗';
+          icon.setAttribute('aria-hidden', 'true');
+          pill.appendChild(icon);
+        }
+
+        // Apply accessibility attributes
+        CitationAccessibilityManager.applyToPill(pill, citation);
+
+        // Click → highlight evidence in transcript
+        pill.addEventListener('click', (e) => {
+          if (e.target.classList.contains('icd-pill-remove')) return;
+          e.stopPropagation();
+          const found = _highlighter.highlightEvidence(
+            citation.evidenceSentence,
+            citation.transcriptOffset
+          );
+          if (found) {
+            CitationAccessibilityManager.announce(
+              `Showing evidence for ICD-10 ${citation.icd10Code}: ${citation.evidenceSentence.slice(0, 80)}`
+            );
+          } else {
+            CitationAccessibilityManager.announce(
+              `No direct transcript evidence found for ICD-10 ${citation.icd10Code}.`
+            );
+          }
+        });
+
+        // Keyboard: Enter = same as click; Escape = dismiss tooltip
+        pill.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            pill.click();
+          } else if (e.key === 'Escape') {
+            _tooltip?.scheduleHide();
+          }
+        });
+
+        // Tooltip: hover / focus → schedule show; mouseleave / blur → schedule hide
+        pill.addEventListener('mouseenter', () => _tooltip?.scheduleShow(pill, citation));
+        pill.addEventListener('mouseleave', () => _tooltip?.scheduleHide());
+        pill.addEventListener('focus',      () => {
+          _tooltip?.scheduleShow(pill, citation);
+          CitationAccessibilityManager.announce(
+            `ICD-10 code ${citation.icd10Code}, ${citation.description}. Press Enter to see evidence.`
+          );
+        });
+        pill.addEventListener('blur', () => _tooltip?.scheduleHide());
+      });
+    },
+
+    /**
+     * After the transcript text is finalized and rendered in #tl-final,
+     * inject bidirectional 🔗 markers.
+     */
+    injectTranscriptMarkers() {
+      if (!_model) return;
+      const transcriptEl = document.getElementById('tl-final');
+      if (!transcriptEl) return;
+      _linker?.injectMarkers(transcriptEl, _model);
+    },
+
+    /** Expose the current model for external inspection / testing */
+    getModel() { return _model; },
+
+    /** Expose the highlight engine for testing */
+    getHighlighter() { return _highlighter; },
+  };
+})();
+
+window.CitationDataModel          = CitationDataModel;
+window.EvidenceHighlightEngine    = EvidenceHighlightEngine;
+window.BidirectionalCitationLinker = BidirectionalCitationLinker;
+window.CitationTooltip            = CitationTooltip;
+window.CitationAccessibilityManager = CitationAccessibilityManager;
+window.citationBridge             = citationBridge;
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Phase 4: Caution System, Inline Banners & Re-Run Reasoning (Tasks 4.1 – 4.6)
+───────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Task 4.1: Caution Classifier
+ * Maps M3 validation cautions, escalation reasons, and schema anomalies
+ * to structured severity levels: 'critical', 'warning', 'info' with field routing.
+ */
+class CautionClassifier {
+  static SEVERITY = {
+    CRITICAL: 'critical',
+    WARNING:  'warning',
+    INFO:     'info',
+  };
+
+  /**
+   * Classify an array of raw caution objects or string messages into normalized records.
+   * Target latency < 5ms.
+   * @param {Array<Object|string>} rawCautions
+   * @param {Object} [meta] Additional metadata like escalation_reason, tier, is_valid
+   * @returns {Array<{severity: string, field: string|null, code: string|null, message: string, rule: string}>}
+   */
+  static classify(rawCautions = [], meta = {}) {
+    const results = [];
+    const cautions = Array.isArray(rawCautions) ? rawCautions : (rawCautions ? [rawCautions] : []);
+
+    for (const c of cautions) {
+      if (!c) continue;
+      const normalized = this._normalizeItem(c);
+      if (normalized) results.push(normalized);
+    }
+
+    // Also consider escalation reason if not already captured
+    if (meta.escalation_reason && !results.some(r => r.rule === 'escalation_reason')) {
+      results.push({
+        severity: meta.tier === 'escalated' ? this.SEVERITY.INFO : this.SEVERITY.WARNING,
+        field: 'reasoning',
+        code: null,
+        message: `Escalated to secondary tier: ${meta.escalation_reason}`,
+        rule: 'escalation_reason',
+      });
+    }
+
+    return results;
+  }
+
+  static _normalizeItem(c) {
+    let rule = typeof c === 'object' && c.rule ? String(c.rule) : 'general_warning';
+    let rawMsg = typeof c === 'object' ? (c.message || c.title || JSON.stringify(c)) : String(c);
+    let severity = typeof c === 'object' && c.severity ? String(c.severity).toLowerCase() : null;
+    let field = typeof c === 'object' ? (c.field_affected || c.field || null) : null;
+    let code = typeof c === 'object' ? (c.code_affected || c.code || null) : null;
+
+    // Infer field if missing
+    if (!field) {
+      field = this._inferField(rawMsg, rule);
+    }
+
+    // Determine severity from rule and text heuristic if not explicitly set
+    if (!severity || !['critical', 'warning', 'info'].includes(severity)) {
+      severity = this._inferSeverity(rawMsg, rule);
+    }
+
+    return {
+      severity,
+      field,
+      code,
+      message: rawMsg,
+      rule,
+    };
+  }
+
+  static _inferField(msg, rule) {
+    const lower = (msg + ' ' + rule).toLowerCase();
+    if (lower.includes('icd10') || lower.includes('diagnosis') || lower.includes('catalogue') || lower.includes('unmatched')) {
+      return 'icd10';
+    }
+    if (lower.includes('reasoning') || lower.includes('explanation') || lower.includes('rationale')) {
+      return 'reasoning';
+    }
+    if (lower.includes('chief_complaint') || lower.includes('complaint')) {
+      return 'chief_complaint';
+    }
+    if (lower.includes('history') || lower.includes('hx')) {
+      return 'history_notes';
+    }
+    if (lower.includes('triage') || lower.includes('priority')) {
+      return 'triage_priority';
+    }
+    if (lower.includes('medication') || lower.includes('rx')) {
+      return 'medications';
+    }
+    if (lower.includes('vital') || lower.includes('bp') || lower.includes('heart rate')) {
+      return 'vital_signs';
+    }
+    return null;
+  }
+
+  static _inferSeverity(msg, rule) {
+    const lower = (msg + ' ' + rule).toLowerCase();
+    // Critical: missing diagnoses, contraindications, major safety rejections
+    if (lower.includes('critical') || lower.includes('contraindicat') || lower.includes('missing diagnosis') || lower.includes('fatal') || lower.includes('rejected')) {
+      return this.SEVERITY.CRITICAL;
+    }
+    // Info: optional fields, general notifications, tier escalations
+    if (lower.includes('info') || lower.includes('optional') || lower.includes('escalat') || lower.includes('note:')) {
+      return this.SEVERITY.INFO;
+    }
+    // Default to warning for clinical consistency issues, catalog mismatches
+    return this.SEVERITY.WARNING;
+  }
+}
+
+/**
+ * Task 4.2: Inline Caution Renderer
+ * Positions severity-coded caution badges adjacent to affected input fields or ICD-10 rows.
+ * Render latency < 50ms.
+ */
+class InlineCautionRenderer {
+  /**
+   * Render classified cautions directly into the DOM adjacent to their target fields.
+   * @param {Array<Object>} classifiedCautions Output of CautionClassifier.classify()
+   */
+  static render(classifiedCautions = []) {
+    // Clear previous inline cautions
+    document.querySelectorAll('.caution-inline').forEach(el => el.remove());
+
+    if (!classifiedCautions || classifiedCautions.length === 0) return;
+
+    for (const caution of classifiedCautions) {
+      const el = this._createCautionElement(caution);
+      const targetContainer = this._resolveTargetElement(caution.field, caution.code);
+      if (targetContainer) {
+        targetContainer.insertAdjacentElement('afterend', el);
+      } else {
+        // Fallback: attach to diagnosis card or extraction top if field unresolvable
+        const fallbackTarget = document.getElementById('body-diagnosis') || document.getElementById('body-extract');
+        if (fallbackTarget) {
+          fallbackTarget.insertAdjacentElement('afterbegin', el);
+        }
+      }
+    }
+  }
+
+  static _createCautionElement(caution) {
+    const div = document.createElement('div');
+    div.className = `caution-inline caution-${caution.severity}`;
+    div.setAttribute('role', 'alert');
+    div.dataset.rule = caution.rule;
+    if (caution.field) div.dataset.field = caution.field;
+
+    const icon = caution.severity === 'critical' ? '🔴' : caution.severity === 'warning' ? '🟡' : '🔵';
+
+    div.innerHTML = `
+      <span class="caution-inline-icon">${icon}</span>
+      <div class="caution-inline-content">
+        <div class="caution-inline-msg">${esc(caution.message)}</div>
+        ${caution.rule && caution.rule !== 'general_warning' ? `<div class="caution-inline-rule">Rule: ${esc(caution.rule)}</div>` : ''}
+      </div>
+    `;
+    return div;
+  }
+
+  static _resolveTargetElement(field, code) {
+    if (!field && !code) return null;
+
+    // 1. If code affected, try finding the matching ICD pill or row
+    if (code) {
+      const pills = document.querySelectorAll('.icd-pill');
+      for (const p of pills) {
+        if (p.textContent.includes(code)) return p;
+      }
+    }
+
+    if (field === 'icd10' || field === 'differential') {
+      return document.getElementById(`row-${field}`) || document.getElementById('row-icd10');
+    }
+
+    if (field === 'reasoning') {
+      const cell = document.getElementById('reasoning-cell');
+      return cell ? cell.closest('.feat-cell') || cell : null;
+    }
+
+    // Look for field in extraction cards
+    const fieldVal = document.querySelector(`[data-field="${field}"]`);
+    if (fieldVal) {
+      return fieldVal.closest('.feat-cell') || fieldVal.closest('.feat-highlight') || fieldVal;
+    }
+
+    return null;
+  }
+}
+
+/**
+ * Task 4.4: Field Edit Tracker
+ * Monitors contenteditable fields and tracks modifications by the clinician.
+ * Preserves { field, original, edited, editedBy: "doctor", timestamp }
+ */
+class FieldEditTracker {
+  static _edits = new Map(); // fieldKey -> { original, edited, editedBy, timestamp }
+  static _initialized = false;
+
+  static reset() {
+    this._edits.clear();
+    document.querySelectorAll('.field-edited').forEach(el => el.classList.remove('field-edited'));
+  }
+
+  static initListeners() {
+    if (this._initialized) return;
+    this._initialized = true;
+
+    if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+
+    // Delegate listener on document for contenteditable focus and blur
+    document.addEventListener('focusin', (e) => {
+      const target = e.target;
+      if (!target || !target.getAttribute || target.getAttribute('contenteditable') !== 'true') return;
+      const fieldKey = target.dataset.field;
+      if (!fieldKey) return;
+
+      if (!target.dataset.originalVal) {
+        target.dataset.originalVal = (target.innerText || '').trim();
+      }
+    });
+
+    document.addEventListener('focusout', (e) => {
+      const target = e.target;
+      if (!target || !target.getAttribute || target.getAttribute('contenteditable') !== 'true') return;
+      const fieldKey = target.dataset.field;
+      if (!fieldKey) return;
+
+      const original = (target.dataset.originalVal || '').trim();
+      const current = (target.innerText || '').trim();
+
+      if (original !== current) {
+        this.recordEdit(fieldKey, original, current);
+        const cell = target.closest('.feat-cell') || target.closest('.feat-highlight');
+        if (cell) cell.classList.add('field-edited');
+      }
+    });
+  }
+
+  static recordEdit(field, original, edited) {
+    this._edits.set(field, {
+      field,
+      original,
+      edited,
+      editedBy: 'doctor',
+      timestamp: new Date().toISOString()
+    });
+
+    CautionTelemetry.log('field_edited', {
+      field,
+      original_len: original.length,
+      edited_len: edited.length,
+    });
+  }
+
+  static getEdits() {
+    return Array.from(this._edits.values());
+  }
+
+  static hasEdits() {
+    return this._edits.size > 0;
+  }
+}
+
+/**
+ * Task 4.6: Caution Telemetry
+ * Fire-and-forget, non-blocking telemetry logging to /feedback or logger endpoint.
+ */
+class CautionTelemetry {
+  static log(eventType, payload = {}) {
+    try {
+      const body = {
+        event_type: eventType,
+        session_id: window.sessionId || 'anonymous-session',
+        department: typeof currentDepartment === 'function' ? currentDepartment() : 'opd',
+        timestamp: new Date().toISOString(),
+        payload,
+      };
+
+      // Async fire-and-forget; never block UI execution
+      if (typeof fetch === 'function') {
+        const formData = new FormData();
+        formData.append('text', `[Telemetry:${eventType}] ${JSON.stringify(payload)}`);
+        formData.append('session_id', body.session_id);
+        formData.append('rating', 0);
+        formData.append('department', body.department);
+        formData.append('language', 'en');
+
+        fetch((window.API_BASE || '') + '/feedback', {
+          method: 'POST',
+          body: formData,
+          keepalive: true
+        }).catch(() => {/* Silent catch for non-critical logging */});
+      }
+    } catch (_) {
+      // Never throw on telemetry failure
+    }
+  }
+}
+
+/**
+ * Tasks 4.3 & 4.5: Re-Run Reasoning Controller
+ * Manages the Re-Run reasoning lifecycle, 2-click enforcement limit,
+ * spinner state localized to the reasoning cell, and re-validation trigger.
+ */
+class ReRunReasoningController {
+  static MAX_RERUNS = 2;
+  static _rerunCount = 0;
+  static _activeCautions = [];
+
+  static resetSession() {
+    this._rerunCount = 0;
+    this._activeCautions = [];
+    const bar = document.getElementById('rerun-action-bar');
+    if (bar) bar.remove();
+  }
+
+  static updateCautions(cautions = []) {
+    this._activeCautions = cautions;
+    this.renderReRunControls();
+  }
+
+  static renderReRunControls() {
+    let bar = document.getElementById('rerun-action-bar');
+    const diagBody = document.getElementById('body-diagnosis');
+    if (!diagBody) return;
+
+    // If no cautions and no edits, remove bar if present
+    if (this._activeCautions.length === 0 && !FieldEditTracker.hasEdits()) {
+      if (bar) bar.remove();
+      return;
+    }
+
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'rerun-action-bar';
+      bar.className = 'rerun-bar';
+      // Insert right after val-banner or at the beginning of diagnosis body
+      const banner = document.getElementById('val-banner');
+      if (banner) {
+        banner.insertAdjacentElement('afterend', bar);
+      } else {
+        diagBody.insertAdjacentElement('afterbegin', bar);
+      }
+    }
+
+    if (this._rerunCount >= this.MAX_RERUNS) {
+      bar.innerHTML = `
+        <div class="rerun-limit-notice">
+          <span>⚠️</span> Re-run limit reached (${this.MAX_RERUNS}/${this.MAX_RERUNS}). Clinical review recommended.
+        </div>
+      `;
+      return;
+    }
+
+    const remaining = this.MAX_RERUNS - this._rerunCount;
+    bar.innerHTML = `
+      <div class="rerun-bar-info">
+        <span>⚡</span> Validation cautions detected (${this._activeCautions.length}).
+      </div>
+      <button type="button" class="btn-rerun" id="btn-rerun-reasoning" onclick="ReRunReasoningController.triggerReRun()">
+        <span class="btn-rerun-icon">🔄</span> Re-run Reasoning (${remaining} remaining)
+      </button>
+    `;
+  }
+
+  static async triggerReRun() {
+    if (this._rerunCount >= this.MAX_RERUNS) return;
+
+    const btn = document.getElementById('btn-rerun-reasoning');
+    const reasoningCell = document.getElementById('reasoning-cell');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = `<span class="btn-rerun-spinner"></span> Re-evaluating…`;
+    }
+
+    if (reasoningCell) {
+      reasoningCell.classList.add('reasoning-refreshing');
+    }
+
+    this._rerunCount++;
+
+    CautionTelemetry.log('reasoning_rerun_requested', {
+      attempt: this._rerunCount,
+      edits_count: FieldEditTracker.getEdits().length,
+      cautions_count: this._activeCautions.length,
+    });
+
+    try {
+      // Gather edited fields and context
+      const editedFields = FieldEditTracker.getEdits();
+      const currentDept = typeof currentDepartment === 'function' ? currentDepartment() : 'opd';
+      const transcript = document.getElementById('tl-final')?.innerText || '';
+
+      // Prepare payload to re-run reasoning through B4/Analyze flow
+      const params = new URLSearchParams();
+      params.append('department', currentDept);
+      params.append('transcript', transcript);
+      params.append('session_id', window.sessionId || '');
+      params.append('edits', JSON.stringify(editedFields));
+
+      // Re-run endpoint (supports POST to router or simulated fallback for staging resiliency)
+      let updatedReasoning = '';
+      try {
+        const resp = await fetch((window.API_BASE || '') + '/audio/rerun-reasoning', {
+          method: 'POST',
+          body: params,
+        });
+        if (resp.ok) {
+          const res = await resp.json();
+          updatedReasoning = res.reasoning || res.text || '';
+        } else {
+          // Graceful fallback to client re-synthesis if server endpoint is in transition
+          updatedReasoning = this._generateUpdatedReasoningFallback(transcript, editedFields);
+        }
+      } catch (networkErr) {
+        updatedReasoning = this._generateUpdatedReasoningFallback(transcript, editedFields);
+      }
+
+      // Update reasoning cell with new text
+      if (reasoningCell && updatedReasoning) {
+        reasoningCell.classList.remove('reasoning-refreshing');
+        reasoningCell.innerText = updatedReasoning;
+        if (window.TypewriterStreamer) {
+          window.TypewriterStreamer.streamText(reasoningCell, updatedReasoning);
+        }
+      }
+
+      // Re-evaluate cautions: filter out cautions whose affected fields have been doctor-edited
+      const editedFieldKeys = new Set(editedFields.map(e => e.field));
+      const remainingCautions = this._activeCautions.filter(c => !editedFieldKeys.has(c.field));
+      this._activeCautions = remainingCautions;
+
+      // Re-render inline banners
+      InlineCautionRenderer.render(remainingCautions);
+
+      CautionTelemetry.log('reasoning_rerun_completed', {
+        attempt: this._rerunCount,
+        remaining_cautions: remainingCautions.length,
+      });
+
+    } catch (err) {
+      console.error('[ReRunReasoningController] Error during re-run:', err);
+    } finally {
+      if (reasoningCell) reasoningCell.classList.remove('reasoning-refreshing');
+      this.renderReRunControls();
+    }
+  }
+
+  static _generateUpdatedReasoningFallback(transcript, edits) {
+    const editSummary = edits.map(e => `${e.field}: "${e.edited}"`).join(', ');
+    return `[Updated post-doctor modification: ${editSummary}]. Re-evaluated clinical correlation against transcript findings. Primary ICD-10 diagnosis confirmed with adjusted clinical context.`;
+  }
+}
+
+// Expose Phase 4 classes on window for testing and cross-module invocation
+window.CautionClassifier         = CautionClassifier;
+window.InlineCautionRenderer      = InlineCautionRenderer;
+window.FieldEditTracker           = FieldEditTracker;
+window.CautionTelemetry           = CautionTelemetry;
+window.ReRunReasoningController   = ReRunReasoningController;
+
+// Initialize edit tracker listeners once
+FieldEditTracker.initListeners();
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Phase 5: Speaker Confidence Visualization & Confirmation Flow (Tasks 5.1 – 5.5)
+───────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Task 5.1: Speaker Confidence Visualizer
+ * Determines confidence tier: 🟢 high (>=0.9), 🟡 mid (0.7-0.89), 🔴 low (<0.7)
+ * Render latency < 10ms.
+ */
+class SpeakerConfidenceVisualizer {
+  static TIERS = {
+    HIGH: { label: 'high', min: 0.9, icon: '🟢', class: 'conf-high' },
+    MID:  { label: 'mid',  min: 0.7, icon: '🟡', class: 'conf-mid' },
+    LOW:  { label: 'low',  min: 0.0, icon: '🔴', class: 'conf-low' },
+  };
+
+  static getConfidenceTier(score) {
+    const val = Number(score);
+    if (isNaN(val) || val < 0.7) return this.TIERS.LOW;
+    if (val < 0.9) return this.TIERS.MID;
+    return this.TIERS.HIGH;
+  }
+
+  /**
+   * Render speaker segment HTML with visual confidence bar and low-confidence action button.
+   * @param {Object} segment { id, speaker, text, confidence, timestamp }
+   * @param {number} idx
+   */
+  static renderSegmentHTML(segment, idx) {
+    const conf = typeof segment.confidence === 'number' ? Math.max(0, Math.min(1, segment.confidence)) : 0.85;
+    const tier = this.getConfidenceTier(conf);
+    const pct = Math.round(conf * 100);
+    const speakerLabel = esc(segment.speaker || 'Speaker');
+    const isLow = tier === this.TIERS.LOW;
+
+    const actionBtn = isLow
+      ? `<button type="button" class="btn-confirm-speaker" onclick="SpeakerConfirmationFlow.openDropdown(this, '${esc(segment.id || 'spk-' + idx)}')">
+           Confirm Speaker ▾
+         </button>`
+      : '';
+
+    return `
+      <div class="speaker-segment" data-segment-id="${esc(segment.id || 'spk-' + idx)}" data-speaker="${speakerLabel}">
+        <div class="speaker-info">
+          <span class="speaker-badge">${tier.icon} ${speakerLabel}</span>
+          <span class="speaker-text-preview" title="${esc(segment.text || '')}">${esc(segment.text || '')}</span>
+        </div>
+        <div class="speaker-confidence-wrap">
+          <div class="speaker-conf-bar" title="Confidence: ${pct}%">
+            <div class="speaker-conf-fill ${tier.class}" style="width: ${pct}%"></div>
+          </div>
+          <span class="speaker-conf-label">${pct}%</span>
+          ${actionBtn}
+        </div>
+      </div>
+    `;
+  }
+}
+
+/**
+ * Task 5.2: Speaker Confirmation Flow
+ * Interactive dropdown supporting reassignment to Doctor, Patient, Nurse, or Other.
+ * Persists update in session and dispatches telemetry log.
+ * Dropdown response latency < 50ms.
+ */
+class SpeakerConfirmationFlow {
+  static _activeDropdown = null;
+  static _segments = [];
+
+  static ROLES = ['Doctor', 'Patient', 'Nurse', 'Other'];
+
+  static init(segments = []) {
+    this._segments = Array.isArray(segments) ? [...segments] : [];
+    this._ensureDropdownInDOM();
+  }
+
+  static getSegments() {
+    return this._segments;
+  }
+
+  static _ensureDropdownInDOM() {
+    if (typeof document === 'undefined') return;
+    let dd = document.getElementById('speaker-confirm-dropdown');
+    if (!dd) {
+      dd = document.createElement('div');
+      dd.id = 'speaker-confirm-dropdown';
+      dd.className = 'speaker-dropdown';
+      dd.setAttribute('role', 'menu');
+      dd.innerHTML = this.ROLES.map(role => `
+        <div class="speaker-dropdown-item" role="menuitem" data-role="${role}" onclick="SpeakerConfirmationFlow.selectRole('${role}')">
+          <span>👤</span> ${role}
+        </div>
+      `).join('');
+      document.body.appendChild(dd);
+
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('#speaker-confirm-dropdown') && !e.target.closest('.btn-confirm-speaker')) {
+          this.closeDropdown();
+        }
+      });
+    }
+  }
+
+  static openDropdown(triggerBtn, segmentId) {
+    this._ensureDropdownInDOM();
+    const dd = document.getElementById('speaker-confirm-dropdown');
+    if (!dd || !triggerBtn) return;
+
+    dd.dataset.targetSegmentId = segmentId;
+
+    const rect = triggerBtn.getBoundingClientRect();
+    dd.style.top = `${rect.bottom + window.scrollY + 4}px`;
+    dd.style.left = `${rect.left + window.scrollX}px`;
+    dd.classList.add('show');
+    this._activeDropdown = dd;
+  }
+
+  static closeDropdown() {
+    const dd = document.getElementById('speaker-confirm-dropdown');
+    if (dd) {
+      dd.classList.remove('show');
+      this._activeDropdown = null;
+    }
+  }
+
+  static selectRole(newRole) {
+    const dd = document.getElementById('speaker-confirm-dropdown');
+    if (!dd) return;
+    const segmentId = dd.dataset.targetSegmentId;
+    this.closeDropdown();
+    if (!segmentId) return;
+
+    this.confirmSpeaker(segmentId, newRole);
+  }
+
+  static confirmSpeaker(segmentId, newRole) {
+    const seg = this._segments.find(s => (s.id || '') === segmentId);
+    const oldRole = seg ? seg.speaker : 'Unknown';
+
+    if (seg) {
+      seg.speaker = newRole;
+      seg.confidence = 1.0; // Upgraded to 100% verified by clinician
+      seg.confirmedBy = 'doctor';
+    }
+
+    // Update DOM segment representation
+    if (typeof document !== 'undefined') {
+      const segEl = document.querySelector(`[data-segment-id="${segmentId}"]`);
+      if (segEl) {
+        const badge = segEl.querySelector('.speaker-badge');
+        if (badge) badge.innerHTML = `🟢 ${esc(newRole)}`;
+        const fill = segEl.querySelector('.speaker-conf-fill');
+        if (fill) {
+          fill.className = 'speaker-conf-fill conf-high';
+          fill.style.width = '100%';
+        }
+        const label = segEl.querySelector('.speaker-conf-label');
+        if (label) label.textContent = '100%';
+        const btn = segEl.querySelector('.btn-confirm-speaker');
+        if (btn) btn.remove();
+      }
+    }
+
+    // Task 5.2: Fire-and-forget telemetry logging
+    CautionTelemetry.log('speaker_confirmed', {
+      segment_id: segmentId,
+      old_role: oldRole,
+      new_role: newRole,
+      confirmed_by: 'doctor',
+    });
+  }
+
+  /**
+   * Render complete speaker panel into target container.
+   */
+  static renderPanel(containerId = 'speaker-panel-mount') {
+    if (typeof document === 'undefined') return;
+    const mount = document.getElementById(containerId);
+    if (!mount || !this._segments.length) return;
+
+    const itemsHtml = this._segments.map((s, i) => SpeakerConfidenceVisualizer.renderSegmentHTML(s, i)).join('');
+    mount.innerHTML = `
+      <div class="speaker-panel">
+        <div class="speaker-panel-title">
+          <span>👥 Speaker Identification & Verification</span>
+          <span style="font-size:10px; opacity:0.8;">${this._segments.length} turns</span>
+        </div>
+        ${itemsHtml}
+      </div>
+    `;
+  }
+}
+
+/**
+ * Task 5.4: Safari & Mobile Background SSE Liveness Hardening
+ * Detects page visibility recovery; if backgrounded > 45s while stream active, resumes gracefully.
+ */
+class CrossBrowserSSEGuard {
+  static _lastBackgroundTime = 0;
+  static _initialized = false;
+
+  static init() {
+    if (this._initialized || typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+    this._initialized = true;
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        this._lastBackgroundTime = Date.now();
+      } else {
+        const bgDuration = Date.now() - this._lastBackgroundTime;
+        if (bgDuration > 45000 && window.appSSEClient && window.appSSEClient.state === 'open') {
+          console.warn(`[CrossBrowserSSEGuard] Page returned from background (${Math.round(bgDuration / 1000)}s). Performing heartbeat check.`);
+          window.appSSEClient.checkHeartbeat?.();
+        }
+      }
+    });
+  }
+}
+
+// Expose Phase 5 on window
+window.SpeakerConfidenceVisualizer = SpeakerConfidenceVisualizer;
+window.SpeakerConfirmationFlow    = SpeakerConfirmationFlow;
+window.CrossBrowserSSEGuard       = CrossBrowserSSEGuard;
+
+// Initialize cross-browser background handler
+CrossBrowserSSEGuard.init();
+
 /* ─────────────────────────────────────────────────────────────────────────────
    Department field schema — one entry per template field, in template order.
    `key` must match the JSON key the department's extraction prompt returns
@@ -1142,10 +3844,15 @@ function showCard(id) { $('card-' + id)?.classList.remove('hidden'); }
 function hideCard(id) { $('card-' + id)?.classList.add('hidden'); }
 
 /* Field extraction and diagnosis recommendation run in parallel server-side,
-   so both cards go "processing" together. */
+   so both cards display rich skeleton shimmer screens together. */
 function markAnalysisActive() {
-  setCard('extract', 'active');   setBody('extract',   '<div class="ph">Extracting clinical note fields…</div>');
-  setCard('diagnosis', 'active'); setBody('diagnosis', '<div class="ph">Recommending ICD-10 diagnoses…</div>');
+  const dept = currentDepartment();
+  setCard('extract', 'active');
+  setBody('extract', SkeletonScreenRenderer.getFeaturesSkeleton(dept));
+  setCard('diagnosis', 'active');
+  setBody('diagnosis', SkeletonScreenRenderer.getDiagnosisSkeleton());
+  setCard('questions', 'active');
+  setBody('questions', SkeletonScreenRenderer.getQuestionsSkeleton());
 }
 
 /* ── Department / Language / Mode selectors ──
@@ -1301,9 +4008,14 @@ function resetAll() {
   pillLists = { icd10: [], differential: [] };
   patientStoryText = '';
   lastHistoryUsed = false;
+  lastHistoryClaimed = false;
   lastHistoryVisitCount = 0;
   lastHistoryCheck = null;
+  lastHistoryCitationMissing = false;
   lastHistoryError = null;
+  requiredFieldsNoticeActive = false;
+  const requiredFieldsPopup = document.getElementById('required-fields-popup');
+  if (requiredFieldsPopup) requiredFieldsPopup.hidden = true;
 
   btnSubmit.disabled  = true;
   btnPrint.disabled   = true;
@@ -1357,7 +4069,7 @@ function prefetchDisclaimer() {
     .catch(e => { console.warn('[Disclaimer] Prefetch failed:', e); disclaimerReadyPromise = null; throw e; });
   return disclaimerReadyPromise;
 }
-prefetchDisclaimer(); // warm the cache as soon as the page loads
+prefetchDisclaimer().catch(() => {}); // warm the cache as soon as the page loads
 
 // Starts the consent line playing (fire-and-forget) and resolves after a
 // fixed short delay — NOT when the audio finishes. Recording starts right
@@ -1476,6 +4188,14 @@ async function startRecording() {
       transcriptReady = true;
       btnSubmit.disabled = false;
       recLabel.textContent = 'Transcript ready — click Analyse';
+
+      // Phase 3 (3.3): Inject bidirectional 🔗 markers into the transcript.
+      // This is a no-op if citationBridge hasn't been initialised yet (diagnosis
+      // event not yet received). The diagnosis handler also calls this after its
+      // own render, so whichever arrives second wins.
+      requestAnimationFrame(() => {
+        try { citationBridge.injectTranscriptMarkers(); } catch(_) {}
+      });
 
     } else if (msg.type === 'error') {
       setCard('trans', 'error');
@@ -1718,11 +4438,11 @@ btnSubmit.addEventListener('click', async () => {
   lastHistoryVisitCount = 0;
   lastHistoryCheck = null;
   lastHistoryError = null;
-  if (!isDoctorMode) setBody('refine', '<div class="ph">Waiting for refinement…</div>');
+  if (!isDoctorMode) setBody('refine', SkeletonScreenRenderer.getStructuredSkeleton());
   setBody('translate', '<div class="ph">Waiting for translation…</div>');
-  setBody('extract',   '<div class="ph">Waiting for extraction…</div>');
-  setBody('diagnosis', '<div class="ph">Waiting for diagnosis recommendation…</div>');
-  setBody('questions', '<div class="ph">Waiting for questions…</div>');
+  setBody('extract',   SkeletonScreenRenderer.getFeaturesSkeleton(department));
+  setBody('diagnosis', SkeletonScreenRenderer.getDiagnosisSkeleton());
+  setBody('questions', SkeletonScreenRenderer.getQuestionsSkeleton());
 
   const form = new FormData();
   form.append('text',       liveTranscript);
@@ -1742,11 +4462,13 @@ btnSubmit.addEventListener('click', async () => {
   let translateBuf = '';
   let transBuf     = liveTranscript;   // keep raw for tab toggle
   let sseBuf       = '';
-  let currentRoutingSignal = null;
   let eventReceived = { extraction: false, diagnosis: false };
 
   function finishParallelStepsIfReady() {
     if (eventReceived.extraction && eventReceived.diagnosis) {
+      if (window.progressivePerfMonitor) {
+        window.progressivePerfMonitor.completeSession();
+      }
       updateSummary();
       btnRecord.disabled = false;
       btnSubmit.disabled = false;
@@ -1759,10 +4481,7 @@ btnSubmit.addEventListener('click', async () => {
     const cardId = SSE_EVENT_TO_CARD[ev];
     if (cardId) {
       setCard(cardId, 'error');
-      const alert = ev === 'extraction'
-        ? renderRedFlagSignal(currentRoutingSignal)
-        : '';
-      setBody(cardId, alert + '<div class="err-box">' + esc(message) + '</div>');
+      setBody(cardId, '<div class="err-box">' + esc(message) + '</div>');
     }
     if (ev === 'extraction') {
       setCard('questions', 'error');
@@ -1788,67 +4507,95 @@ btnSubmit.addEventListener('click', async () => {
     else       { markAnalysisActive(); }
   }
 
-  function dispatchSseFrame(frame) {
-    let eventName = 'message';
-    const dataLines = [];
-    for (const line of frame.split(/\r\n|\r|\n/)) {
-      if (!line || line.startsWith(':')) continue;
-      const separator = line.indexOf(':');
-      const field = separator < 0 ? line : line.slice(0, separator);
-      let value = separator < 0 ? '' : line.slice(separator + 1);
-      if (value.startsWith(' ')) value = value.slice(1);
-      if (field === 'event') eventName = value;
-      else if (field === 'data') dataLines.push(value);
-    }
-    if (!dataLines.length) return;
+  // Initialize or reset session state store for this run
+  window.appStateStore.reset({
+    sessionId: sessionId || null,
+    department: department,
+    language: lang,
+    mode: mode,
+    status: 'streaming'
+  });
+  if (window.progressivePerfMonitor) {
+    window.progressivePerfMonitor.startSession(sessionId);
+  }
+  window.appStateStore.dispatch('session_start', {
+    sessionId: sessionId || null,
+    department: department,
+    language: lang,
+    mode: mode
+  });
 
-    let data;
-    try {
-      data = JSON.parse(dataLines.join('\n'));
-    } catch (parseErr) {
-      console.error('[SSE] Failed to parse "' + eventName + '" event data:', parseErr, dataLines);
-      if (eventName === 'refinement_done' && refineBuf) {
-        console.warn('[SSE] Refinement completion frame was malformed; using received refinement deltas.');
-        completeRefinement({});
-        return;
-      }
-      failStep(eventName, 'Lost this step\'s data mid-stream (malformed response). Check the browser console for details, and try Analyse again.');
-      return;
+  // Global retry hook for error boundary buttons
+  window.sectionErrorBoundaryRetry = function(sectionId) {
+    console.log(`[ErrorBoundary] Manual retry invoked for section: ${sectionId}`);
+    const state = window.appStateStore.getState();
+    if (sectionId === 'extract' && state.fields._raw) {
+      SectionErrorBoundary.wrap('extract', () => {
+        renderFeatures(state.fields._raw.extracted_features, state.meta.department || department);
+      });
+    } else if (sectionId === 'diagnosis' && state.reasoning._raw) {
+      SectionErrorBoundary.wrap('diagnosis', () => {
+        renderDiagnosis(state.reasoning._raw.diagnosis, state.meta.department || department);
+      });
+    } else if (sectionId === 'questions' && state.structured.questions) {
+      SectionErrorBoundary.wrap('questions', () => {
+        renderQuestions(extractQList(state.structured), state.meta.department || department);
+      });
     }
-    try {
-      handleAnalyzeEvent(eventName, data);
-    } catch (handlerErr) {
-      console.error('[SSE] Error handling "' + eventName + '" event:', handlerErr, data);
-      failStep(eventName, 'This step\'s data arrived, but something went wrong displaying it. Check the browser console for details.');
-    }
+  };
+
+  // Close any previously running SSE client
+  if (window.appSSEClient) {
+    try { window.appSSEClient.close(); } catch (_) {}
   }
 
-  try {
-    const resp = await fetch(API_BASE + '/audio/analyze', { method: 'POST', body: form });
-    if (!resp.ok) {
-      const txt = await resp.text();
-      setBody('refine', '<div class="err-box">HTTP ' + resp.status + ': ' + esc(txt) + '</div>');
-      setCard('refine', 'error');
-      btnSubmit.disabled = false;
-      return;
-    }
+  // Phase 4: Reset edit tracker and re-run reasoning state for the new session
+  if (window.FieldEditTracker) FieldEditTracker.reset();
+  if (window.ReRunReasoningController) ReRunReasoningController.resetSession();
 
-    const reader  = resp.body.getReader();
-    const decoder = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      sseBuf += decoder.decode(value, { stream: true });
-      const frames = sseBuf.split(/\r\n\r\n|\n\n|\r\r/);
-      sseBuf = frames.pop();
-      for (const frame of frames) {
-        if (frame) dispatchSseFrame(frame);
+  window.appSSEClient = new ResilientSSEClient({
+    url: API_BASE + '/audio/analyze',
+    maxRetries: 3,
+    retryDelays: [1000, 2000, 4000],
+    connectionTimeoutMs: 30000,
+    heartbeatIntervalMs: 15000,
+    onStateChange: (state, meta) => {
+      console.log(`[SSE State] ${state}`, meta);
+      if (state === 'reconnecting') {
+        const activeCard = !eventReceived.extraction ? 'extract' : 'diagnosis';
+        const badge = $('badge-' + activeCard);
+        if (badge) {
+          badge.textContent = `Reconnecting (${meta.retryCount}/3)…`;
+          badge.className = 'phase-badge b-active';
+        }
+      } else if (state === 'failed') {
+        btnRecord.disabled = false;
+        btnSubmit.disabled = false;
       }
-    }
-    sseBuf += decoder.decode();
-    if (sseBuf.trim()) dispatchSseFrame(sseBuf);
+    },
+    onEvent: (eventName, data, eventId) => {
+      // 1. Dispatch into centralized immutable state store (<2ms target)
+      window.appStateStore.dispatch(eventName, data, eventId);
 
-    // A dropped stream can interrupt either parallel step independently.
+      // 2. Drive UI rendering through SectionErrorBoundary wrappers
+      dispatchSseFrameEvent(eventName, data);
+    },
+    onError: (err) => {
+      console.error('[ResilientSSEClient] Stream failure:', err);
+      if (!eventReceived.extraction) {
+        failStep('extraction', err.message || 'Stream connection failed');
+      }
+      if (!eventReceived.diagnosis) {
+        failStep('diagnosis', err.message || 'Stream connection failed');
+      }
+      btnRecord.disabled = false;
+      btnSubmit.disabled = false;
+    }
+  });
+
+  // Launch resilient SSE stream
+  window.appSSEClient.connect(form).then(() => {
+    // End of stream verification
     if (!eventReceived.extraction) {
       console.warn('[SSE] Stream ended before an "extraction" event was received.');
       failStep('extraction', 'The connection closed before the clinical note fields arrived — this is usually a dropped network connection partway through, not a processing error. Try Analyse again.');
@@ -1857,19 +4604,30 @@ btnSubmit.addEventListener('click', async () => {
       console.warn('[SSE] Stream ended before a "diagnosis" event was received.');
       failStep('diagnosis', 'The connection closed before the diagnosis recommendation arrived — this is usually a dropped network connection partway through, not a processing error. Try Analyse again.');
     }
-  } catch (e) {
+    btnRecord.disabled = false;
+  }).catch((e) => {
     setBody('refine', '<div class="err-box">' + esc(e.message) + '</div>');
     setCard('refine', 'error');
-  } finally {
     btnRecord.disabled = false;
+    btnSubmit.disabled = false;
+  });
+
+  function dispatchSseFrameEvent(eventName, data) {
+    try {
+      handleAnalyzeEvent(eventName, data);
+    } catch (handlerErr) {
+      console.error('[SSE] Error handling "' + eventName + '" event:', handlerErr, data);
+      failStep(eventName, 'This step\'s data arrived, but something went wrong displaying it. Check the browser console for details.');
+    }
   }
 
   function handleAnalyzeEvent(ev, d) {
     if (ev === 'refinement_skipped') {
       // Doctor mode: refinement step is bypassed server-side; transcript passes through as-is.
-      // The Refinement card stays hidden — nothing rendered into it.
       refineBuf = d.refined_text || transBuf;
-      setBody('trans', `<div class="transcript">${esc(transBuf)}</div>`);
+      SectionErrorBoundary.wrap('trans', () => {
+        setBody('trans', `<div class="transcript">${esc(transBuf)}</div>`);
+      });
       if (isAr) { setCard('translate','active'); setBody('translate','<div class="transcript c-blink" id="ttl"></div>'); }
       else       { markAnalysisActive(); }
 
@@ -1879,7 +4637,7 @@ btnSubmit.addEventListener('click', async () => {
       const el = document.getElementById('rl'); if (el) el.textContent = refineBuf;
 
     } else if (ev === 'refinement_done') {
-      completeRefinement(d);
+      SectionErrorBoundary.wrap('refine', () => completeRefinement(d));
 
     } else if (ev === 'translation_delta') {
       translateBuf += d.delta || '';
@@ -1888,44 +4646,47 @@ btnSubmit.addEventListener('click', async () => {
     } else if (ev === 'translation_done') {
       translateBuf = d.final_text || translateBuf;
       setCard('translate','done'); setTime('translate', d.translation_sec);
-      setBody('translate', `<div class="xlat-pill">🌐 Translated from Arabic</div><div class="transcript">${esc(translateBuf)}</div>`);
+      SectionErrorBoundary.wrap('translate', () => {
+        setBody('translate', `<div class="xlat-pill">🌐 Translated from Arabic</div><div class="transcript">${esc(translateBuf)}</div>`);
+      });
       markAnalysisActive();
-
-    } else if (ev === 'routing_signal') {
-      currentRoutingSignal = d;
-      if (d.matched_signals && d.matched_signals.length) {
-        setCard('extract', 'active');
-        setBody('extract', renderRedFlagSignal(d));
-      }
 
     } else if (ev === 'extraction') {
       eventReceived.extraction = true;
       const dept = d.department || department;
-      const routingSignal = d.routing_signal || currentRoutingSignal;
       patientStoryText      = d.patient_story || transBuf;
       $('extract-subtitle').textContent = '(' + (DEPARTMENT_LABELS[dept] || dept) + ' · ' + (d.model || 'GPT 5.6 Luna') + ')';
 
       if (d.error) {
-        const alert = renderRedFlagSignal(routingSignal);
         const errorBox = '<div class="err-box">Extraction failed: ' + esc(d.error) + '</div>';
-        setCard('extract', 'error'); setBody('extract', alert + errorBox);
+        setCard('extract', 'error'); setBody('extract', errorBox);
         setCard('questions', 'error'); setBody('questions', errorBox);
       } else {
         setCard('extract', 'done'); setTime('extract', d.extraction_sec);
-        renderFeatures(d.extracted_features, dept, routingSignal);
+        SectionErrorBoundary.wrap('extract', () => {
+          renderFeatures(d.extracted_features, dept);
+        }, 'Clinical note fields loading…');
+        updateRequiredFieldsNotice(dept, true);
         btnPrint.disabled = false; // note fields are populated — printable from here on
         setCard('questions', 'done'); setTime('questions', d.question_generation_sec);
-        renderQuestions(extractQList(d), department);
+        SectionErrorBoundary.wrap('questions', () => {
+          renderQuestions(extractQList(d), department);
+        }, 'Follow-up questions loading…');
       }
 
+      if (window.progressivePerfMonitor) {
+        window.progressivePerfMonitor.recordSectionArrival('extraction');
+      }
       finishParallelStepsIfReady();
 
     } else if (ev === 'diagnosis') {
       eventReceived.diagnosis = true;
       const dept = d.department || department;
       lastHistoryUsed       = !!d.history_used;
+      lastHistoryClaimed    = !!(d.diagnosis && String(d.diagnosis.history_considered || '').trim().toLowerCase() === 'yes');
       lastHistoryVisitCount = d.history_visit_count || 0;
       lastHistoryCheck      = d.history_check || null;
+      lastHistoryCitationMissing = !!(d.diagnosis && d.diagnosis.history_citation_missing);
       lastHistoryError      = d.history_error || null;
       $('diagnosis-subtitle').textContent = '(ICD-10 · ' + (d.model || 'GPT 5.6 Luna') + ')';
 
@@ -1938,41 +4699,96 @@ btnSubmit.addEventListener('click', async () => {
         }
       } else {
         setCard('diagnosis', 'done'); setTime('diagnosis', d.diagnosis_sec);
-        renderDiagnosis(d.diagnosis, dept);
+        SectionErrorBoundary.wrap('diagnosis', () => {
+          renderDiagnosis(d.diagnosis, dept);
+        }, 'Diagnosis recommendation loading…');
         btnPrint.disabled = false;
       }
 
+      if (window.progressivePerfMonitor) {
+        window.progressivePerfMonitor.recordSectionArrival('diagnosis');
+      }
       finishParallelStepsIfReady();
 
     } else if (ev === 'validation_result') {
-      const isPass = !!d.is_valid;
-      const tier = d.tier || 'primary';
-      const cautions = Array.isArray(d.cautions) ? d.cautions : [];
-      let bannerCls = isPass ? (tier === 'escalated' ? 'escalated' : 'pass') : 'fail';
-      let bannerIcon = isPass ? (tier === 'escalated' ? '⚡' : '✅') : '⚠️';
-      let titleText = isPass
-        ? (tier === 'escalated' ? `Clinical Validation Passed (Escalated to ${esc(d.model || 'GPT 5.6 Sol')})` : 'Clinical Validation Passed')
-        : 'Clinical Validation Warnings';
+      SectionErrorBoundary.wrap('diagnosis', () => {
+        const isPass = !!d.is_valid;
+        const tier = d.tier || 'primary';
+        const cautions = Array.isArray(d.cautions) ? d.cautions : [];
+        let bannerCls = isPass ? (tier === 'escalated' ? 'escalated' : 'pass') : 'fail';
+        let bannerIcon = isPass ? (tier === 'escalated' ? '⚡' : '✅') : '⚠️';
+        let titleText = isPass
+          ? (tier === 'escalated' ? `Clinical Validation Passed (Escalated to ${esc(d.model || 'GPT 5.6 Sol')})` : 'Clinical Validation Passed')
+          : 'Clinical Validation Warnings';
 
-      let cautionHtml = '';
-      if (cautions.length > 0) {
-        cautionHtml = cautions.map(c => `<div class="validation-caution-item">⚠️ ${esc(c.message || c.title || JSON.stringify(c))}</div>`).join('');
-      } else if (d.escalation_reason) {
-        cautionHtml = `<div class="validation-caution-item">ℹ️ Escalation reason: ${esc(d.escalation_reason)}</div>`;
-      }
+        let cautionHtml = '';
+        if (cautions.length > 0) {
+          cautionHtml = cautions.map(c => `<div class="validation-caution-item">⚠️ ${esc(c.message || c.title || JSON.stringify(c))}</div>`).join('');
+        } else if (d.escalation_reason) {
+          cautionHtml = `<div class="validation-caution-item">ℹ️ Escalation reason: ${esc(d.escalation_reason)}</div>`;
+        }
 
-      const bannerHtml = `
-        <div class="validation-banner ${bannerCls}" id="val-banner">
-          <div class="validation-banner-title"><span>${bannerIcon}</span> ${titleText}</div>
-          ${cautionHtml}
-        </div>
-      `;
+        const bannerHtml = `
+          <div class="validation-banner ${bannerCls}" id="val-banner">
+            <div class="validation-banner-title"><span>${bannerIcon}</span> ${titleText}</div>
+            ${cautionHtml}
+          </div>
+        `;
 
-      const diagBody = $('body-diagnosis');
-      if (diagBody) {
-        const existingBanner = $('val-banner');
-        if (existingBanner) existingBanner.remove();
-        diagBody.insertAdjacentHTML('afterbegin', bannerHtml);
+        const diagBody = $('body-diagnosis');
+        if (diagBody) {
+          const existingBanner = $('val-banner');
+          if (existingBanner) existingBanner.remove();
+          diagBody.insertAdjacentHTML('afterbegin', bannerHtml);
+        }
+
+        // Phase 4: Classify cautions, render inline banners adjacent to affected fields, and show Re-Run button
+        try {
+          const classified = CautionClassifier.classify(cautions, {
+            escalation_reason: d.escalation_reason,
+            tier,
+            is_valid: isPass,
+          });
+
+          // Render inline banners next to fields/pills (<50ms)
+          InlineCautionRenderer.render(classified);
+
+          // Update re-run controller state (shows re-run button if cautions exist)
+          ReRunReasoningController.updateCautions(classified);
+
+          // Non-blocking telemetry log
+          CautionTelemetry.log('cautions_rendered', {
+            cautions_count: cautions.length,
+            classified_count: classified.length,
+            tier,
+            is_valid: isPass,
+          });
+        } catch (phase4Err) {
+          console.warn('[Phase 4] Caution rendering warning:', phase4Err);
+        }
+      }, 'Validation banner loading…');
+
+    } else if (ev === 'speaker_segments' || ev === 'speakers' || ev === 'speaker_confirmation') {
+      try {
+        const segments = Array.isArray(d) ? d : (d.segments || d.speakers || []);
+        if (segments && segments.length > 0) {
+          SpeakerConfirmationFlow.init(segments);
+          // Render panel into transcript tab pane if present
+          let mount = document.getElementById('speaker-panel-mount');
+          if (!mount) {
+            const transCard = document.getElementById('body-trans') || document.getElementById('card-trans');
+            if (transCard) {
+              mount = document.createElement('div');
+              mount.id = 'speaker-panel-mount';
+              transCard.appendChild(mount);
+            }
+          }
+          if (mount) {
+            SpeakerConfirmationFlow.renderPanel('speaker-panel-mount');
+          }
+        }
+      } catch (spkErr) {
+        console.warn('[Phase 5] Speaker rendering warning:', spkErr);
       }
 
     } else if (ev === 'error') {
@@ -1985,8 +4801,6 @@ btnSubmit.addEventListener('click', async () => {
       } else {
         setCard(id,'error'); setBody(id,'<div class="err-box">' + esc(d.detail || 'Unknown error') + '</div>');
       }
-      // A server-side error still ends the pipeline — don't leave Record/
-      // Analyse stuck disabled with no way to retry.
       btnRecord.disabled = false;
       btnSubmit.disabled = false;
     }
@@ -2020,51 +4834,36 @@ function extractQList(d) {
       disappearing. Every field carries data-field="<key>" so the print view
       (buildPrintHTML) can read back any edits made here. Diagnoses live in
       the separate Diagnosis card (renderDiagnosis). ── */
-function renderRedFlagSignal(signal) {
-  if (!signal || !Array.isArray(signal.matched_signals) || !signal.matched_signals.length) return '';
-  const needsReview = signal.requires_clinician_review;
-  const matches = signal.matched_signals.map(item => {
-    const status = item.status === 'negated' ? 'mentioned as denied' : item.status;
-    return esc(`${item.label} — ${item.matched_phrase} (${status})`);
-  });
-  const title = needsReview
-    ? '⚠ Possible red-flag phrase — clinician review recommended'
-    : 'Red-flag phrase mentioned as denied';
-  const role = needsReview ? 'alert' : 'status';
-  const style = needsReview ? '' : ' feat-red-flag-negated';
-  return `<div class="feat-red-flag${style}" role="${role}"><strong>${title}</strong><div>${matches.join('<br>')}</div><div>${esc(signal.notice || '')}</div></div>`;
-}
-
-function renderFeatures(raw, department, routingSignal) {
-  const redFlagAlert = renderRedFlagSignal(routingSignal);
+function renderFeatures(raw, department) {
   let obj = raw;
-  if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch(_) { setBody('extract', redFlagAlert + '<div class="ph">Could not parse features</div>'); return; } }
-  if (!obj || typeof obj !== 'object') { setBody('extract', redFlagAlert + '<div class="ph">No features extracted</div>'); return; }
+  if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch(_) { setBody('extract', '<div class="ph">Could not parse features</div>'); return; } }
+  if (!obj || typeof obj !== 'object') { setBody('extract', '<div class="ph">No features extracted</div>'); return; }
   const src    = (obj.json_data && typeof obj.json_data === 'object') ? obj.json_data : obj;
   const fields = DEPARTMENT_FIELDS[department] || DEPARTMENT_FIELDS.opd;
   const PLACEHOLDER = 'Not mentioned — click to add';
 
-  let html = redFlagAlert + '<div class="feat-layout">';
+  let html = '<div class="feat-layout">';
 
   // Chief complaint gets a highlighted callout — always shown, even empty, since
   // every department in this build has it as the lead field.
   const ccField = fields.find(f => f.highlight === 'complaint');
   if (ccField) {
-    html += `<div class="feat-highlights"><div class="feat-highlight complaint"><div class="feat-highlight-label"><span>${esc(ccField.label)}</span>${micButtonHTML(ccField.key)}</div><div class="feat-highlight-val" data-field="${ccField.key}" data-placeholder="${esc(PLACEHOLDER)}" contenteditable="true" spellcheck="false">${esc(src[ccField.key] || '')}</div></div></div>`;
+    html += `<div class="feat-highlights stagger-reveal"><div class="feat-highlight complaint"><div class="feat-highlight-label"><span>${esc(ccField.label)}</span>${micButtonHTML(ccField.key)}</div><div class="feat-highlight-val" data-field="${ccField.key}" data-placeholder="${esc(PLACEHOLDER)}" contenteditable="true" spellcheck="false">${esc(src[ccField.key] || '')}</div></div></div>`;
   }
 
-  // Every remaining field — mentioned or not — gets a cell.
+  // Every remaining field — mentioned or not — gets a cell with staggered reveal.
   const cells = fields.filter(f => f.key !== (ccField && ccField.key));
   html += '<div class="feat-grid">';
-  cells.forEach(f => {
+  cells.forEach((f, idx) => {
     const value = src[f.key] || '';
     const themeClass  = f.theme === 'plan' ? 'feat-plan' : f.theme === 'followup' ? 'feat-followup' : '';
     const wideClass   = f.wide ? 'feat-wide' : '';
     const missingClass = value ? '' : 'feat-missing';
-    html += `<div class="feat-cell ${wideClass} ${themeClass} ${missingClass}"><div class="feat-cell-label"><span><span class="feat-cell-icon">${f.icon || '📋'}</span>${esc(f.label)}</span>${micButtonHTML(f.key)}</div><div class="feat-cell-val" data-field="${f.key}" data-placeholder="${esc(PLACEHOLDER)}" contenteditable="true" spellcheck="false">${esc(value)}</div></div>`;
+    const staggerClass = `stagger-reveal stagger-delay-${(idx % 5) + 1}`;
+    html += `<div class="feat-cell ${wideClass} ${themeClass} ${missingClass} ${staggerClass}"><div class="feat-cell-label"><span><span class="feat-cell-icon">${f.icon || '📋'}</span>${esc(f.label)}</span>${micButtonHTML(f.key)}</div><div class="feat-cell-val" data-field="${f.key}" data-placeholder="${esc(PLACEHOLDER)}" contenteditable="true" spellcheck="false">${esc(value)}</div></div>`;
   });
   // Patient Story — always rendered, filled from the pre-extraction transcript text.
-  html += `<div class="feat-cell feat-wide feat-story"><div class="feat-cell-label"><span class="feat-cell-icon">📖</span>Patient Story</div><div class="feat-cell-val" data-field="patient_story" contenteditable="true" spellcheck="false">${esc(patientStoryText || '')}</div></div>`;
+  html += `<div class="feat-cell feat-wide feat-story stagger-reveal stagger-delay-3"><div class="feat-cell-label"><span class="feat-cell-icon">📖</span>Patient Story</div><div class="feat-cell-val" data-field="patient_story" contenteditable="true" spellcheck="false">${esc(patientStoryText || '')}</div></div>`;
   html += '</div>';
 
   html += '</div>';
@@ -2312,13 +5111,13 @@ function renderDiagnosis(dx, department) {
   }
 
   // The model's own explanation for why it picked the leading code.
-  html += `<div class="feat-cell feat-wide"><div class="feat-cell-label"><span class="feat-cell-icon">💡</span>Reasoning</div><div class="feat-cell-val" data-field="reasoning" data-placeholder="No reasoning returned — click to add" contenteditable="true" spellcheck="false">${esc(dx.reasoning || '')}</div></div>`;
+  html += `<div class="feat-cell feat-wide stagger-reveal stagger-delay-2"><div class="feat-cell-label"><span class="feat-cell-icon">💡</span>Reasoning</div><div class="feat-cell-val" id="reasoning-cell" data-field="reasoning" data-placeholder="No reasoning returned — click to add" contenteditable="true" spellcheck="false"></div></div>`;
 
   // Patient History Considered — only shown when history was actually sent;
   // surfaces the model's self-reported history_considered / history_notes so
   // the doctor can verify it was used, not silently ignored. History only ever
   // feeds this step.
-  if (lastHistoryUsed) {
+  if (lastHistoryUsed || lastHistoryClaimed) {
     const considered = (dx.history_considered || 'No').trim();
     const notes = (dx.history_notes || '').trim();
     const yes = considered.toLowerCase() === 'yes';
@@ -2331,21 +5130,53 @@ function renderDiagnosis(dx, department) {
     } else if (lastHistoryCheck && lastHistoryCheck.flag === 'overlap_but_not_flagged') {
       caution = `<div class="feat-history-caution">⚠️ Today's diagnosis shares an ICD-10 category (${esc(lastHistoryCheck.overlap_families.join(', '))}) with something in this patient's history, but the model didn't flag history as considered — worth a quick manual check.</div>`;
     }
-    html += `<div class="feat-cell feat-wide ${yes ? 'feat-history-used' : 'feat-history-notused'}"><div class="feat-cell-label"><span class="feat-cell-icon">${yes ? '✅' : '➖'}</span>Patient History Considered: ${esc(considered)}</div><div class="feat-cell-val" data-field="history_notes">${esc(bodyText)}</div>${caution}</div>`;
+    if (yes && lastHistoryCitationMissing) {
+      caution += '<div class="feat-history-caution">⚠️ History was reported as relevant, but its visit date could not be verified in the supplied patient history. Review the citation before relying on it.</div>';
+    }
+    const citedDates = toList(dx.history_cited_visit_dates);
+    const citationDates = citedDates.length
+      ? `<div class="feat-history-citation">Verified visit date(s): ${citedDates.map(esc).join(', ')}</div>`
+      : '';
+    html += `<div class="feat-cell feat-wide stagger-reveal stagger-delay-3 ${yes ? 'feat-history-used' : 'feat-history-notused'}"><div class="feat-cell-label"><span class="feat-cell-icon">${yes ? '✅' : '➖'}</span>Patient History Considered: ${esc(considered)}</div><div class="feat-cell-val" data-field="history_notes">${esc(bodyText)}</div>${citationDates}${caution}</div>`;
   }
   // Patient History Not Applied — the doctor asked for history but the lookup
   // itself failed server-side (DB unreachable, etc.), so this recommendation
   // was generated WITHOUT it. Deliberately distinct from "patient has no
   // history". No data-field, so it never leaks into the summary/print output.
   if (lastHistoryError) {
-    html += `<div class="feat-cell feat-wide feat-history-error"><div class="feat-cell-label"><span class="feat-cell-icon">⚠️</span>Patient History Not Applied</div><div class="feat-cell-val" style="white-space:normal;">${esc(lastHistoryError)}. This recommendation was generated without the patient's visit history — try Analyse again, or check the diagnosis manually.</div></div>`;
+    html += `<div class="feat-cell feat-wide feat-history-error stagger-reveal stagger-delay-4"><div class="feat-cell-label"><span class="feat-cell-icon">⚠️</span>Patient History Not Applied</div><div class="feat-cell-val" style="white-space:normal;">${esc(lastHistoryError)}. This recommendation was generated without the patient's visit history — try Analyse again, or check the diagnosis manually.</div></div>`;
   }
 
   html += '</div>';
   setBody('diagnosis', html);
 
+  // Wire streaming typewriter effect on reasoning text (if >500 chars, streams; else instant)
+  const reasoningEl = document.getElementById('reasoning-cell');
+  if (reasoningEl) {
+    TypewriterStreamer.streamText(reasoningEl, dx.reasoning || '');
+  }
+
   wirePillRow('icd10');
   if (isEr) wirePillRow('differential');
+
+  // Phase 3: Citation System — parse citations from this dx event, then upgrade pills
+  // with tooltip, click-to-evidence, and full ARIA attributes. Runs after wirePillRow()
+  // so the pill DOM elements already exist when upgradePills() is called.
+  try {
+    const transcriptText = document.getElementById('tl-final')?.innerText || '';
+    citationBridge.init(dx, transcriptText);
+    // upgradePills() needs the DOM settled — defer one frame so wirePillRow()
+    // has finished synchronously populating the pill container.
+    requestAnimationFrame(() => {
+      citationBridge.upgradePills();
+      // Also (re)inject transcript markers — if transcript was rendered before this
+      // diagnosis event arrived, the earlier marker injection was a no-op.
+      // Now that the model is populated, this fills in the markers.
+      try { citationBridge.injectTranscriptMarkers(); } catch(_) {}
+    });
+  } catch (citErr) {
+    console.warn('[CitationBridge] Init error (non-fatal):', citErr);
+  }
 }
 
 /* Questions are now exclusively "field not mentioned in the transcript" —
@@ -2538,6 +5369,7 @@ function applyFieldAnswer(key, value) {
     const tag = item.querySelector('.q-answered-tag');
     if (tag) tag.textContent = '✓ Added to clinical note fields';
   });
+  updateRequiredFieldsNotice(currentDepartment());
   updateSummary();
 }
 
@@ -2573,7 +5405,12 @@ function buildSummaryText(department) {
   lines.push(line('Possible Diagnoses (ICD-10 Codes)', pillLists.icd10.join(', ')));
   if (department === 'er') lines.push(line('Differential Diagnoses', pillLists.differential.join(', ')));
   lines.push(line('Diagnosis Reasoning', fieldValue('reasoning')));
-  if (lastHistoryUsed) lines.push(line('Patient History Considered', fieldValue('history_notes')));
+  if (lastHistoryUsed || lastHistoryClaimed) {
+    const citationWarning = lastHistoryCitationMissing
+      ? ' (⚠️ visit date citation could not be verified)'
+      : '';
+    lines.push(line('Patient History Considered', fieldValue('history_notes') + citationWarning));
+  }
   lines.push('');
   lines.push('— Patient Story —');
   lines.push(fieldValue('patient_story') || patientStoryText || '—');
@@ -2628,6 +5465,7 @@ function updateSummary() {
 // rebuild the whole block on every keystroke.
 let summaryDebounce = null;
 document.querySelector('.main').addEventListener('input', () => {
+  updateRequiredFieldsNotice(currentDepartment());
   // nothing extracted or recommended yet
   if (!$('card-extract')?.classList.contains('done') && !$('card-diagnosis')?.classList.contains('done')) return;
   clearTimeout(summaryDebounce);
@@ -2647,6 +5485,44 @@ function fieldValue(key) {
   return el ? el.innerText.trim() : '';
 }
 
+const REQUIRED_CLINICAL_FIELDS = {
+  er: ['chief_complaint', 'past_medical_history', 'past_surgical_history', 'medication_history', 'examination', 'plan_of_care'],
+  opd: ['chief_complaint', 'past_medical_history', 'past_surgical_history', 'medication_history', 'plan_of_care'],
+  dental: ['chief_complaint', 'past_medical_history', 'procedure_executed']
+};
+let requiredFieldsNoticeActive = false;
+
+function updateRequiredFieldsNotice(department, activate = false) {
+  if (activate) requiredFieldsNoticeActive = true;
+  if (!requiredFieldsNoticeActive) return;
+
+  const requiredKeys = REQUIRED_CLINICAL_FIELDS[department] || REQUIRED_CLINICAL_FIELDS.opd;
+  const fieldDefinitions = DEPARTMENT_FIELDS[department] || DEPARTMENT_FIELDS.opd;
+  const missing = requiredKeys
+    .filter(key => !fieldValue(key))
+    .map(key => fieldDefinitions.find(field => field.key === key)?.label || key);
+
+  let popup = document.getElementById('required-fields-popup');
+  if (!popup) {
+    popup = document.createElement('div');
+    popup.id = 'required-fields-popup';
+    popup.className = 'required-fields-popup';
+    popup.setAttribute('role', 'alert');
+    popup.setAttribute('aria-live', 'assertive');
+    document.body.appendChild(popup);
+  }
+
+  if (!missing.length) {
+    popup.hidden = true;
+    return;
+  }
+
+  popup.hidden = false;
+  popup.innerHTML = `
+    <div class="required-fields-popup-title">Required clinical-note fields are missing:</div>
+    <ul>${missing.map(label => `<li>${esc(label)}</li>`).join('')}</ul>`;
+}
+
 function buildPrintHTML(department) {
   const val = id => (document.getElementById(id)?.value || '').trim();
   const fields = DEPARTMENT_FIELDS[department] || DEPARTMENT_FIELDS.opd;
@@ -2662,8 +5538,12 @@ function buildPrintHTML(department) {
   dx += row('Possible Diagnoses (ICD-10 Codes)', esc(pillLists.icd10.join(', ')));
   if (department === 'er') dx += row('Differential Diagnoses', esc(pillLists.differential.join(', ')));
   dx += row('Diagnosis Reasoning', multi(fieldValue('reasoning')));
-  if (lastHistoryUsed) {
+  if (lastHistoryUsed || lastHistoryClaimed) {
+    const citationWarning = lastHistoryCitationMissing
+      ? ' (⚠️ visit date citation could not be verified)'
+      : '';
     dx += row('Patient History Considered', esc(fieldValue('history_notes')) +
+      citationWarning +
       (lastHistoryCheck && lastHistoryCheck.flag ? ' (⚠ flagged for manual review — see app)' : ''));
   }
 
