@@ -28,6 +28,12 @@ Useful environment variables::
     LOCUST_LENGTH_MIX=short:50,medium:35,long:15
     LOCUST_MAX_FAIL_RATIO=0.01        Headless exit threshold; default 1%
     LOCUST_MAX_P95_MS=                Optional final-extraction p95 threshold
+    LOCUST_WS_MAX_FAIL_RATIO=         ws-session row fail ratio (defaults to
+                                      LOCUST_MAX_FAIL_RATIO)
+    LOCUST_WS_MAX_P95_MS=             Optional WS-session total p95 threshold
+    LOCUST_SESSION_CSV=locust_sessions.csv
+                                      Per-session CSV path
+    LOCUST_SESSION_CSV_APPEND=false   Append instead of truncating per run
 
 The optional stepped shape is in ``step_load_shape.py``. Use both files to
 enable it, for example ``locust -f locustfile.py,step_load_shape.py``.
@@ -43,6 +49,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import math
 import os
 import random
@@ -231,6 +238,18 @@ def _failure_category(error: BaseException) -> str:
         return "Timeout"
     if isinstance(error, requests.exceptions.ConnectionError):
         return "Connection error"
+    # The WebSocket phase raises websocket-client exceptions, which are not
+    # ``requests`` exceptions; classify them explicitly so they do not all
+    # collapse into the generic "Stream error" bucket.
+    try:
+        import websocket
+    except ImportError:  # websocket-client is optional for HTTP-only runs
+        websocket = None
+    if websocket is not None:
+        if isinstance(error, websocket.WebSocketTimeoutException):
+            return "Timeout"
+        if isinstance(error, websocket.WebSocketException):
+            return "WS error"
     return "Stream error"
 
 
@@ -245,18 +264,79 @@ def _percentile(entry: Any, percentile: float) -> int:
 _SESSION_CSV_PATH = os.getenv("LOCUST_SESSION_CSV", "locust_sessions.csv")
 _session_csv_lock = threading.Lock()
 _session_csv_header_written = False
+_session_csv_run_tag = ""
+_session_csv_target_path = _SESSION_CSV_PATH
 
 
-def _write_session_row(row: dict[str, Any]) -> None:
-    """Append one per-session row to the CSV, writing the header once."""
+def _session_csv_tag(environment: Environment) -> str:
+    """Return a stable per-run, per-process tag for the session CSV."""
+    explicit = os.getenv("LOCUST_SESSION_CSV_TAG", "").strip()
+    if explicit:
+        return explicit
+    runner = getattr(environment, "runner", None)
+    role = "local"
+    if runner is not None:
+        name = type(runner).__name__.lower()
+        if "master" in name:
+            role = "master"
+        elif "worker" in name:
+            role = "worker"
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
+    return f"{role}-{stamp}-{os.getpid()}"
+
+
+def _session_csv_target(environment: Environment) -> str:
+    """Resolve the CSV path for this process, once per run.
+
+    A distributed run (``--master``/``--worker``) gives every process its own
+    file so workers never interleave rows or race on the header. A local run
+    keeps the configured path and is truncated at ``test_start`` so rows do not
+    accumulate across runs.
+    """
+    global _session_csv_run_tag, _session_csv_target_path
+    if _session_csv_run_tag:
+        return _session_csv_target_path
+    _session_csv_run_tag = _session_csv_tag(environment)
+    runner = getattr(environment, "runner", None)
+    name = type(runner).__name__.lower() if runner is not None else "local"
+    if "master" in name or "worker" in name:
+        root, ext = os.path.splitext(_SESSION_CSV_PATH)
+        _session_csv_target_path = f"{root}.{_session_csv_run_tag}{ext or '.csv'}"
+    else:
+        _session_csv_target_path = _SESSION_CSV_PATH
+    return _session_csv_target_path
+
+
+@events.test_start.add_listener
+def _reset_session_csv(environment: Environment, **kwargs: Any) -> None:
+    """Start each run with an empty CSV so rows never mix across runs."""
+    global _session_csv_header_written
+    target = _session_csv_target(environment)
+    append = os.getenv("LOCUST_SESSION_CSV_APPEND", "").lower() in {
+        "1", "true", "yes",
+    }
+    with _session_csv_lock:
+        _session_csv_header_written = False
+        if append:
+            return
+        try:
+            with open(target, "w", encoding="utf-8"):
+                pass
+        except OSError:
+            pass
+
+
+def _write_session_row(environment: Environment, row: dict[str, Any]) -> None:
+    """Append one per-session row, writing the header once per run."""
     global _session_csv_header_written
     fields = [
         "session_id", "language", "mode",
         "first_partial", "final_transcript", "first_sse_event", "total_sec",
     ]
+    target = _session_csv_target(environment)
     with _session_csv_lock:
         write_header = not _session_csv_header_written
-        with open(_SESSION_CSV_PATH, "a", newline="", encoding="utf-8") as fh:
+        with open(target, "a", newline="", encoding="utf-8") as fh:
             writer = csv.DictWriter(fh, fieldnames=fields)
             if write_header:
                 writer.writeheader()
@@ -308,6 +388,26 @@ def _wav_to_pcm_chunks(wav_bytes: bytes, chunk_ms: int = 100) -> tuple[list[byte
     return chunks, sample_rate
 
 
+def _fail_ratio_reason(
+    entry: Any, threshold: float, description: str
+) -> str | None:
+    """Return a threshold-failure reason for a row's failure ratio, if any."""
+    if not entry.num_requests:
+        return None
+    ratio = entry.num_failures / entry.num_requests
+    if ratio > threshold:
+        return f"{description} failure ratio {ratio:.2%} > {threshold:.2%}"
+    return None
+
+
+def _p95_reason(entry: Any, max_ms: float, description: str) -> str | None:
+    """Return a threshold-failure reason for a row's p95 latency, if any."""
+    p95 = _percentile(entry, 0.95)
+    if not entry.num_requests or p95 > max_ms:
+        return f"{description} p95 {p95} ms > {max_ms:g} ms"
+    return None
+
+
 @events.quitting.add_listener
 def _check_thresholds(environment: Environment) -> None:
     """Print end-of-test metrics and set a failing headless exit code."""
@@ -315,12 +415,22 @@ def _check_thresholds(environment: Environment) -> None:
     main = stats.get("POST /audio/analyze", "POST")
     first = stats.get("SSE first event", "SSE")
     final = stats.get("SSE final extraction", "SSE")
+    ws_main = stats.get("POST /audio/analyze (ws-session)", "POST")
+    ws_total = stats.get("WS session total", "SSE")
     failure_ratio = main.num_failures / main.num_requests if main.num_requests else 0.0
+
+    max_fail_ratio = float(os.getenv("LOCUST_MAX_FAIL_RATIO", "0.01"))
+    ws_max_fail_ratio = float(
+        os.getenv("LOCUST_WS_MAX_FAIL_RATIO", str(max_fail_ratio))
+    )
+    max_p95_text = os.getenv("LOCUST_MAX_P95_MS", "").strip()
+    ws_max_p95_text = os.getenv("LOCUST_WS_MAX_P95_MS", "").strip()
 
     print(
         "\nLocust summary: "
         f"requests={main.num_requests}, failures={main.num_failures}, "
-        f"failure_ratio={failure_ratio:.2%}"
+        f"failure_ratio={failure_ratio:.2%}; "
+        f"ws-sessions={ws_main.num_requests}, ws-failures={ws_main.num_failures}"
     )
     print(
         "Full stream ms: "
@@ -332,21 +442,29 @@ def _check_thresholds(environment: Environment) -> None:
         f"p50={_percentile(first, 0.50)}, p95={_percentile(first, 0.95)}, "
         f"p99={_percentile(first, 0.99)}"
     )
+    print(
+        "WS session ms: "
+        f"p50={_percentile(ws_total, 0.50)}, p95={_percentile(ws_total, 0.95)}, "
+        f"p99={_percentile(ws_total, 0.99)}"
+    )
 
-    max_fail_ratio = float(os.getenv("LOCUST_MAX_FAIL_RATIO", "0.01"))
-    max_p95_text = os.getenv("LOCUST_MAX_P95_MS", "").strip()
     reasons: list[str] = []
-    if failure_ratio > max_fail_ratio:
-        reasons.append(
-            f"failure ratio {failure_ratio:.2%} > {max_fail_ratio:.2%}"
-        )
+    for reason in (
+        _fail_ratio_reason(main, max_fail_ratio, "POST /audio/analyze"),
+        _fail_ratio_reason(
+            ws_main, ws_max_fail_ratio, "POST /audio/analyze (ws-session)"
+        ),
+    ):
+        if reason:
+            reasons.append(reason)
     if max_p95_text:
-        max_p95_ms = float(max_p95_text)
-        final_p95 = _percentile(final, 0.95)
-        if not final.num_requests or final_p95 > max_p95_ms:
-            reasons.append(
-                f"final extraction p95 {final_p95} ms > {max_p95_ms:g} ms"
-            )
+        reason = _p95_reason(final, float(max_p95_text), "final extraction")
+        if reason:
+            reasons.append(reason)
+    if ws_max_p95_text:
+        reason = _p95_reason(ws_total, float(ws_max_p95_text), "WS session total")
+        if reason:
+            reasons.append(reason)
     if reasons:
         environment.process_exit_code = 1
         print("Threshold failure: " + "; ".join(reasons))
@@ -621,7 +739,7 @@ class MedVoiceAnalyzeUser(HttpUser):
             failure_reason = failure_reason or _failure_category(exc)
 
         total_sec = round(time.perf_counter() - started, 3)
-        _write_session_row({
+        _write_session_row(self.environment, {
             "session_id": session_id,
             "language": language,
             "mode": mode,

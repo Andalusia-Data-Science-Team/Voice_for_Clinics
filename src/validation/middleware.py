@@ -170,7 +170,7 @@ async def validate_feedback_input(
         logger.debug("[Middleware] FeedbackInput validation failed: %s", exc)
         raise HTTPException(
             status_code=422,
-            detail=exc.errors(include_url=False),
+            detail=exc.errors(include_url=False, include_context=False),
         )
 
 

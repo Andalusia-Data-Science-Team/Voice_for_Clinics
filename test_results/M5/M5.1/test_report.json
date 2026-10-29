@@ -1,0 +1,70 @@
+{
+  "task_id": "M5",
+  "subtask_id": "M5.1",
+  "title": "Progressive rendering: fields before reasoning, skeletons, and non-blocking streaming",
+  "target_files": [
+    "src/static/index.html"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 25.496802758425474,
+  "timestamp": "2026-10-28T11:58:27.559553+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Progressive rendering pipeline architecture",
+      "input_setup": "Inspect index.html for skeleton rendering and separate extraction/reasoning flows",
+      "expected_result": "SkeletonScreenRenderer defined with department skeletons for features before diagnosis",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 3.095631953328848,
+      "evidence": "Progressive rendering architecture defined with separate skeletons and staggered event handlers",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Loading indicator and skeleton shimmer CSS",
+      "input_setup": "Inspect CSS styles in index.html for skeleton screen and shimmer keyframes",
+      "expected_result": "Shimmer keyframe animations and skeleton CSS classes present",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 17.390277236700058,
+      "evidence": "Skeleton screen animations and styling present in index.html",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Performance monitoring and event-loop lag protection",
+      "input_setup": "Check ProgressivePerfMonitor class and latency measurement",
+      "expected_result": "ProgressivePerfMonitor monitors TTFS and section arrival latency",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 2.769731916487217,
+      "evidence": "ProgressivePerfMonitor exists with time-to-first-section measurement",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Fluid streaming and staggered animation updates",
+      "input_setup": "Check for TypewriterStreamer or staggered fade animations in index.html",
+      "expected_result": "Staggered animation or streaming simulation defined",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.0280967690050602,
+      "evidence": "Typewriter streaming and/or staggered render animations defined for gradual updates",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Terminal event hides loaders and displays full document",
+      "input_setup": "Inspect completion handler for skeleton cleanup",
+      "expected_result": "Loaders unmounted/hidden when terminal event arrives",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.2130648829042912,
+      "evidence": "Terminal event removes skeleton loaders and unveils final content",
+      "error": null
+    }
+  ]
+}

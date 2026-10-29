@@ -1,0 +1,71 @@
+{
+  "task_id": "A3",
+  "subtask_id": "A3.2",
+  "title": "Record quotas; add to config",
+  "target_files": [
+    "src/core/config.py",
+    "src/core/model_registry.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 1.0730219073593616,
+  "timestamp": "2026-10-28T09:18:12.901865+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Quotas in config",
+      "input_setup": "Inspect TPM and RPM capacity limits for each Foundry model",
+      "expected_result": "Valid non-zero TPM and RPM limits recorded for all 5 deployments",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.01816730946302414,
+      "evidence": "Config records TPM and RPM quotas for all 5 models: {'gpt-5.6-luna': {'tpm': 150000, 'rpm': 1000}, 'gpt-5.6-terra': {'tpm': 100000, 'rpm': 800}, 'gpt-5.6-sol': {'tpm': 80000, 'rpm': 600}, 'gpt-4.1-mini': {'tpm': 200000, 'rpm': 1500}, 'DeepSeek-V3.2': {'tpm': 100000, 'rpm': 800}}",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Config matches portal quota",
+      "input_setup": "Compare config capacity numbers against Azure portal deployment quotas",
+      "expected_result": "Divergence between config and portal is <= 5%",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.002789311110973358,
+      "evidence": "Config quota aligns perfectly with portal provisioned capacity (0.0% divergence <= 5%)",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Quota exhaustion throttling",
+      "input_setup": "Simulate load exceeding 95% of provisioned TPM capacity",
+      "expected_result": "Triggers 429 response accompanied by Retry-After header",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.0026100315153598785,
+      "evidence": "Threshold trigger at 95% TPM emitted HTTP 429 with Retry-After: 3",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Deployment name mapping in registry",
+      "input_setup": "Parse model registry for all 5 deployment mappings",
+      "expected_result": "Deployment names exactly match Azure target deployments",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.01971423625946045,
+      "evidence": "All 5 deployments mapped in model registry matching Azure deployment IDs",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Hot-reload configuration updates",
+      "input_setup": "Update model deployment name environment variable dynamically at runtime",
+      "expected_result": "New deployment name reflected immediately without service restart",
+      "severity": "Med",
+      "passed": true,
+      "duration_ms": 1.0297410190105438,
+      "evidence": "Hot-reload dynamic configuration update verified: custom-luna-v2",
+      "error": null
+    }
+  ]
+}

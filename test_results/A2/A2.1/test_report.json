@@ -1,0 +1,72 @@
+{
+  "task_id": "A2",
+  "subtask_id": "A2.1",
+  "title": "Key Vault; move all secrets",
+  "target_files": [
+    "src/core/azure_identity.py",
+    "src/core/config.py",
+    ".env.example"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 33.92421454191208,
+  "timestamp": "2026-10-28T09:18:11.890667+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "No secrets in source",
+      "input_setup": "Scan all production python source files with regex secret patterns",
+      "expected_result": "Zero hardcoded API keys or credentials found in src/",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 28.818368911743164,
+      "evidence": "Scanned all python files in src/; zero hardcoded secrets detected",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": ".env.example safe",
+      "input_setup": "Parse .env.example and inspect values for credential patterns",
+      "expected_result": "Contains only safe placeholders and non-secret defaults",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.16730278730392456,
+      "evidence": "Verified 66 config lines in .env.example; all contain safe placeholders",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Key Vault client initialization",
+      "input_setup": "Enable USE_KEY_VAULT=true with valid vault URL and invoke _build_client()",
+      "expected_result": "SecretClient constructed using DefaultAzureCredential",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 3.432151861488819,
+      "evidence": "SecretClient successfully initialized with DefaultAzureCredential and vault URL",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Secret caching TTL",
+      "input_setup": "Fetch same secret key multiple times",
+      "expected_result": "Second fetch served from cache; zero remote API calls",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.924253836274147,
+      "evidence": "Subsequent reads resolved instantly from in-memory cache without API call",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Missing secret error handling",
+      "input_setup": "Query non-existent secret name from Key Vault client",
+      "expected_result": "Returns None cleanly with informative error; zero PHI leak and no application crash",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.5821371451020241,
+      "evidence": "Graceful handling of missing secret: ResourceNotFoundError: Secret missing_secret_xyz not found",
+      "error": null
+    }
+  ]
+}

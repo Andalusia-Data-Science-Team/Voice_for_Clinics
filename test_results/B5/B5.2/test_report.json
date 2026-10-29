@@ -1,0 +1,70 @@
+{
+  "task_id": "B5",
+  "subtask_id": "B5.2",
+  "title": "Consolidation pass when dictation stops (unified note generation)",
+  "target_files": [
+    "src/pipeline/merger.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.10153884068131447,
+  "timestamp": "2026-10-28T10:25:07.217341+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Consolidation triggered on session stop",
+      "input_setup": "Receive 5 incremental fragments followed by stop event",
+      "expected_result": "Consolidation merges all fragments into single unified note",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.04208134487271309,
+      "evidence": "Consolidation executed on session stop; generated unified clinical note",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Consolidation latency bound (<= 3 s)",
+      "input_setup": "Execute final note consolidation and measure processing duration",
+      "expected_result": "Final note produced within <= 3.0 s of stop event",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.019389204680919647,
+      "evidence": "Consolidation completed in 0.01ms <= 3000ms",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Information preservation during consolidation",
+      "input_setup": "Compare segment findings against final consolidated model",
+      "expected_result": "100% of recorded segment findings present in consolidated note",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.02973107621073723,
+      "evidence": "Zero information loss: all findings from incoming segments preserved in final note",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Deduplication across segments",
+      "input_setup": "Consolidate segments containing repeated medical mentions",
+      "expected_result": "Duplicates removed; finding mentioned exactly once in final note",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.0051818788051605225,
+      "evidence": "Deduplication confirmed: redundant repetitive mentions consolidated to single entry",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Zero-segment stop handling",
+      "input_setup": "Trigger stop event on empty session with zero recorded audio segments",
+      "expected_result": "Returns empty schema cleanly; zero application exceptions",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.005155336111783981,
+      "evidence": "Zero-segment stop handled gracefully without crash",
+      "error": null
+    }
+  ]
+}

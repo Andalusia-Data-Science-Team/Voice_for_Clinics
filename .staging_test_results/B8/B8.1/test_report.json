@@ -1,0 +1,71 @@
+{
+  "task_id": "B8",
+  "subtask_id": "B8.1",
+  "title": "Run new MedVoice v3.4 pipeline on gold set without crashes or schema invalidity",
+  "target_files": [
+    "src/pipeline/orchestrator.py",
+    "data/production_gold_set/gold_set_candidates.jsonl"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 57.54257692024112,
+  "timestamp": "2026-10-28T12:38:09.569604+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Gold set contains >= 100 encounters for new pipeline execution",
+      "input_setup": "Count lines in data/production_gold_set/gold_set_candidates.jsonl",
+      "expected_result": "Count >= 100",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 2.4439049884676933,
+      "evidence": "Gold set contains 171 encounters available for pipeline processing",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "AnalyzeInput schema validates gold set record",
+      "input_setup": "Instantiate AnalyzeInput with record from gold_set_candidates.jsonl",
+      "expected_result": "Schema instantiates without ValidationError",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.35415729507803917,
+      "evidence": "AnalyzeInput validates gold candidate 'PROD-GOLD-001' without error",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "PipelineContext cleanly instantiated from gold encounter",
+      "input_setup": "Instantiate PipelineContext with first gold candidate record",
+      "expected_result": "Clean instantiation without exception",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 54.50204713270068,
+      "evidence": "PipelineContext instantiated cleanly for gold case without errors",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "OPDExtractionOutput validates gold extraction payload",
+      "input_setup": "Validate sample expected_extraction with OPDExtractionOutput",
+      "expected_result": "Pydantic model validates fields without ValidationError",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.20263856276869774,
+      "evidence": "Output schema validates extraction payload cleanly",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Pipeline merger combines extraction and diagnosis deterministically",
+      "input_setup": "Merge ExtractionStepResult and DiagnosisStepResult with full required args",
+      "expected_result": "MergedResult contains both components",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.039828941226005554,
+      "evidence": "Pipeline step results merge deterministically without crash",
+      "error": null
+    }
+  ]
+}

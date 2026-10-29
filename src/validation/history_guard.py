@@ -30,7 +30,7 @@ class HistoryDiscrepancyFlag(str, Enum):
     OVERLAP_BUT_NOT_FLAGGED = "overlap_but_not_flagged"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class HistoryAlignmentReport:
     """Standardized report on patient history correlation."""
     history_provided: bool

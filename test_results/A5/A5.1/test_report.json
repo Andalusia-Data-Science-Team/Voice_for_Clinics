@@ -1,0 +1,70 @@
+{
+  "task_id": "A5",
+  "subtask_id": "A5.1",
+  "title": "Locust load testing script imports cleanly and defines realistic workload patterns",
+  "target_files": [
+    "locustfile.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 1136.6778276860714,
+  "timestamp": "2026-10-28T11:46:52.945179+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "locustfile imports cleanly",
+      "input_setup": "import locustfile in Python environment with locust installed",
+      "expected_result": "locustfile imports with zero errors or unhandled exceptions",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 1136.4675108343363,
+      "evidence": "locustfile imported cleanly without exception",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "User model defines realistic pacing (wait_time)",
+      "input_setup": "Inspect MedVoiceAnalyzeUser attributes and tasks",
+      "expected_result": "wait_time and analyze tasks present on class",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.0039781443774700165,
+      "evidence": "MedVoiceAnalyzeUser defines wait_time pacing and analyze tasks",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Realistic language and clinical mode distributions",
+      "input_setup": "Check language_names, mode_names, and weights on MedVoiceAnalyzeUser",
+      "expected_result": "Both EN/AR languages and doctor/conversation modes supported with weights",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.009556766599416733,
+      "evidence": "Mixtures verified: langs=['en', 'ar'], modes=['doctor', 'conversation']",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Synthetic clinical transcripts available for English and Arabic",
+      "input_setup": "Inspect SYNTHETIC_TRANSCRIPTS dictionary across languages and length buckets",
+      "expected_result": "short, medium, long lengths present for both 'en' and 'ar'",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.004601199179887772,
+      "evidence": "Complete synthetic clinical transcripts present for en/ar across short/medium/long",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Granular failure classification helper",
+      "input_setup": "Call _failure_category with simulated TimeoutError and ConnectionError",
+      "expected_result": "Accurate semantic strings returned without swallowing root cause",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.19218074157834053,
+      "evidence": "_failure_category correctly tags Timeout, Connection error, and Stream error",
+      "error": null
+    }
+  ]
+}

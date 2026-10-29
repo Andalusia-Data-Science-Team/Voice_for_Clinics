@@ -1,0 +1,71 @@
+{
+  "task_id": "A1",
+  "subtask_id": "A1.5",
+  "title": "30 parallel analyses",
+  "target_files": [
+    "tests/test_concurrency.py",
+    "src/pipeline/orchestrator.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 1178.6017562262714,
+  "timestamp": "2026-10-28T09:18:11.851799+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "30 sessions complete",
+      "input_setup": "Launch 30 concurrent mock analysis pipelines through LLMRuntime",
+      "expected_result": "100% of sessions complete successfully with status 200",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 65.66588906571269,
+      "evidence": "All 30 parallel clinical sessions completed successfully with HTTP 200",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "No event-loop starvation",
+      "input_setup": "Sample event loop scheduling lag while executing 30 parallel requests",
+      "expected_result": "p99 loop lag < 50 ms across entire execution window",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 43.02789084613323,
+      "evidence": "Loop responsiveness preserved during 30-load: p99 lag = 1.27ms < 50ms",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "429 throttling recovery",
+      "input_setup": "Inject 429 rate limit errors on 20% of concurrent sessions",
+      "expected_result": "All sessions recover successfully within <= 4 retry attempts",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 816.9599692337215,
+      "evidence": "All 30 sessions succeeded; 6 were throttled with 429 and recovered within <= 4 retries",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Memory stability",
+      "input_setup": "Measure resident set size (RSS) before and after batch processing + GC",
+      "expected_result": "Memory delta < 50 MB; zero runaway object accumulation",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 169.92171574383974,
+      "evidence": "Memory stable under high throughput: delta = 0.00 MB < 50 MB",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Graceful shedding at 60 concurrent",
+      "input_setup": "Saturate capacity with 60 simultaneous requests against capacity 20",
+      "expected_result": "Excess load shed cleanly with timeout/rejection; zero unhandled crash",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 83.02629133686423,
+      "evidence": "Load shedding verified: 20 admitted, 40 shed gracefully with timeout/503",
+      "error": null
+    }
+  ]
+}

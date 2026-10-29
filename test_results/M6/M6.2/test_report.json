@@ -1,0 +1,71 @@
+{
+  "task_id": "M6",
+  "subtask_id": "M6.2",
+  "title": "Voice-fill term correction feeds through structuring pipeline",
+  "target_files": [
+    "src/model/specialty_terms.py",
+    "src/schemas/output_schemas.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 13.706871308386326,
+  "timestamp": "2026-10-28T11:46:50.438291+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Corrected text flows into schema validation without crash",
+      "input_setup": "'pt c/o sob and cp since 2d' \u2192 correct_specialty_terms \u2192 SchemaValidator",
+      "expected_result": "No exception; validation returns (value, errors_list)",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 12.068408075720072,
+      "evidence": "corrected='pt c/o sob and cp since 2d\u2026'; OPDExtractionOutput accepts corrected text",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Mode-specific extraction prompts (doctor vs conversation)",
+      "input_setup": "Call get_extraction_prompt with is_conversation=False vs True",
+      "expected_result": "Doctor prompt references chief_complaint; both prompts non-empty strings",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.17991289496421814,
+      "evidence": "Doctor and conversation mode prompts differ; both non-empty",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Term correction idempotent through structuring",
+      "input_setup": "Apply correct_specialty_terms() twice to same text",
+      "expected_result": "Output of second pass equals first pass",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.004031229764223099,
+      "evidence": "Idempotent: double correction identical",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Output schema contains voice-fill structured sections",
+      "input_setup": "Inspect STRUCTURED_NOTE_SCHEMA keys",
+      "expected_result": "chief_complaint, history_of_present_illness, physical_examination, assessment_and_plan present",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.017045997083187103,
+      "evidence": "OPDExtractionOutput has voice-fill fields: ['chief_complaint', 'examination_finding', 'plan_of_care']",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Specialty-term correction integrates with red-flag detection",
+      "input_setup": "correct_specialty_terms('pt c/o sob and chest pain') \u2192 detect_red_flags()",
+      "expected_result": "No exception; returns dict with matched_signals list",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.4374731108546257,
+      "evidence": "Term correction + red flag detection pipeline intact; flags=[{'id': 'chest_pain_cardiac_features', 'label': 'Chest pain (cardiac features)', 'acuity': 2, 'population': 'all', 'matched_phrase': 'chest pain', 'language': 'en', 'status': 'affirmed'}]",
+      "error": null
+    }
+  ]
+}

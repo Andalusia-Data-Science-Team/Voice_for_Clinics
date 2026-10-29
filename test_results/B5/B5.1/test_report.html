@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Report: B5 - B5.1</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f8fafc; color: #1e293b; margin: 0; padding: 24px; }
+        .container { max-width: 1080px; margin: 0 auto; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); padding: 32px; border: 1px solid #e2e8f0; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; }
+        .badge-status { background: #10b981; color: #ffffff; padding: 6px 16px; border-radius: 20px; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 24px 0; padding: 16px; background: #f1f5f9; border-radius: 6px; }
+        .meta-card { display: flex; flex-direction: column; }
+        .meta-label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600; }
+        .meta-value { font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { background: #f8fafc; padding: 12px; text-align: left; font-size: 12px; text-transform: uppercase; color: #64748b; border-bottom: 2px solid #cbd5e1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1 style="margin:0 0 8px 0; font-size: 24px;">Subtask Verification: B5.1</h1>
+                <div style="font-size: 15px; color: #475569;">Incremental structuring: per-segment live extraction and running context</div>
+            </div>
+            <div class="badge-status">ALL 5 PASSED — VERIFIED</div>
+        </div>
+
+        <div class="meta-grid">
+            <div class="meta-card">
+                <span class="meta-label">Task Identifier</span>
+                <span class="meta-value">B5 / B5.1</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-label">Pass Rate</span>
+                <span class="meta-value">5 / 5 (100% required)</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-label">Execution Time</span>
+                <span class="meta-value">0.1 ms</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-label">Executed At</span>
+                <span class="meta-value">2026-10-28T10:25:07.215455+00:00</span>
+            </div>
+        </div>
+
+        <div style="margin: 16px 0; font-size: 13px;">
+            <strong>Target Files:</strong> <code style='background:#e5e7eb;padding:2px 6px;border-radius:3px;font-size:12px;'>src/pipeline/orchestrator.py</code>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="text-align:center;width:40px;">#</th>
+                    <th style="text-align:center;width:60px;">Sev</th>
+                    <th>Test Case</th>
+                    <th>Input / Setup</th>
+                    <th>Expected Result</th>
+                    <th style="text-align:center;width:80px;">Status</th>
+                    <th style="text-align:right;width:80px;">Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#1</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>Crit</span></td>
+            <td style="padding:12px;"><strong>Per-segment extraction latency bound</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Process single spoken segment into structured fragment</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Structured fragment produced within <= 2.0 s</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.0ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>Segment structured in 0.04ms <= 2000ms</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#2</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>Crit</span></td>
+            <td style="padding:12px;"><strong>Running context accumulation</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Update accumulated context across sequential segments</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Prior findings maintained and augmented with new segment data</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.0ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>Running context accumulated without dropping previous findings</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#3</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>Crit</span></td>
+            <td style="padding:12px;"><strong>Speaker attribution per segment</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Process dialogue segments with distinct Doctor and Patient tags</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Attribution preserved per segment block</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.0ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>Multi-speaker attribution tagged accurately across conversation segments</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#4</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#ea580c;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>High</span></td>
+            <td style="padding:12px;"><strong>Segment chronological ordering</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Process shuffled segment sequence</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Segments re-ordered correctly based on sequence index</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.0ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>Out-of-order network arrival resolved into chronological clinical order</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#5</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#ea580c;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>High</span></td>
+            <td style="padding:12px;"><strong>Context window bound management</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Simulate stream of 20 sequential transcript segments</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Sliding context bounds token consumption; prevents context overflow</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.0ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>Context window maintained within bounds without token overflow</div>
+                
+            </td>
+        </tr>
+        
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

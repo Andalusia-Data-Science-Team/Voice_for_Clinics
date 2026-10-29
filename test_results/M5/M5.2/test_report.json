@@ -1,0 +1,70 @@
+{
+  "task_id": "M5",
+  "subtask_id": "M5.2",
+  "title": "Traceable clinical evidence: citation click-through and bidirectional linking",
+  "target_files": [
+    "src/static/index.html"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 11.867997702211142,
+  "timestamp": "2026-10-28T11:58:27.577927+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "CitationDataModel parses reasoning event into structured citations",
+      "input_setup": "Inspect index.html for CitationDataModel class and extraction methods",
+      "expected_result": "CitationDataModel parses diagnosis evidence sentences",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 3.9970306679606438,
+      "evidence": "CitationDataModel defined with structured and heuristic citation extraction",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Clicking diagnosis navigates to and highlights supporting transcript sentence",
+      "input_setup": "Inspect EvidenceHighlightEngine methods and scrollIntoView integration",
+      "expected_result": "EvidenceHighlightEngine scrolls to and pulses matching transcript text",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 3.3115409314632416,
+      "evidence": "EvidenceHighlightEngine implements smooth scrolling and pulse highlighting",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Bidirectional citation markers in transcript",
+      "input_setup": "Check for citation badge injection and two-way jump links",
+      "expected_result": "Bidirectional badges inserted into transcript linking to diagnoses",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 2.5434899143874645,
+      "evidence": "Bidirectional badges link transcript sentences back to diagnostic codes",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Citation preview tooltip / card",
+      "input_setup": "Inspect index.html for CitationTooltip implementation",
+      "expected_result": "Tooltip component presents code description and supporting text",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.9933430701494217,
+      "evidence": "Citation tooltip component defined with debounced preview",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Accessibility announcements for citation navigation",
+      "input_setup": "Check for aria-live or sr-announce container in index.html",
+      "expected_result": "ARIA live region updates when citation navigation occurs",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.02259311825037,
+      "evidence": "Screen-reader announcements present for accessible citation navigation",
+      "error": null
+    }
+  ]
+}

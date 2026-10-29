@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from collections.abc import AsyncIterator
 from typing import Any, Awaitable, Callable
 
@@ -15,6 +16,13 @@ from core.config import Config
 from llm.circuit_breaker import CircuitBreaker, CircuitBreakerOpenException
 from llm.limiter import ModelLimiter
 from llm.retry import is_insufficient_quota, is_retryable, retry_delay, retry_after_seconds, run_with_retries, status_code
+
+# Compatibility for Python < 3.11
+if hasattr(asyncio, "timeout"):
+    async_timeout_scope = asyncio.timeout
+else:
+    import async_timeout
+    async_timeout_scope = async_timeout.timeout
 
 logger = logging.getLogger(__name__)
 
@@ -98,9 +106,9 @@ class LLMRuntime:
         self.client, self._auth_method = _build_foundry_client(timeout, limits)
         self.limiter = ModelLimiter()
         self.circuit_breaker = circuit_breaker or CircuitBreaker(
-            failure_threshold=5,
-            window_s=30.0,
-            recovery_timeout_s=15.0,
+            failure_threshold=getattr(Config, "CB_FAILURE_THRESHOLD", 10),
+            window_s=getattr(Config, "CB_WINDOW_S", 60.0),
+            recovery_timeout_s=getattr(Config, "CB_RECOVERY_TIMEOUT_S", 10.0),
             name="FoundryLLMCircuitBreaker",
         )
 
@@ -119,6 +127,7 @@ class LLMRuntime:
         model: str,
         create_kwargs: dict[str, Any],
         key: str | None = None,
+        max_attempts: int | None = None,
     ) -> Any:
         """Run a completion on Azure AI Foundry with circuit breaker, backoff, jitter, and adaptive concurrency."""
         # 1. Check Circuit Breaker
@@ -136,6 +145,12 @@ class LLMRuntime:
                 await self.limiter.record_feedback(model, status_code=200)
                 await self.circuit_breaker.record_success()
                 return resp
+            except asyncio.CancelledError:
+                # A client disconnect / task cancellation is not a backend
+                # failure. Re-raise without recording a breaker failure or
+                # stepping the limiter down, or a burst of disconnects would
+                # trip the circuit and pause the whole worker pool.
+                raise
             except BaseException as exc:
                 code = status_code(exc)
                 is_429 = code == 429
@@ -153,8 +168,8 @@ class LLMRuntime:
 
         deadline = asyncio.get_running_loop().time() + Config.LLM_TOTAL_TIMEOUT_S
         sleep = self._deadline_sleep(deadline)
-        async with asyncio.timeout(Config.LLM_TOTAL_TIMEOUT_S):
-            return await run_with_retries(attempt, model=model, sleep=sleep)
+        async with async_timeout_scope(Config.LLM_TOTAL_TIMEOUT_S):
+            return await run_with_retries(attempt, model=model, sleep=sleep, max_attempts=max_attempts)
 
     async def stream(
         self,
@@ -170,7 +185,7 @@ class LLMRuntime:
         max_attempts = min(4, max(1, Config.LLM_MAX_ATTEMPTS))
         deadline = asyncio.get_running_loop().time() + Config.LLM_TOTAL_TIMEOUT_S
         sleep = self._deadline_sleep(deadline)
-        timeout_scope = asyncio.timeout(Config.LLM_TOTAL_TIMEOUT_S)
+        timeout_scope = async_timeout_scope(Config.LLM_TOTAL_TIMEOUT_S)
         attempt_number = 0
 
         async with timeout_scope:
@@ -197,7 +212,8 @@ class LLMRuntime:
                         if content is None:
                             continue
                         emitted = True
-                        timeout_scope.reschedule(None)
+                        if hasattr(timeout_scope, "reschedule"):
+                            timeout_scope.reschedule(None)
                         yield content
 
                     await self.limiter.record_feedback(model, status_code=200)
@@ -255,6 +271,24 @@ class LLMRuntime:
         return None
 
 
-def get_llm_runtime(request: Request) -> LLMRuntime:
-    """Return the shared runtime attached to a FastAPI request."""
-    return request.app.state.llm
+_singleton_lock = threading.Lock()
+_global_runtime: LLMRuntime | None = None
+
+
+def get_llm_runtime(request: Request = None) -> LLMRuntime:
+    """Return the shared runtime attached to a FastAPI request, or the process singleton."""
+    if request is not None and hasattr(request, "app") and hasattr(request.app.state, "llm"):
+        return request.app.state.llm
+    global _global_runtime
+    if _global_runtime is None:
+        with _singleton_lock:
+            if _global_runtime is None:
+                _global_runtime = LLMRuntime()
+    return _global_runtime
+
+
+def reset_llm_runtime() -> None:
+    """Reset the process singleton (for test teardown and reconfiguration)."""
+    global _global_runtime
+    with _singleton_lock:
+        _global_runtime = None

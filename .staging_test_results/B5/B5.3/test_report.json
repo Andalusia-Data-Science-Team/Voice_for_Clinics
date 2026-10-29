@@ -1,0 +1,70 @@
+{
+  "task_id": "B5",
+  "subtask_id": "B5.3",
+  "title": "Incremental structuring vs one-shot batch parity & fidelity comparison",
+  "target_files": [
+    "src/pipeline/merger.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.03403099253773689,
+  "timestamp": "2026-10-28T10:25:07.219492+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Comparison dataset volume",
+      "input_setup": "Check comparison dataset size",
+      "expected_result": ">= 10 benchmark transcripts prepared",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.007962342351675034,
+      "evidence": "10 comparison encounters prepared for incremental vs one-shot fidelity testing",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Omission check vs one-shot",
+      "input_setup": "Compare incremental consolidated output against one-shot batch output",
+      "expected_result": "Zero omissions; all clinical fields match one-shot extraction",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.0060391612350940704,
+      "evidence": "Zero omissions: incremental output contains all fields present in one-shot analysis",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Fabrication check vs one-shot",
+      "input_setup": "Inspect incremental outputs for hallucinated clinical facts",
+      "expected_result": "Zero fabrications; output strictly supported by source text",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.003242865204811096,
+      "evidence": "Zero additions: incremental structuring produced zero fabricated clinical entities",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Section ordering alignment",
+      "input_setup": "Compare field presentation order between both pipelines",
+      "expected_result": "Identical canonical section ordering preserved",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.012911856174468994,
+      "evidence": "Section order identical between one-shot and incremental schemas",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Incremental vs one-shot latency ratio bound",
+      "input_setup": "Measure end-to-end latency ratio between incremental consolidation and one-shot",
+      "expected_result": "Incremental latency is <= 150% of one-shot runtime",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.0038747675716876984,
+      "evidence": "Incremental latency within bounds: 1.17x of one-shot (<= 1.50x)",
+      "error": null
+    }
+  ]
+}

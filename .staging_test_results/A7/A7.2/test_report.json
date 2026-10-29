@@ -1,0 +1,70 @@
+{
+  "task_id": "A7",
+  "subtask_id": "A7.2",
+  "title": "Circuit breaker protects downstream LLM endpoints from cascading failure",
+  "target_files": [
+    "src/llm/circuit_breaker.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 127.07043578848243,
+  "timestamp": "2026-10-28T11:46:53.100295+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Trips CLOSED -> OPEN at failure threshold",
+      "input_setup": "Register 3 consecutive failures with threshold=3",
+      "expected_result": "State becomes OPEN and check_state raises CircuitBreakerOpenException",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.8970359340310097,
+      "evidence": "Circuit tripped to OPEN and immediately rejected subsequent call",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Transitions OPEN -> HALF_OPEN after recovery timeout",
+      "input_setup": "Wait recovery_timeout_s and call check_state()",
+      "expected_result": "Circuit transitions to HALF_OPEN to permit probe execution",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 61.40270084142685,
+      "evidence": "Circuit transitioned OPEN -> HALF_OPEN after recovery timeout elapsed",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Closes circuit on probe success in HALF_OPEN",
+      "input_setup": "Call record_success while in HALF_OPEN",
+      "expected_result": "Circuit transitions back to CLOSED",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 31.98242001235485,
+      "evidence": "Trial success closed the circuit breaker",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Re-trips to OPEN on probe failure",
+      "input_setup": "Call record_failure while in HALF_OPEN",
+      "expected_result": "Circuit immediately returns to OPEN state",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 31.782912090420723,
+      "evidence": "Probe failure in HALF_OPEN immediately returned circuit to OPEN",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Circuit breaker stats tracking",
+      "input_setup": "Query get_stats() after recorded failure",
+      "expected_result": "Accurate stats object returned",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.0053669102489948,
+      "evidence": "Circuit breaker stats reflect failure count and state",
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "task_id": "B6",
+  "subtask_id": "B6.2",
+  "title": "Model benchmark: gpt-4o-mini vs gpt-5.6-luna extraction fidelity and latency",
+  "target_files": [
+    "docs/foundry_models.md",
+    "src/core/model_registry.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.7846648804843426,
+  "timestamp": "2026-10-28T12:38:09.499736+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "gpt-5.6-luna designated as primary extraction deployment",
+      "input_setup": "Query get_model('extraction') in core.model_registry",
+      "expected_result": "Primary extraction model corresponds to luna deployment",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.020698178559541702,
+      "evidence": "Luna (gpt-5.6-luna) registered as primary extraction model",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "gpt-4.1-mini designated as extraction fallback",
+      "input_setup": "Inspect Config.foundry_model_extraction_fallback()",
+      "expected_result": "Fallback returns configured mini deployment",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.026979949325323105,
+      "evidence": "Extraction fallback deployment configured as gpt-4.1-mini",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Model selection justification documented in foundry_models.md",
+      "input_setup": "Inspect docs/foundry_models.md for model roles",
+      "expected_result": "foundry_models.md defines extraction and reasoning deployment roles",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.4544663242995739,
+      "evidence": "Model roles and selection justification documented in foundry_models.md",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Independent concurrency semaphores per model tier",
+      "input_setup": "Query Config.llm_model_limit for both luna and mini models",
+      "expected_result": "Positive limits configured independently per deployment",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.27266936376690865,
+      "evidence": "Concurrency limits defined: luna=16, mini=4",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Model execution timeout bounds configured",
+      "input_setup": "Inspect Config.LLM_TIMEOUT_S",
+      "expected_result": "Per-call timeout bounded at 45s",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.009851064532995224,
+      "evidence": "LLM_TIMEOUT_S configured at 45.0s",
+      "error": null
+    }
+  ]
+}

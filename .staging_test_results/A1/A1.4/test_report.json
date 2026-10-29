@@ -1,0 +1,70 @@
+{
+  "task_id": "A1",
+  "subtask_id": "A1.4",
+  "title": "Per-model concurrency limits",
+  "target_files": [
+    "src/llm/limiter.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 207.6019481755793,
+  "timestamp": "2026-10-28T09:18:10.668255+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Semaphore bounds",
+      "input_setup": "Configure model limit=3 and execute 10 concurrent async tasks",
+      "expected_result": "Peak concurrent execution never exceeds 3; remaining tasks queue cleanly",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 87.76413928717375,
+      "evidence": "10 workers executed; strict peak active concurrency = 3 <= 3",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Independent per model",
+      "input_setup": "Configure model-A limit=2 and model-B limit=5, fire 5 concurrent requests each",
+      "expected_result": "Model A throttles at 2; Model B serves all 5 simultaneously",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 63.434925861656666,
+      "evidence": "Independent semaphores verified: model-A peak=2, model-B peak=5",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Release on exception",
+      "input_setup": "Acquire semaphore, trigger exception, ensure release in finally block",
+      "expected_result": "Slot freed immediately; subsequent caller acquires without timeout",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.8960501290857792,
+      "evidence": "Semaphore successfully re-acquired by subsequent caller in 0.48ms",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Config-driven concurrency limit",
+      "input_setup": "Set environment variable LLM_LIMIT__GPT_4O_MINI=7",
+      "expected_result": "ModelLimiter parses dynamic limit=7 from config",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 3.867011982947588,
+      "evidence": "Limiter successfully read LLM_LIMIT__GPT_4O_MINI=7 from config",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Deadlock prevention under timeout",
+      "input_setup": "Hold sole semaphore slot and attempt second acquire with short timeout",
+      "expected_result": "Acquire aborts with TimeoutError; subsequent release/acquire restores consistency",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 51.63982091471553,
+      "evidence": "Timed out cleanly under resource exhaustion; state remained 100% consistent",
+      "error": null
+    }
+  ]
+}

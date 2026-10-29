@@ -1,0 +1,70 @@
+{
+  "task_id": "M5",
+  "subtask_id": "M5.3",
+  "title": "Context-aware caution banners, clinician edit tracking, and one-click re-evaluation",
+  "target_files": [
+    "src/static/index.html"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 20.14899579808116,
+  "timestamp": "2026-10-28T11:58:27.603603+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "CautionClassifier severity tier classification",
+      "input_setup": "Inspect CautionClassifier class and classify method in index.html",
+      "expected_result": "Issues classified into normalized severity tiers",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 13.548057060688734,
+      "evidence": "CautionClassifier maps validation issues to critical/warning/info tiers",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Inline caution banners adjacent to affected fields",
+      "input_setup": "Inspect inline caution rendering targeting data-field attributes",
+      "expected_result": "Inline cautions attached directly to field elements",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.214096788316965,
+      "evidence": "Inline cautions render visually adjacent to affected clinical fields",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Doctor inline field modification tracking",
+      "input_setup": "Inspect FieldEditTracker and field-edited CSS classes in index.html",
+      "expected_result": "Modifications captured with audit metadata",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 1.0351981036365032,
+      "evidence": "Field edit tracking captures doctor edits on clinical fields",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "One-click re-run reasoning with section-isolated refresh",
+      "input_setup": "Check for ReRunReasoningController and rerun action bar",
+      "expected_result": "One-click re-run button triggers re-evaluation",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 3.317622933536768,
+      "evidence": "Re-run action bar and controller defined with section-isolated loading",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Re-run attempt limit prevents infinite loops",
+      "input_setup": "Inspect ReRunReasoningController for MAX_RERUNS and limit notice",
+      "expected_result": "Re-run disabled after max threshold (2 attempts) with notice",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.0340209119021893,
+      "evidence": "Re-run bounded with maximum attempt enforcement to prevent infinite loops",
+      "error": null
+    }
+  ]
+}

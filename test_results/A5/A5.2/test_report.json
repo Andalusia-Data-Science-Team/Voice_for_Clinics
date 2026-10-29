@@ -1,0 +1,70 @@
+{
+  "task_id": "A5",
+  "subtask_id": "A5.2",
+  "title": "Session CSV export captures timings: first partial, final transcript, first SSE, total",
+  "target_files": [
+    "locustfile.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 5.484683904796839,
+  "timestamp": "2026-10-28T11:46:52.954238+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Session CSV tag and path resolution",
+      "input_setup": "Call _session_csv_tag and _session_csv_target with mock environment",
+      "expected_result": "Deterministic target string ending in .csv",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.6638760678470135,
+      "evidence": "Session CSV tagging and target resolution verified (target=locust_sessions.csv)",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "All required timing columns present in CSV writer schema",
+      "input_setup": "Inspect _write_session_row fields definition in locustfile.py",
+      "expected_result": "Fields list contains session_id, language, mode, first_partial, final_transcript, first_sse_event, total_sec",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 1.2808293104171753,
+      "evidence": "All required telemetry columns verified in writer: ['session_id', 'language', 'mode', 'first_partial', 'final_transcript', 'first_sse_event', 'total_sec']",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Row writing outputs parseable CSV with correct values",
+      "input_setup": "Directly execute _write_session_row to a temporary CSV file",
+      "expected_result": "Valid CSV header and data row created with matching field values",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.632312148809433,
+      "evidence": "CSV file created, header written, row appended with valid contents",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "_fire_sse_metric correctly dispatches custom metric",
+      "input_setup": "Call _fire_sse_metric with mock Environment and custom metric name",
+      "expected_result": "events.request.fire called without exception",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.1693993583321571,
+      "evidence": "_fire_sse_metric cleanly dispatches metric to Locust events",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Automated threshold evaluation triggers on SLA violation",
+      "input_setup": "Configure mock environment exceeding LOCUST_MAX_FAIL_RATIO",
+      "expected_result": "process_exit_code set to 1 indicating automated test failure",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.7382670193910599,
+      "evidence": "_check_thresholds sets process_exit_code=1 on fail ratio violation",
+      "error": null
+    }
+  ]
+}

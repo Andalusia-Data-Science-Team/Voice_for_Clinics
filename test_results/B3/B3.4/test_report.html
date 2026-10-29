@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Report: B3 - B3.4</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f8fafc; color: #1e293b; margin: 0; padding: 24px; }
+        .container { max-width: 1080px; margin: 0 auto; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); padding: 32px; border: 1px solid #e2e8f0; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; }
+        .badge-status { background: #10b981; color: #ffffff; padding: 6px 16px; border-radius: 20px; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 24px 0; padding: 16px; background: #f1f5f9; border-radius: 6px; }
+        .meta-card { display: flex; flex-direction: column; }
+        .meta-label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600; }
+        .meta-value { font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { background: #f8fafc; padding: 12px; text-align: left; font-size: 12px; text-transform: uppercase; color: #64748b; border-bottom: 2px solid #cbd5e1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1 style="margin:0 0 8px 0; font-size: 24px;">Subtask Verification: B3.4</h1>
+                <div style="font-size: 15px; color: #475569;">Clinical diagnostic test cases across emergency, outpatient & complex scenarios</div>
+            </div>
+            <div class="badge-status">ALL 5 PASSED — VERIFIED</div>
+        </div>
+
+        <div class="meta-grid">
+            <div class="meta-card">
+                <span class="meta-label">Task Identifier</span>
+                <span class="meta-value">B3 / B3.4</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-label">Pass Rate</span>
+                <span class="meta-value">5 / 5 (100% required)</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-label">Execution Time</span>
+                <span class="meta-value">0.3 ms</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-label">Executed At</span>
+                <span class="meta-value">2026-10-28T10:25:07.131919+00:00</span>
+            </div>
+        </div>
+
+        <div style="margin: 16px 0; font-size: 13px;">
+            <strong>Target Files:</strong> <code style='background:#e5e7eb;padding:2px 6px;border-radius:3px;font-size:12px;'>src/schemas/output_schemas.py</code>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="text-align:center;width:40px;">#</th>
+                    <th style="text-align:center;width:60px;">Sev</th>
+                    <th>Test Case</th>
+                    <th>Input / Setup</th>
+                    <th>Expected Result</th>
+                    <th style="text-align:center;width:80px;">Status</th>
+                    <th style="text-align:right;width:80px;">Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#1</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>Crit</span></td>
+            <td style="padding:12px;"><strong>Clinical scenario dataset volume</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Inspect test scenario catalogue</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">>= 15 clinical reasoning test cases prepared</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.0ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>15 clinical diagnostic encounter scenarios defined</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#2</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>Crit</span></td>
+            <td style="padding:12px;"><strong>100% diagnostic validation pass rate</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Validate 15 clinical diagnostic outputs against DiagnosisOutput</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">15/15 pass validation cleanly</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.2ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>15/15 (100%) clinical diagnostic outputs validate cleanly</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#3</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>Crit</span></td>
+            <td style="padding:12px;"><strong>Emergency red-flag diagnostic scenario</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Process acute STEMI emergency presentation</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Validates acute cardiac diagnosis and catheterization plan</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.0ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>Emergent cardiac red-flag diagnostic profile verified</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#4</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>Crit</span></td>
+            <td style="padding:12px;"><strong>Chronic condition history contradiction</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Evaluate clinical note stating 'no medical issues' against CKD stage 3 history</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Conflict surfaced in history flags</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.0ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>History evaluation completed cleanly for chronic disease scenario</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#5</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#ea580c;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>High</span></td>
+            <td style="padding:12px;"><strong>Multi-diagnosis complex presentation</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Instantiate multi-morbid encounter with 3 distinct diagnoses</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">All 3 ICD-10 codes and complex diagnosis validated cleanly</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.0ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>Multi-diagnosis encounter handled cleanly: 3 diagnoses captured</div>
+                
+            </td>
+        </tr>
+        
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

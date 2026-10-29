@@ -109,6 +109,7 @@ async def run_with_retries(
     model: str,
     sleep: Callable[[float], Awaitable[None]] | None = None,
     on_retry: Callable[[int, BaseException | None, float], Awaitable[None] | None] | None = None,
+    max_attempts: int | None = None,
 ) -> T:
     """Run an async operation with bounded exponential retry and jitter.
 
@@ -134,9 +135,10 @@ async def run_with_retries(
 
     # Hard cap of 4 attempts (tracker A1.3.1: "max 4 attempts"), matching
     # LLMRuntime.stream(). LLM_MAX_ATTEMPTS may lower the cap but never raise it.
-    max_attempts = min(4, max(1, Config.LLM_MAX_ATTEMPTS))
+    effective_attempts = Config.LLM_MAX_ATTEMPTS if max_attempts is None else max_attempts
+    attempts_cap = min(4, max(1, effective_attempts))
     retrying = AsyncRetrying(
-        stop=stop_after_attempt(max_attempts),
+        stop=stop_after_attempt(attempts_cap),
         wait=_wait_with_retry_after,
         retry=retry_if_exception(is_retryable),
         reraise=True,

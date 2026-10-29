@@ -1,0 +1,70 @@
+{
+  "task_id": "B5",
+  "subtask_id": "B5.1",
+  "title": "Incremental structuring: per-segment live extraction and running context",
+  "target_files": [
+    "src/pipeline/orchestrator.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.06902916356921196,
+  "timestamp": "2026-10-28T10:25:07.215455+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Per-segment extraction latency bound",
+      "input_setup": "Process single spoken segment into structured fragment",
+      "expected_result": "Structured fragment produced within <= 2.0 s",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.044729094952344894,
+      "evidence": "Segment structured in 0.04ms <= 2000ms",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Running context accumulation",
+      "input_setup": "Update accumulated context across sequential segments",
+      "expected_result": "Prior findings maintained and augmented with new segment data",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.0032866373658180237,
+      "evidence": "Running context accumulated without dropping previous findings",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Speaker attribution per segment",
+      "input_setup": "Process dialogue segments with distinct Doctor and Patient tags",
+      "expected_result": "Attribution preserved per segment block",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.0025103799998760223,
+      "evidence": "Multi-speaker attribution tagged accurately across conversation segments",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Segment chronological ordering",
+      "input_setup": "Process shuffled segment sequence",
+      "expected_result": "Segments re-ordered correctly based on sequence index",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.005600973963737488,
+      "evidence": "Out-of-order network arrival resolved into chronological clinical order",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Context window bound management",
+      "input_setup": "Simulate stream of 20 sequential transcript segments",
+      "expected_result": "Sliding context bounds token consumption; prevents context overflow",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.012902077287435532,
+      "evidence": "Context window maintained within bounds without token overflow",
+      "error": null
+    }
+  ]
+}

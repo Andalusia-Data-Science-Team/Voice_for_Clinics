@@ -1,0 +1,71 @@
+{
+  "task_id": "B6",
+  "subtask_id": "B6.3",
+  "title": "Reasoning models: baseline Luna with Sol escalation and documented memo",
+  "target_files": [
+    "src/core/model_registry.py",
+    "docs/foundry_models.md"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 5.9182601980865,
+  "timestamp": "2026-10-28T12:38:09.508498+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "gpt-5.6-sol configured as reasoning escalation target",
+      "input_setup": "Inspect Config.FOUNDRY_MODEL_REASONING_COMPLEX class attribute",
+      "expected_result": "Escalation model deployment returns gpt-5.6-sol",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.009270850569009781,
+      "evidence": "Escalation model configured as gpt-5.6-sol",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Complexity routing confines escalation to high-acuity cases",
+      "input_setup": "Evaluate classify_clinical_complexity on routine outpatient case",
+      "expected_result": "is_complex is False for simple encounters",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 5.0897360779345036,
+      "evidence": "Complexity classifier returns simple tier for routine encounter (tier=simple)",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "High-acuity emergency cases categorized as complex",
+      "input_setup": "Evaluate classify_clinical_complexity on acute cardiac emergency with reasoning cues",
+      "expected_result": "is_complex=True or tier='complex'",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.30865613371133804,
+      "evidence": "High-acuity case tier='complex', score=3, matched=['NOISY_DICTATION', 'REASONING_CUES', 'UNKNOWN_ABBREVIATIONS']",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Model tiering architecture documented in project reports",
+      "input_setup": "Verify model architecture section in docs/FINAL_REPORT.md",
+      "expected_result": "Documentation references primary and escalation models",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.14380086213350296,
+      "evidence": "Model tiering and routing architecture documented in FINAL_REPORT.md",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Complexity classification determinism and reproducibility",
+      "input_setup": "Execute classify_clinical_complexity 5 times with identical input",
+      "expected_result": "Identical tier returned on all 5 runs",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.36679627373814583,
+      "evidence": "Classification perfectly reproducible across 5 runs: tier='simple'",
+      "error": null
+    }
+  ]
+}

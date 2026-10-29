@@ -1,0 +1,70 @@
+{
+  "task_id": "M4",
+  "subtask_id": "M4.1",
+  "title": "Extraction and reasoning parallel execution with bounded timeouts",
+  "target_files": [
+    "src/pipeline/orchestrator.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 10551.64489755407,
+  "timestamp": "2026-10-28T11:46:50.322587+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Parallel initiation timing bound",
+      "input_setup": "Launch extraction and diagnosis concurrently through PipelineOrchestrator",
+      "expected_result": "Extraction and diagnosis start within 100 ms of each other",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 437.37228587269783,
+      "evidence": "Parallel start verified: tasks initiated within 0.18ms <= 100ms",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Concurrent task scheduling architecture",
+      "input_setup": "Inspect src/pipeline/orchestrator.py concurrency mechanics",
+      "expected_result": "asyncio concurrent scheduling with FIRST_COMPLETED progressive streaming",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.34330179914832115,
+      "evidence": "Concurrent non-blocking Task scheduling with FIRST_COMPLETED streaming verified",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Extraction timeout isolation",
+      "input_setup": "Simulate extraction latency exceeding timeout threshold while diagnosis completes",
+      "expected_result": "Extraction timed out; diagnosis output preserved without crash",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 5014.843828044832,
+      "evidence": "Extraction timeout gracefully isolated: pipeline continued without hang",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Reasoning timeout isolation",
+      "input_setup": "Simulate diagnosis latency exceeding timeout while extraction completes",
+      "expected_result": "Extraction delivered intact; reasoning timeout handled gracefully",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 5012.635788880289,
+      "evidence": "Reasoning timeout gracefully handled: extracted features delivered cleanly",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Dual success parallel merge",
+      "input_setup": "Execute standard parallel pipeline with both extract and diagnose succeeding",
+      "expected_result": "Merged stream encapsulates both extraction and diagnosis events",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 86.44969295710325,
+      "evidence": "Both parallel steps succeeded: extraction and diagnosis events streamed",
+      "error": null
+    }
+  ]
+}

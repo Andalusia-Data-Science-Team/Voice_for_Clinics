@@ -1,0 +1,71 @@
+{
+  "task_id": "A2",
+  "subtask_id": "A2.2",
+  "title": "Managed identities + RBAC",
+  "target_files": [
+    "src/core/azure_identity.py",
+    "src/llm/runtime.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 1.9627646543085575,
+  "timestamp": "2026-10-28T09:18:11.896965+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Managed identity authentication",
+      "input_setup": "Configure AI_FOUNDRY_AUTH_METHOD=managed_identity without static API key",
+      "expected_result": "Auth resolves to Entra ID token provider with Cognitive Services scope",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.9860140271484852,
+      "evidence": "Managed Identity auth configured with Azure Cognitive Services token scope: https://cognitiveservices.azure.com/.default",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Least privilege role enforcement",
+      "input_setup": "Verify RBAC profile against required Azure permissions",
+      "expected_result": "Restricted strictly to Key Vault Secrets User and Cognitive Services User",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.008907634764909744,
+      "evidence": "Least privilege policy enforced: only {'Cognitive Services OpenAI User', 'Key Vault Secrets User'} permitted",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "API key fallback mode",
+      "input_setup": "Set AI_FOUNDRY_AUTH_METHOD=api_key and provide AI_FOUNDRY_KEY",
+      "expected_result": "System falls back cleanly to API key authentication",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.9386399760842323,
+      "evidence": "API key fallback active; auth method switched cleanly without Managed Identity",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Token proactive refresh",
+      "input_setup": "Simulate token expiration lifecycle with 5-minute initial validity",
+      "expected_result": "Proactive refresh scheduled before token reaches expiry boundary",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.0033210963010787964,
+      "evidence": "Proactive token refresh triggered at 4m10s (50s before 5m expiry)",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Cross-tenant isolation enforcement",
+      "input_setup": "Simulate cross-tenant unauthorized response (403 Forbidden)",
+      "expected_result": "Raises 403 immediately; aborts without entering infinite retry loop",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.025881920009851456,
+      "evidence": "Cross-tenant 403 authorization error marked non-retryable; terminates immediately",
+      "error": null
+    }
+  ]
+}

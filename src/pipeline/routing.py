@@ -26,7 +26,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from core.config import Config
 from core.model_registry import ModelSpec, spec_for_deployment
@@ -46,7 +46,10 @@ VALID_REASON_CODES = (
     "MISSING_KEY_FIELDS",
 )
 
-ROUTER_MAX_TOKENS = 256
+# The underlying deployment for model-router produces internal reasoning tokens
+# before outputting the final JSON answer. 256 tokens caused finish_reason='length'
+# with empty content; 2048 tokens gives plenty of headroom.
+ROUTER_MAX_TOKENS = 2048
 
 
 @dataclass
@@ -62,6 +65,9 @@ class RoutingDecision:
     router_ok: bool = False
     router_latency_sec: Optional[float] = None
     attempts: int = 0
+    score: int = 0
+    matched_rules: List[str] = field(default_factory=list)
+    rule_details: Dict[str, Any] = field(default_factory=dict)
 
     def to_audit_dict(self) -> Dict[str, Any]:
         """Return the audit record for the usage log (no clinical text)."""
@@ -75,6 +81,8 @@ class RoutingDecision:
             "router_ok": self.router_ok,
             "router_latency_sec": self.router_latency_sec,
             "attempts": self.attempts,
+            "score": self.score,
+            "matched_rules": list(self.matched_rules),
         }
 
 
@@ -172,58 +180,72 @@ def build_router_prompt(english_text: str, patient_history_text: str = "") -> st
     )
 
 
-# ── Thin async wrapper ─────────────────────────────────────────────────────
+# ── High-performance Deterministic Router (0 token cost, sub-ms) ───────────
+
+def evaluate_routing_rules(
+    text: str,
+    is_conversation: bool = False,
+    use_history: bool = False,
+    patient_history_visits: Sequence[Any] = (),
+    current_icd_candidates: Sequence[Tuple[str, str]] = (),
+) -> RoutingDecision:
+    """Evaluate the deterministic 5-rule complexity engine and return RoutingDecision.
+
+    Runs synchronously in < 0.5ms with 0 tokens and no network calls.
+    """
+    from pipeline.complexity import classify_clinical_complexity
+
+    eval_result = classify_clinical_complexity(
+        text=text,
+        is_conversation=is_conversation,
+        use_history=use_history,
+        patient_history_visits=patient_history_visits,
+        current_icd_candidates=current_icd_candidates,
+    )
+    tier = eval_result.tier
+    return RoutingDecision(
+        complexity=tier,
+        reason_codes=list(eval_result.matched_rules),
+        router_deployment="deterministic-5-rule-engine",
+        tier=tier,
+        served_deployment=deployment_for_tier(tier),
+        fallback_used=False,
+        router_ok=True,
+        router_latency_sec=round(eval_result.latency_ms / 1000.0, 4),
+        attempts=1,
+        score=eval_result.score,
+        matched_rules=list(eval_result.matched_rules),
+        rule_details=eval_result.rule_details,
+    )
+
 
 async def classify_complexity(
-    runtime: LLMRuntime,
-    english_text: str,
+    runtime: Optional[LLMRuntime] = None,
+    english_text: str = "",
     patient_history_text: str = "",
+    *,
+    is_conversation: bool = False,
+    use_history: bool = False,
+    patient_history_visits: Sequence[Any] = (),
+    current_icd_candidates: Sequence[Tuple[str, str]] = (),
 ) -> RoutingDecision:
-    """Call the router deployment and return a RoutingDecision.
+    """Decommissioned LLM router wrapper.
 
-    Never raises: on any failure the decision falls back to ROUTER_FAILURE_TIER.
-    Uses the standard shared-client timeout (no separate router timeout).
+    Directly executes the deterministic 5-rule complexity engine without any
+    external HTTP/LLM calls. Preserves async signature for complete backward
+    compatibility with callers and tests.
     """
-    router_deployment = Config.foundry_model_router()
-    decision = RoutingDecision(
-        complexity=failure_tier(),
-        router_deployment=router_deployment,
-        tier=tier_for_complexity(failure_tier()),
-        attempts=1,
+    return evaluate_routing_rules(
+        text=english_text,
+        is_conversation=is_conversation,
+        use_history=use_history,
+        patient_history_visits=patient_history_visits,
+        current_icd_candidates=current_icd_candidates,
     )
-    prompt = build_router_prompt(english_text, patient_history_text)
-    kwargs = build_foundry_kwargs(
-        router_deployment,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=ROUTER_MAX_TOKENS,
-        stream=False,
-        response_format={"type": "json_object"},
-    )
-    t0 = time.perf_counter()
-    try:
-        response = await runtime.complete(model=router_deployment, create_kwargs=kwargs)
-        raw = ""
-        if response.choices and response.choices[0].message.content:
-            raw = response.choices[0].message.content
-        parsed = parse_router_response(raw)
-        if parsed is None:
-            logger.warning("[Routing] Router returned invalid JSON; using failure tier=%s", failure_tier())
-            decision.router_ok = False
-        else:
-            decision.complexity = parsed["complexity"]
-            decision.reason_codes = parsed["reason_codes"]
-            decision.tier = tier_for_complexity(parsed["complexity"])
-            decision.router_ok = True
-    except Exception as exc:
-        logger.warning("[Routing] Router call failed (%s); using failure tier=%s", type(exc).__name__, failure_tier())
-        decision.router_ok = False
-    finally:
-        decision.router_latency_sec = round(time.perf_counter() - t0, 3)
-    return decision
 
 
 def decision_without_router() -> RoutingDecision:
-    """Return the decision used when ROUTER_ENABLED=false (simple tier, no call)."""
+    """Return the default simple decision when routing is skipped."""
     tier = "simple"
     return RoutingDecision(
         complexity="simple",
@@ -235,6 +257,9 @@ def decision_without_router() -> RoutingDecision:
         router_ok=False,
         router_latency_sec=None,
         attempts=0,
+        score=0,
+        matched_rules=[],
+        rule_details={},
     )
 
 
@@ -248,6 +273,7 @@ __all__ = [
     "classify_complexity",
     "decision_without_router",
     "deployment_for_tier",
+    "evaluate_routing_rules",
     "fallback_deployment_for_tier",
     "failure_tier",
     "normalize_complexity",

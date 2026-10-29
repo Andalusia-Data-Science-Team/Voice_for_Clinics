@@ -1,0 +1,71 @@
+{
+  "task_id": "B4",
+  "subtask_id": "B4.1",
+  "title": "Reasoning router trigger rules as pure deterministic functions",
+  "target_files": [
+    "src/pipeline/routing.py",
+    "src/pipeline/complexity.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 67.76819005608559,
+  "timestamp": "2026-10-28T10:25:07.201661+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Purity and lack of side effects",
+      "input_setup": "Execute classify_clinical_complexity() 1,000 times with identical input",
+      "expected_result": "1,000 identical classifications returned; zero state mutation",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 67.38424627110362,
+      "evidence": "Pure function verified: 1,000 executions yielded bitwise identical classifications",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Complex presentation escalation to complex tier",
+      "input_setup": "Evaluate clinical note matching 3 criteria (fillers, companion, differential)",
+      "expected_result": "Classified as is_complex=True, tier='complex' (deployment: gpt-5.6-sol)",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.17549190670251846,
+      "evidence": "Complex escalation verified: 3 rules triggered -> tier=complex (deployment: gpt-5.6-sol)",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Simple presentation routes to simple tier",
+      "input_setup": "Evaluate simple clinical encounter text",
+      "expected_result": "Classifies as tier='simple' with sub-millisecond execution",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.06697280332446098,
+      "evidence": "Simple presentation routes to default tier=simple (deployment: gpt-5.6-luna)",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Deterministic decision mapping",
+      "input_setup": "Generate two decisions with identical text using evaluate_routing_rules",
+      "expected_result": "Bitwise identical decision objects returned",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.12829899787902832,
+      "evidence": "Deterministic decision verified: d1 == d2",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Empty input safe default",
+      "input_setup": "Call classify_clinical_complexity('') with empty string",
+      "expected_result": "Defaults gracefully to baseline tier; zero unhandled exceptions",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.013180077075958252,
+      "evidence": "Empty text input handled safely: score=0, tier='simple'",
+      "error": null
+    }
+  ]
+}

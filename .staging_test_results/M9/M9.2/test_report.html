@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Report: M9 - M9.2</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f8fafc; color: #1e293b; margin: 0; padding: 24px; }
+        .container { max-width: 1080px; margin: 0 auto; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); padding: 32px; border: 1px solid #e2e8f0; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; }
+        .badge-status { background: #10b981; color: #ffffff; padding: 6px 16px; border-radius: 20px; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 24px 0; padding: 16px; background: #f1f5f9; border-radius: 6px; }
+        .meta-card { display: flex; flex-direction: column; }
+        .meta-label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600; }
+        .meta-value { font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { background: #f8fafc; padding: 12px; text-align: left; font-size: 12px; text-transform: uppercase; color: #64748b; border-bottom: 2px solid #cbd5e1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1 style="margin:0 0 8px 0; font-size: 24px;">Subtask Verification: M9.2</h1>
+                <div style="font-size: 15px; color: #475569;">Retest with security team: OWASP verification and auth bypass prevention</div>
+            </div>
+            <div class="badge-status">ALL 5 PASSED — VERIFIED</div>
+        </div>
+
+        <div class="meta-grid">
+            <div class="meta-card">
+                <span class="meta-label">Task Identifier</span>
+                <span class="meta-value">M9 / M9.2</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-label">Pass Rate</span>
+                <span class="meta-value">5 / 5 (100% required)</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-label">Execution Time</span>
+                <span class="meta-value">4412.4 ms</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-label">Executed At</span>
+                <span class="meta-value">2026-10-28T12:38:09.237393+00:00</span>
+            </div>
+        </div>
+
+        <div style="margin: 16px 0; font-size: 13px;">
+            <strong>Target Files:</strong> <code style='background:#e5e7eb;padding:2px 6px;border-radius:3px;font-size:12px;'>tests/test_m7_security.py</code> <code style='background:#e5e7eb;padding:2px 6px;border-radius:3px;font-size:12px;'>docs/FINAL_REPORT.md</code>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="text-align:center;width:40px;">#</th>
+                    <th style="text-align:center;width:60px;">Sev</th>
+                    <th>Test Case</th>
+                    <th>Input / Setup</th>
+                    <th>Expected Result</th>
+                    <th style="text-align:center;width:80px;">Status</th>
+                    <th style="text-align:right;width:80px;">Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#1</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>Crit</span></td>
+            <td style="padding:12px;"><strong>Dedicated security test suite verified</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Check presence of tests/test_m7_security.py</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">test_m7_security.py exists and covers security contracts</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.0ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>Dedicated security verification suite test_m7_security.py present</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#2</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>Crit</span></td>
+            <td style="padding:12px;"><strong>Authentication bypass strictly blocked</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Invoke require_authenticated with APIM_ENABLED=true and missing roles</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">HTTPException 401 or 403 raised preventing unauthorized bypass</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">1.0ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>Auth bypass attempt blocked with HTTP 403</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#3</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>Crit</span></td>
+            <td style="padding:12px;"><strong>OWASP A02: Sensitive Data Exposure prevented (PHI scrubbing)</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Execute sanitize_usage_entry with transcript and free-text fields</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Free-text fields stripped; transcript_hash SHA-256 generated</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">4411.2ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>OWASP A02 Sensitive Data Exposure prevented: all PHI fields scrubbed and hashed</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#4</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#ea580c;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>High</span></td>
+            <td style="padding:12px;"><strong>Cryptographic integrity of anonymized hashes</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Generate SHA-256 digest of sample text</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Valid 64-character hexadecimal SHA-256 digest</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.0ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>SHA-256 cryptographic standard used for transcript identification</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#5</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#ea580c;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>High</span></td>
+            <td style="padding:12px;"><strong>Security sign-off and audit documented in project artifacts</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Inspect docs/FINAL_REPORT.md for security and PHI validation</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Audit record confirms zero PHI leakage and verified auth</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.2ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>Security validation and audit confirmation documented in FINAL_REPORT.md</div>
+                
+            </td>
+        </tr>
+        
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

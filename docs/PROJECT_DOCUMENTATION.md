@@ -98,25 +98,40 @@ Stages:
    mode; streamed in conversation mode.
 3. **Translation** — Arabic to English, streamed. Skipped for English.
 4. **Extraction** — structured clinical-note fields for the selected
-   department (ER, OPD, or Dental).
+   department (ER, OPD, or Dental). After extraction, a live required-fields
+   notice lists the department's mandatory note fields that are still empty:
+   ER requires chief complaint, past medical and surgical history, medication
+   history, examination, and plan of care; OPD requires chief complaint, past
+   medical and surgical history, medication history, and plan of care; Dental
+   requires chief complaint, past medical history, and procedure executed. The
+   notice updates as the doctor types or dictates and disappears when all
+   required fields are complete.
 5. **Diagnosis** — ICD-10 recommendations, final diagnosis, and reasoning,
-   optionally informed by patient history.
+   optionally informed by patient history. When history influences the
+   recommendation, the relevant prior visit date must be cited in the
+   reasoning and history notes; cited dates are checked against the visits
+   supplied to the model.
    A local retrieval-augmented generation (RAG) step ranks Australian
-   ICD-10-AM catalogue entries using BM25-style full-note matching and the
-   existing phrase/code search, then provides a shortlist to the reasoning
-   model. The server accepts only exact catalogue codes on that shortlist,
-   canonicalizes their labels, and excludes other suggestions from
-   recommendations.
+   ICD-10-AM catalogue entries using a local semantic embedding model,
+   BM25-style full-note matching, and the existing phrase/code search, then
+   provides a shortlist to the reasoning model. The server accepts only exact
+   catalogue codes on that shortlist, canonicalizes their labels, and excludes
+   other suggestions from recommendations.
 6. **Questions** — generated deterministically from the extracted fields.
-7. **Red-flag phrase check** — a bilingual lexicon checks transcript,
-   refined, and translated text for candidate warning phrases. Matches are
-   sent in an early `routing_signal` SSE event, repeated in the extraction
-   event, and retained in the usage log and persisted session for ER, OPD, and
-   Dental. Common English and Arabic negation cues are labeled `negated`;
+7. **Red-flag phrase check** — a lexicon of 169 presenting complaints
+   (`src/data/red_flag_lexicon.json`), each tagged with a triage level
+   (1 = most urgent … 5 = least) and an adult/pediatric/all population, checks
+   the transcript, refined, and translated text. Matches are sent in an early
+   `routing_signal` SSE event, repeated in the extraction event, and retained
+   in the usage log and persisted session. Each match carries `acuity` and
+   `population`; `highest_acuity` is the most urgent non-negated match. Where
+   phrases overlap, the longest wins (e.g. "non-cardiac chest pain" does not
+   also fire as cardiac chest pain). Entries with different levels per
+   population (sexual assault: 3 adult / 2 pediatric) use the more urgent
+   level. Common English and Arabic negation cues are labeled `negated`;
    uncertain or affirmed matches prompt clinician review. This is heuristic,
-   not diagnosis or automated triage. Review original context, and remember
-   that no match does not rule out an urgent condition. The starter lexicon
-   (`src/data/red_flag_lexicon.json`) requires local clinical review.
+   not diagnosis or automated triage, and no match does not rule out an urgent
+   condition. The phrase lists require local clinical review.
 
 ---
 
@@ -124,18 +139,32 @@ Stages:
 
 The diagnosis step retrieves candidate code/description pairs from the
 Australian ICD-10-AM catalogue loaded from the project CSV. Retrieval combines
-BM25-style term ranking over the complete clinical note with the existing
-phrase and code search, fusing the ranked results before sending the shortlist
-to the reasoning model. This is local retrieval: the catalogue index is built
-in memory and the note is not sent to a separate embedding service.
+local dense-vector semantic search (Sentence Transformers with
+`abhinand/MedEmbed-small-v0.1`), BM25-style ranking over the
+complete note, and the existing phrase/code search. The ranked lists are fused
+before the shortlist is sent to the reasoning model. The catalogue embeddings
+are cached locally by catalogue/model version and loaded into memory per
+worker; clinical notes are not sent to a separate embedding service. The first
+diagnosis request may take longer while the model downloads and catalogue
+vectors are built.
 
-This version uses lexical retrieval, not dense-vector embeddings. It can rank
-catalogue descriptions containing words from a note more effectively than
-phrase-only search, but cannot reliably bridge different wording such as
-synonyms that do not occur in either the note or catalogue description. If a
-relevant entry is not retrieved, the model cannot select it. A server-side
-allow-list ensures recommendations still cannot contain codes outside the
-retrieved shortlist.
+Semantic retrieval can bridge some differences in wording, but it does not
+guarantee correct coding. Validate retrieval against clinician-reviewed cases
+and confirm expected codes appear in the shortlist. A server-side allow-list
+ensures recommendations cannot contain codes outside that shortlist.
+
+To download the local model and build the catalogue-vector cache before serving
+clinical requests, run `PYTHONPATH=src python -m model.icd10_registry` as the
+same OS user that will run MedVoice. The cache is stored under that user's
+`~/.cache/medvoice/` directory.
+
+For CPU-only installs, install CPU PyTorch before the project dependencies so
+the package resolver does not pull CUDA libraries:
+
+```bash
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -r src/requirements.txt
+```
 
 ---
 

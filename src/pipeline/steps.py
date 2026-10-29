@@ -14,12 +14,12 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 from llm.runtime import LLMRuntime
 from model.llm_service import LLMService
 from core.model_registry import ModelSpec
-from model.patient_history import check_history_usage
+from model.patient_history import check_history_usage, validate_history_citations
 from model.question_generator import QuestionGenerator
 from model.icd10_registry import get_registry
 from model.diagnosis import constrain_diagnosis_to_registry
@@ -66,6 +66,7 @@ class PipelineContext:
     patient_story: str = ""
     routing_signal: Optional[Dict[str, Any]] = None
     routing_decision: Optional[Any] = None
+    icd_candidates: Optional[List[Tuple[str, str]]] = None
 
     @property
     def is_arabic(self) -> bool:
@@ -223,9 +224,14 @@ async def step_diagnose(
     meta: Dict[str, Any] = {}
     t0 = time.perf_counter()
     try:
-        catalogue_candidates = get_registry().search_diagnosis_candidates(
-            ctx.patient_story
-        )
+        if ctx.icd_candidates is not None:
+            catalogue_candidates = ctx.icd_candidates
+        else:
+            catalogue_candidates = await asyncio.to_thread(
+                get_registry().search_diagnosis_candidates,
+                ctx.patient_story,
+            )
+            ctx.icd_candidates = catalogue_candidates
         diagnosis_result = await LLMService.recommend_diagnosis_with_fallback_async(
             translated_text=ctx.patient_story,
             runtime=ctx.runtime,
@@ -244,7 +250,14 @@ async def step_diagnose(
             ctx.department_value,
             catalogue_candidates,
         )
-        
+        if isinstance(data, dict):
+            data = validate_history_citations(data, ctx.patient_history_visits)
+            if data["history_citation_missing"]:
+                logger.warning(
+                    "[Pipeline] session_id=%s: claimed history impact lacks a verified visit-date citation",
+                    ctx.session_id,
+                )
+
         history_check = None
         if ctx.patient_history_text and data:
             history_check = check_history_usage(ctx.patient_history_visits, data)

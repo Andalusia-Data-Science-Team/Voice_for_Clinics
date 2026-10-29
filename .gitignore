@@ -116,7 +116,6 @@ foundry-probe/
 src/data/
 !src/data/
 src/data/*
-!src/data/red_flag_lexicon.json
 
 # Excel and CSV datasets (large; use DVC or releases instead)
 *.xlsx

@@ -1,0 +1,70 @@
+{
+  "task_id": "B4",
+  "subtask_id": "B4.3",
+  "title": "Routing decision audit logging & telemetry compliance",
+  "target_files": [
+    "src/pipeline/routing.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.8486425504088402,
+  "timestamp": "2026-10-28T10:25:07.212280+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Audit record generation per decision",
+      "input_setup": "Generate routing decisions across 5 diverse encounters",
+      "expected_result": "Audit record dictionary created for every decision",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.344826839864254,
+      "evidence": "Audit record generated for 5/5 routing decisions",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Audit record metadata structure",
+      "input_setup": "Inspect to_audit_dict keys on RoutingDecision",
+      "expected_result": "Contains complexity, tier, and routing trigger metadata",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.2064877189695835,
+      "evidence": "Audit record structure verified: keys=['complexity', 'reason_codes', 'router_deployment', 'tier', 'served_deployment', 'fallback_used', 'router_ok', 'router_latency_sec', 'attempts', 'score', 'matched_rules']",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "PHI-safe audit records",
+      "input_setup": "Inspect serialized to_audit_dict for clinical or demographic identifiers",
+      "expected_result": "Zero PHI present in routing audit logs",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.16374094411730766,
+      "evidence": "Audit record verified 100% PHI-free (zero clinical or demographic text)",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Complexity classification unit test pass",
+      "input_setup": "Classify acute clinical note using complexity rules engine",
+      "expected_result": "Returns valid complexity level and latency < 5ms",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.11930800974369049,
+      "evidence": "classify_clinical_complexity passed unit verification: score=2, tier=simple, latency=0.109ms",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Decision queryability and filtering",
+      "input_setup": "Filter decision collection by tier='complex'",
+      "expected_result": "Correctly isolates all complex-tier decisions for audit reporting",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.014279037714004517,
+      "evidence": "Filter by tier='complex' isolated exactly 2 complex decisions",
+      "error": null
+    }
+  ]
+}

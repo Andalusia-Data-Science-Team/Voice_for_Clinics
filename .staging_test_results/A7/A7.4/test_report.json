@@ -1,0 +1,70 @@
+{
+  "task_id": "A7",
+  "subtask_id": "A7.4",
+  "title": "Admission controller bounds concurrent requests and manages capacity overload",
+  "target_files": [
+    "src/core/admission.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 8.60539311543107,
+  "timestamp": "2026-10-28T11:46:53.134156+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Rejects requests exceeding max_analyses threshold",
+      "input_setup": "AdmissionController with max_analyses=2 and mock active=2",
+      "expected_result": "AdmissionRejectedError raised",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 1.671270001679659,
+      "evidence": "check_analysis raised AdmissionRejectedError at capacity limit",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Rejects websockets exceeding max_websockets threshold",
+      "input_setup": "AdmissionController with max_websockets=5 and mock active=5",
+      "expected_result": "AdmissionRejectedError raised with path=/ws/transcribe",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 1.3231639750301838,
+      "evidence": "check_websocket raised AdmissionRejectedError at socket limit",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "acquire_analysis_slot manages lifetime bounds",
+      "input_setup": "Enter and exit acquire_analysis_slot context manager",
+      "expected_result": "increment called on enter, decrement called on exit",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 2.0080902613699436,
+      "evidence": "acquire_analysis_slot cleanly managed increment and decrement lifecycle",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Slot released safely when exception occurs",
+      "input_setup": "Raise exception inside acquire_analysis_slot context manager",
+      "expected_result": "decrement called ensuring no slot leak",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 2.274114638566971,
+      "evidence": "Slot released immediately even when task raises exception",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Stats reporting calculates utilization ratios",
+      "input_setup": "Query AdmissionController.stats under mocked active counts",
+      "expected_result": "Accurate utilization ratios calculated for both analyses and websockets",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.3287542387843132,
+      "evidence": "AdmissionController.stats calculated accurate 50% utilization metrics",
+      "error": null
+    }
+  ]
+}

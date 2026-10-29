@@ -1,0 +1,70 @@
+{
+  "task_id": "A1",
+  "subtask_id": "A1.3",
+  "title": "Backoff + jitter; remove key rotation",
+  "target_files": [
+    "src/llm/retry.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 409.5983006991446,
+  "timestamp": "2026-10-28T09:18:10.451543+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "429 retry with Retry-After",
+      "input_setup": "Mock 429 HTTP status with Retry-After: 2 header",
+      "expected_result": "Calculates delay >= 2.0s and classifies error as retryable",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.05687400698661804,
+      "evidence": "Retry-After header parsed correctly: delay=2.00s >= 2.0s",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Exponential backoff + jitter",
+      "input_setup": "Compute retry delays across multiple attempts without Retry-After header",
+      "expected_result": "Delays scale exponentially; jitter produces random spread",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.08473685011267662,
+      "evidence": "Exponential progression: avg1=0.29s, avg2=0.78s, avg3=2.03s with jitter spread",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "No retry on 400/401/403",
+      "input_setup": "Evaluate retryability of HTTP 400, 401, 403, 404, 422 client errors",
+      "expected_result": "is_retryable returns False immediately; no retries attempted",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.03098277375102043,
+      "evidence": "HTTP 400, 401, 403, 404, 422 all classified as non-retryable (zero retries)",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Key rotation removed",
+      "input_setup": "Recursive regex search for rotate_key and next_key across src/",
+      "expected_result": "Zero matches found across all production source files",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 408.17697113379836,
+      "evidence": "Zero matches for rotate_key or next_key in entire src/ directory",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "5xx + circuit breaker",
+      "input_setup": "Record repeated 503 errors against CircuitBreaker instance",
+      "expected_result": "Circuit transitions to OPEN; check_state raises CircuitBreakerOpenException",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.248735934495926,
+      "evidence": "Circuit breaker tripped after 3 consecutive 503 failures; short-circuits subsequent calls",
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "task_id": "M2",
+  "subtask_id": "M2.2",
+  "title": "Configuration switch OpenRouter -> Foundry (zero-code environment switching)",
+  "target_files": [
+    "src/providers/factory.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 31.18625422939658,
+  "timestamp": "2026-10-28T09:18:12.952869+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Default provider resolves to Foundry",
+      "input_setup": "Call build_llm_provider() without LLM_PROVIDER environment variable set",
+      "expected_result": "Returns FoundryLLMProvider as the default enterprise provider",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 2.1891160868108273,
+      "evidence": "Default provider without env override is FoundryLLMProvider",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Environment switch to OpenRouter",
+      "input_setup": "Set LLM_PROVIDER=openrouter in environment and invoke build_llm_provider()",
+      "expected_result": "Returns OpenRouterLLMProvider instance without code modifications",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 12.926461175084114,
+      "evidence": "Switched cleanly to OpenRouterLLMProvider via LLM_PROVIDER=openrouter",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Invalid provider rejection with valid choices",
+      "input_setup": "Set LLM_PROVIDER=nonexistent_vendor and invoke build_llm_provider()",
+      "expected_result": "Raises ValueError detailing valid supported providers",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.2117419391870499,
+      "evidence": "Invalid provider rejected with descriptive error: Unknown LLM_PROVIDER: 'nonexistent_vendor'. Supported options: ['foundry', 'openrouter']",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "STT provider switch to Voxtral",
+      "input_setup": "Set STT_PROVIDER=voxtral and invoke build_stt_provider()",
+      "expected_result": "Returns VoxtralSTTProvider cleanly",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.2480849400162697,
+      "evidence": "STT provider switched seamlessly to VoxtralSTTProvider via environment",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Dynamic runtime switch without stale cache",
+      "input_setup": "Instantiate provider, reset singleton cache, update env, and re-query factory",
+      "expected_result": "New provider instantiated immediately; old cached instance discarded",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 13.61085008829832,
+      "evidence": "Runtime reset and re-invocation correctly returns new provider without stale cache",
+      "error": null
+    }
+  ]
+}

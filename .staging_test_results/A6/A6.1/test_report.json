@@ -1,0 +1,71 @@
+{
+  "task_id": "A6",
+  "subtask_id": "A6.1",
+  "title": "Load ramp 1 -> 5 -> 10 -> 20 -> 50 concurrent sessions per language",
+  "target_files": [
+    "scripts/run_load_ramp.sh",
+    "reports/a6_demo/summary.csv"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 11.30221039056778,
+  "timestamp": "2026-10-28T11:58:28.436711+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Load ramp script defines exact steps 1, 5, 10, 20, 50",
+      "input_setup": "Inspect scripts/run_load_ramp.sh for STEPS array and language iteration",
+      "expected_result": "STEPS=(1 5 10 20 50) and LOCUST_LANGUAGE parameter configured",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.09261630475521088,
+      "evidence": "run_load_ramp.sh defines exact 1->5->10->20->50 stepped ramp per language",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Arabic p95 latency bounded under peak load (< 30s)",
+      "input_setup": "Check reports/a6_demo/summary.csv for Arabic 50-user p95",
+      "expected_result": "p95 < 30,000 ms",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 5.397793371230364,
+      "evidence": "Arabic peak p95 latency = 820ms (< 30,000ms SLA)",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "English p95 latency bounded under peak load (< 30s)",
+      "input_setup": "Check reports/a6_demo/summary.csv for English 50-user p95",
+      "expected_result": "p95 < 30,000 ms",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 2.57282517850399,
+      "evidence": "English peak p95 latency = 16000ms (< 30,000ms SLA)",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Load report metrics record p50, p95, p99, and 429 rates per step",
+      "input_setup": "Validate column schema of reports/a6_demo/summary.csv",
+      "expected_result": "Columns include p50, p95, p99, reqs, fails, 429, err_pct",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 1.6026073135435581,
+      "evidence": "All required metrics present in load report: ['lang', 'users', 'p50', 'p95', 'p99', 'reqs', 'fails', '429', 'err_pct']",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Zero 429 rate across load ramp",
+      "input_setup": "Sum '429' column across all steps in summary.csv",
+      "expected_result": "Total 429 count == 0",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.6363682225346565,
+      "evidence": "Zero 429 throttling errors observed across all load ramp steps",
+      "error": null
+    }
+  ]
+}

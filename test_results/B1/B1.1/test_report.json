@@ -1,0 +1,70 @@
+{
+  "task_id": "B1",
+  "subtask_id": "B1.1",
+  "title": "Structured-note JSON schema validation & backwards compatibility",
+  "target_files": [
+    "src/schemas/output_schemas.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.6051217205822468,
+  "timestamp": "2026-10-28T10:25:06.630312+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Required clinical sections presence",
+      "input_setup": "Inspect ERExtractionOutput and OPDExtractionOutput model fields",
+      "expected_result": "Contains chief_complaint, onset, course, duration, and plan_of_care",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.024213921278715134,
+      "evidence": "Core clinical sections (chief_complaint, onset, course, duration, plan_of_care) verified in schemas",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Structured session model verification",
+      "input_setup": "Inspect PipelineSessionOutput model fields",
+      "expected_result": "Validates multi-turn and multi-step extraction/diagnosis payload",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.005976762622594833,
+      "evidence": "PipelineSessionOutput incorporates multi-step structured outputs",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Clinical segment integrity",
+      "input_setup": "Instantiate structured schema with field-level segments",
+      "expected_result": "Segment attributes preserved and accessible per block",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.5420641973614693,
+      "evidence": "Section blocks serialize and deserialize reliably",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Routing signals representation",
+      "input_setup": "Evaluate RoutingDecision model with red-flag signals",
+      "expected_result": "Tier and signals structured cleanly in decision model",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.01952284947037697,
+      "evidence": "Routing signals and tier decisions model validated",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Backward compatibility of clinical schemas",
+      "input_setup": "Validate legacy v3.3 payload against current schema",
+      "expected_result": "Validates without error; omitted fields assign safe default values",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.013343989849090576,
+      "evidence": "Backward compatibility confirmed: partial legacy dictionary validates with empty/null defaults",
+      "error": null
+    }
+  ]
+}

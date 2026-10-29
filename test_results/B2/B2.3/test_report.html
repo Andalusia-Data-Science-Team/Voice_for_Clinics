@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Report: B2 - B2.3</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f8fafc; color: #1e293b; margin: 0; padding: 24px; }
+        .container { max-width: 1080px; margin: 0 auto; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); padding: 32px; border: 1px solid #e2e8f0; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; }
+        .badge-status { background: #10b981; color: #ffffff; padding: 6px 16px; border-radius: 20px; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 24px 0; padding: 16px; background: #f1f5f9; border-radius: 6px; }
+        .meta-card { display: flex; flex-direction: column; }
+        .meta-label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600; }
+        .meta-value { font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { background: #f8fafc; padding: 12px; text-align: left; font-size: 12px; text-transform: uppercase; color: #64748b; border-bottom: 2px solid #cbd5e1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1 style="margin:0 0 8px 0; font-size: 24px;">Subtask Verification: B2.3</h1>
+                <div style="font-size: 15px; color: #475569;">Schema validity tests across 60 clinical samples (20 per department)</div>
+            </div>
+            <div class="badge-status">ALL 5 PASSED — VERIFIED</div>
+        </div>
+
+        <div class="meta-grid">
+            <div class="meta-card">
+                <span class="meta-label">Task Identifier</span>
+                <span class="meta-value">B2 / B2.3</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-label">Pass Rate</span>
+                <span class="meta-value">5 / 5 (100% required)</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-label">Execution Time</span>
+                <span class="meta-value">0.7 ms</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-label">Executed At</span>
+                <span class="meta-value">2026-10-28T10:25:06.649448+00:00</span>
+            </div>
+        </div>
+
+        <div style="margin: 16px 0; font-size: 13px;">
+            <strong>Target Files:</strong> <code style='background:#e5e7eb;padding:2px 6px;border-radius:3px;font-size:12px;'>src/schemas/output_schemas.py</code>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="text-align:center;width:40px;">#</th>
+                    <th style="text-align:center;width:60px;">Sev</th>
+                    <th>Test Case</th>
+                    <th>Input / Setup</th>
+                    <th>Expected Result</th>
+                    <th style="text-align:center;width:80px;">Status</th>
+                    <th style="text-align:right;width:80px;">Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#1</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>Crit</span></td>
+            <td style="padding:12px;"><strong>Clinical test dataset quota</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Configure 60 clinical test fixtures across 3 departments</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">>= 60 validation scenarios (20 per department) tested</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.0ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>60 synthetic clinical encounter test cases prepared (20 ER, 20 OPD, 20 Dental)</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#2</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>Crit</span></td>
+            <td style="padding:12px;"><strong>100% ER notes validity</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Validate 20 diverse Emergency Department notes against ERExtractionOutput</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">20/20 (100%) pass schema validation without error</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.3ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>20/20 (100%) Emergency Department notes pass schema validation</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#3</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>Crit</span></td>
+            <td style="padding:12px;"><strong>100% OPD notes validity</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Validate 20 diverse Outpatient Department notes against OPDExtractionOutput</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">20/20 (100%) pass schema validation without error</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.2ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>20/20 (100%) Outpatient Department notes pass schema validation</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#4</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>Crit</span></td>
+            <td style="padding:12px;"><strong>100% Dental notes validity</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Validate 20 diverse Dental clinic notes against DentalExtractionOutput</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">20/20 (100%) pass schema validation without error</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.2ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>20/20 (100%) Dental notes pass schema validation</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#5</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#ea580c;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>High</span></td>
+            <td style="padding:12px;"><strong>Minimal content and empty fields resilience</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Submit minimal note containing only chief_complaint</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Validates without error; optional fields default to empty string or null</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">0.0ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>Minimal clinical note with omitted optional fields validates cleanly with safe defaults</div>
+                
+            </td>
+        </tr>
+        
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

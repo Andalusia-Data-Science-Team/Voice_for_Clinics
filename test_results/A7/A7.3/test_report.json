@@ -1,0 +1,70 @@
+{
+  "task_id": "A7",
+  "subtask_id": "A7.3",
+  "title": "Single-hop model fallback on eligible provider errors",
+  "target_files": [
+    "src/pipeline/fallback.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 19.59276059642434,
+  "timestamp": "2026-10-28T11:46:53.123484+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Fallback eligibility criteria verification",
+      "input_setup": "Test 429, 503, timeout vs 400 with is_fallback_eligible",
+      "expected_result": "429/503/timeout eligible; 400 ineligible",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 6.9200280122458935,
+      "evidence": "Eligibility classification adheres strictly to trigger rules",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Primary success bypasses fallback invocation",
+      "input_setup": "Execute run_with_single_fallback with succeeding primary callable",
+      "expected_result": "Fallback not called; meta indicates fallback_used=False",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 2.5143478997051716,
+      "evidence": "Primary call succeeded without invoking fallback",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Eligible error triggers single fallback call",
+      "input_setup": "Primary raises HTTP 503; fallback succeeds",
+      "expected_result": "Fallback executed; meta records fallback_used=True and served_deployment",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 3.5850671119987965,
+      "evidence": "Eligible 503 triggered exactly one fallback hop",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Ineligible error propagated without invoking fallback",
+      "input_setup": "Primary raises HTTP 400",
+      "expected_result": "Exception propagated; fallback called 0 times",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 2.8776763938367367,
+      "evidence": "400 error re-raised immediately; fallback never called",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Fallback failure propagated without infinite looping",
+      "input_setup": "Both primary and fallback raise exceptions",
+      "expected_result": "Fallback exception propagated cleanly; maximum single hop enforced",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 3.695641178637743,
+      "evidence": "Fallback exception propagated without infinite loop",
+      "error": null
+    }
+  ]
+}

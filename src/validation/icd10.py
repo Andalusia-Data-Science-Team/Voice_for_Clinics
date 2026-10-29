@@ -45,7 +45,7 @@ class ResolutionTier(str, Enum):
     UNRESOLVED = "UNRESOLVED"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class CodeValidationResult:
     """Detailed validation result for an individual ICD-10 candidate."""
     raw_input: str
@@ -58,7 +58,7 @@ class CodeValidationResult:
     matched_entry: Optional[ICD10Entry] = None
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class BatchValidationResult:
     """Summary of batch ICD-10 validation."""
     validated_codes: list[str]                # Canonical strings: "A00.0 - Description"

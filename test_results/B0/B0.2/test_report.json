@@ -1,0 +1,71 @@
+{
+  "task_id": "B0",
+  "subtask_id": "B0.2",
+  "title": "Red-flag lexicon detection & routing signal generation",
+  "target_files": [
+    "src/data/red_flag_lexicon.json",
+    "src/utils/red_flags.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 9.580652229487896,
+  "timestamp": "2026-10-28T10:25:06.621045+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Arabic red-flag detection",
+      "input_setup": "Evaluate Arabic acute cardiac symptom: '\u0627\u0644\u0645\u0631\u064a\u0636 \u064a\u0634\u0643\u0648 \u0645\u0646 \u0623\u0644\u0645 \u062d\u0627\u062f \u0641\u064a \u0627\u0644\u0635\u062f\u0631'",
+      "expected_result": "Red flag emitted with appropriate clinical category",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 2.1606190130114555,
+      "evidence": "Arabic red flag detected: 1 flag(s) found -> \u0623\u0644\u0645 \u0641\u064a \u0627\u0644\u0635\u062f\u0631",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "English red-flag detection with category",
+      "input_setup": "Evaluate English narrative 'crushing chest pain radiating to left arm'",
+      "expected_result": "Detected with category (e.g. cardiac) and high severity",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 2.122540958225727,
+      "evidence": "English red flag detected with category: Chest pain (cardiac features) (term: crushing chest pain)",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Negation suppression",
+      "input_setup": "Evaluate negated symptom text: 'Patient denies shortness of breath, no chest pain'",
+      "expected_result": "Negated symptoms are suppressed; red flag is NOT emitted",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 1.8891231156885624,
+      "evidence": "Negation suppression confirmed: 'no chest pain' suppressed active red-flag trigger",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Multiple distinct red flags detection",
+      "input_setup": "Evaluate encounter with 3 distinct emergent triggers (cardiac, respiratory, neuro)",
+      "expected_result": "All active emergency triggers detected independently",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 2.3395931348204613,
+      "evidence": "Multiple distinct red-flag triggers identified: 3 flags captured",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Lexicon file schema and structure integrity",
+      "input_setup": "Parse src/data/red_flag_lexicon.json and validate required dictionary schema",
+      "expected_result": "All entries contain term_ar, term_en, category, and severity",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.0687760077416897,
+      "evidence": "Lexicon file structure valid: 169 entries with id, label, acuity, population, phrases",
+      "error": null
+    }
+  ]
+}

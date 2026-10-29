@@ -1,0 +1,70 @@
+{
+  "task_id": "B4",
+  "subtask_id": "B4.2",
+  "title": "Reasoning router tier progression: simple default and single-step complex escalation",
+  "target_files": [
+    "src/pipeline/routing.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.4264586605131626,
+  "timestamp": "2026-10-28T10:25:07.207049+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Simple baseline default deployment",
+      "input_setup": "Check baseline tier for standard encounters",
+      "expected_result": "Default tier is simple with configured primary deployment",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.019615981727838516,
+      "evidence": "Default reasoning tier confirmed: simple -> gpt-5.6-luna",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Single-step escalation bound",
+      "input_setup": "Check fallback deployment mapping for simple and complex tiers",
+      "expected_result": "Explicit single fallback targets configured for both tiers",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.027820002287626266,
+      "evidence": "Configured fallbacks: simple->'gpt-4.1-mini', complex->'gpt-5.6-terra'",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Escalation audit logging",
+      "input_setup": "Record escalation decision with matched rules",
+      "expected_result": "Audit dictionary captures matched rules and complexity score",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.018466264009475708,
+      "evidence": "Escalation audit recorded: ['NOISY_DICTATION', 'MULTI_SPEAKER', 'REASONING_CUES']",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Router failure handling configuration",
+      "input_setup": "Inspect configured failure tier for router timeouts or errors",
+      "expected_result": "Clean failure tier configured ('complex' or 'simple')",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.015780795365571976,
+      "evidence": "Failure tier defined safely as: 'simple'",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Router JSON response parser",
+      "input_setup": "Parse valid router JSON response",
+      "expected_result": "Extracts complexity and normalized reason codes",
+      "severity": "Med",
+      "passed": true,
+      "duration_ms": 0.34477561712265015,
+      "evidence": "Router JSON response parsed cleanly with normalized reason codes",
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "task_id": "B9",
+  "subtask_id": "B9.1",
+  "title": "Fix failed cases: prompt fixes, lexicon updates, and routing adjustments",
+  "target_files": [
+    "src/data/abbreviation_whitelist.json",
+    "src/data/red_flag_lexicon.json"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 2.88220401853323,
+  "timestamp": "2026-10-28T12:38:09.579622+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Abbreviation whitelist protects clinical acronyms",
+      "input_setup": "Inspect src/data/abbreviation_whitelist.json (nested dict structure)",
+      "expected_result": "Contains key diagnostic acronyms (CT, MRI, ECG); size > 10",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.16918126493692398,
+      "evidence": "Abbreviation whitelist loaded (114 terms protected)",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Red-flag lexicon contains high-acuity clinical triggers",
+      "input_setup": "Inspect src/data/red_flag_lexicon.json (raw list format)",
+      "expected_result": "Contains > 20 curated critical symptom triggers",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 1.3251579366624355,
+      "evidence": "Red-flag lexicon contains 169 high-acuity triggers",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Clinical term expander resolves medical spelling errors",
+      "input_setup": "Pass 'atrial fibrilation' (typo) into correct_specialty_terms with Cardiology specialty",
+      "expected_result": "Corrects to 'atrial fibrillation'",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.3246208652853966,
+      "evidence": "Term correction fixes 'atrial fibrilation' \u2192 'atrial fibrillation'",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Routing rules trigger complex tier on multi-rule emergency dialogue",
+      "input_setup": "Classify multi-turn anaphylaxis dialogue with fillers + reasoning cues",
+      "expected_result": "is_complex=True or tier='complex' (>=3 rules triggered)",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.8567171171307564,
+      "evidence": "Emergency routing: tier=complex, score=3, matched=['NOISY_DICTATION', 'REASONING_CUES', 'UNKNOWN_ABBREVIATIONS']",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Change log and fixes documented in project report",
+      "input_setup": "Inspect docs/FINAL_REPORT.md for changes section",
+      "expected_result": "Changes section lists bug fixes and adjustments",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.20652683451771736,
+      "evidence": "System changes and gap resolutions documented in FINAL_REPORT.md",
+      "error": null
+    }
+  ]
+}

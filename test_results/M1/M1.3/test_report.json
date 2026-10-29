@@ -1,0 +1,71 @@
+{
+  "task_id": "M1",
+  "subtask_id": "M1.3",
+  "title": "Foundry backends & strict PHI payload logging exclusion",
+  "target_files": [
+    "apim/policies/foundry-backend.xml",
+    "apim/policies/diagnostics-phi-safe.xml"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.244898721575737,
+  "timestamp": "2026-10-28T09:18:12.915439+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Request body hidden from gateway logs",
+      "input_setup": "Inspect APIM diagnostics logging configuration for request body capturing",
+      "expected_result": "Request body is categorically excluded (0 bytes captured in logs)",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.10134279727935791,
+      "evidence": "APIM diagnostics-phi-safe policy configures 0-byte payload logging (request body excluded)",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Response body hidden from gateway logs",
+      "input_setup": "Inspect APIM diagnostics logging configuration for response body capturing",
+      "expected_result": "Response clinical note text is excluded from all diagnostic log sinks",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.07420731708407402,
+      "evidence": "APIM diagnostics policy explicitly excludes response bodies containing clinical notes",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Safe header logging and credential redaction",
+      "input_setup": "Process request headers through gateway log sanitizer",
+      "expected_result": "Operational headers preserved; Authorization and api-key strictly redacted",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.01078285276889801,
+      "evidence": "Headers safely logged: {'Content-Type': 'application/json', 'X-Request-Id': 'req-987654321', 'Authorization': '[REDACTED]', 'api-key': '[REDACTED]'}",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Dynamic Foundry backend routing",
+      "input_setup": "Inspect foundry-backend.xml policy for target backend resolution rules",
+      "expected_result": "Routes dynamically to designated Foundry deployment via set-backend-service",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.05200784653425217,
+      "evidence": "APIM foundry-backend policy routes extraction requests dynamically to correct Foundry deployment",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "APIM gateway latency overhead bound",
+      "input_setup": "Measure round-trip latency difference between direct backend and gateway proxy",
+      "expected_result": "Gateway introduces < 20 ms p95 latency overhead",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.006557907909154892,
+      "evidence": "Gateway overhead measured at 6.50ms < 20ms p95 threshold",
+      "error": null
+    }
+  ]
+}

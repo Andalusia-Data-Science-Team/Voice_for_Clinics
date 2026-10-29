@@ -1,58 +1,2610 @@
 [
   {
-    "id": "chest_pain",
-    "label": "Chest pain",
+    "id": "cardiac_arrest_non_traumatic",
+    "label": "Cardiac arrest (non-traumatic)",
+    "acuity": 1,
+    "population": "all",
     "phrases": {
-      "en": ["chest pain", "chest tightness"],
-      "ar": ["ألم في الصدر", "ألم بالصدر", "ضيق في الصدر"]
+      "en": [
+        "cardiac arrest",
+        "cardiopulmonary arrest",
+        "no pulse"
+      ]
     }
   },
   {
-    "id": "breathing_difficulty",
-    "label": "Breathing difficulty",
+    "id": "cardiac_arrest_traumatic",
+    "label": "Cardiac arrest (traumatic)",
+    "acuity": 1,
+    "population": "all",
     "phrases": {
-      "en": ["difficulty breathing", "shortness of breath", "trouble breathing"],
-      "ar": ["ضيق التنفس", "صعوبة التنفس", "صعوبة في التنفس"]
+      "en": [
+        "traumatic cardiac arrest",
+        "cardiac arrest after trauma"
+      ]
     }
   },
   {
-    "id": "stroke_signs",
-    "label": "Possible stroke symptoms",
+    "id": "chest_pain_cardiac_features",
+    "label": "Chest pain (cardiac features)",
+    "acuity": 2,
+    "population": "all",
     "phrases": {
-      "en": ["facial droop", "face drooping", "one-sided weakness", "slurred speech"],
-      "ar": ["تدلي الوجه", "ضعف في جهة واحدة", "ضعف في جانب واحد", "ثقل اللسان"]
+      "en": [
+        "chest pain",
+        "chest pressure",
+        "chest tightness",
+        "chest heaviness",
+        "crushing chest pain",
+        "angina"
+      ],
+      "ar": [
+        "ألم في الصدر",
+        "ألم بالصدر",
+        "ضيق في الصدر"
+      ]
     }
   },
   {
-    "id": "loss_of_consciousness",
-    "label": "Loss of consciousness",
+    "id": "chest_pain_non_cardiac_features",
+    "label": "Chest pain (non-cardiac features)",
+    "acuity": 5,
+    "population": "all",
     "phrases": {
-      "en": ["loss of consciousness", "lost consciousness", "unresponsive"],
-      "ar": ["فقدان الوعي", "فقد الوعي", "لا يستجيب"]
+      "en": [
+        "non cardiac chest pain",
+        "pleuritic chest pain",
+        "chest wall pain",
+        "musculoskeletal chest pain"
+      ]
     }
   },
   {
-    "id": "severe_bleeding",
-    "label": "Severe bleeding",
+    "id": "cool_pulseless_limb",
+    "label": "Cool pulseless limb",
+    "acuity": 2,
+    "population": "all",
     "phrases": {
-      "en": ["severe bleeding", "uncontrolled bleeding"],
-      "ar": ["نزيف شديد", "نزيف حاد", "نزيف لا يتوقف"]
+      "en": [
+        "cool pulseless limb",
+        "pulseless limb",
+        "cold pulseless leg",
+        "cold pulseless arm",
+        "absent distal pulse"
+      ]
     }
   },
   {
-    "id": "severe_allergic_reaction",
-    "label": "Severe allergic reaction",
+    "id": "edema",
+    "label": "Edema",
+    "acuity": 4,
+    "population": "all",
     "phrases": {
-      "en": ["anaphylaxis", "severe allergic reaction"],
-      "ar": ["تأق", "حساسية مفرطة", "صدمة تحسسية"]
+      "en": [
+        "edema",
+        "oedema"
+      ]
+    }
+  },
+  {
+    "id": "hypertension",
+    "label": "Hypertension",
+    "acuity": 4,
+    "population": "adult",
+    "phrases": {
+      "en": [
+        "hypertension",
+        "high blood pressure",
+        "hypertensive"
+      ]
+    }
+  },
+  {
+    "id": "leg_swelling_edema",
+    "label": "Leg swelling / edema",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "leg swelling",
+        "leg edema",
+        "leg oedema",
+        "swollen leg",
+        "swollen legs",
+        "ankle swelling",
+        "swollen ankles"
+      ]
+    }
+  },
+  {
+    "id": "palpitations_irregular_heart_beat",
+    "label": "Palpitations / irregular heart beat",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "palpitations",
+        "irregular heartbeat",
+        "irregular heart beat",
+        "racing heart",
+        "heart racing"
+      ]
+    }
+  },
+  {
+    "id": "syncope_pre_syncope",
+    "label": "Syncope / pre-syncope",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "syncope",
+        "presyncope",
+        "pre syncope",
+        "fainting",
+        "fainted",
+        "passed out",
+        "near fainting"
+      ]
+    }
+  },
+  {
+    "id": "unilateral_reddened_hot_limb",
+    "label": "Unilateral reddened hot limb",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "red hot limb",
+        "reddened hot limb",
+        "hot red leg",
+        "hot red arm",
+        "unilateral leg swelling"
+      ]
+    }
+  },
+  {
+    "id": "discharge_ear",
+    "label": "Discharge, ear",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "ear discharge",
+        "discharge from the ear",
+        "discharge from ear",
+        "discharge, ear",
+        "otorrhea"
+      ]
+    }
+  },
+  {
+    "id": "earache",
+    "label": "Earache",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "earache",
+        "ear ache",
+        "ear pain",
+        "otalgia"
+      ]
+    }
+  },
+  {
+    "id": "ear_injury",
+    "label": "Ear Injury",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "ear injury",
+        "injured ear"
+      ]
+    }
+  },
+  {
+    "id": "foreign_body_ear",
+    "label": "Foreign body, ear",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "foreign body in the ear",
+        "foreign body in ear",
+        "foreign body ear"
+      ]
+    }
+  },
+  {
+    "id": "loss_of_hearing",
+    "label": "Loss of hearing",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "loss of hearing",
+        "hearing loss",
+        "cannot hear",
+        "sudden deafness"
+      ]
+    }
+  },
+  {
+    "id": "tinnitus",
+    "label": "Tinnitus",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "tinnitus",
+        "ringing in the ears",
+        "ringing in ears"
+      ]
+    }
+  },
+  {
+    "id": "dental_gum_problem",
+    "label": "Dental / gum problem",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "dental problem",
+        "dental pain",
+        "toothache",
+        "tooth ache",
+        "gum problem",
+        "gum bleeding",
+        "bleeding gums",
+        "gum swelling"
+      ]
+    }
+  },
+  {
+    "id": "difficulty_swallowing_dysphagia",
+    "label": "Difficulty swallowing / dysphagia",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "difficulty swallowing",
+        "dysphagia",
+        "trouble swallowing",
+        "cannot swallow"
+      ]
+    }
+  },
+  {
+    "id": "facial_pain_non_traumatic_non_dental",
+    "label": "Facial pain (non-traumatic / non-dental)",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "facial pain",
+        "face pain"
+      ]
+    }
+  },
+  {
+    "id": "facial_trauma",
+    "label": "Facial trauma",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "facial trauma",
+        "facial injury",
+        "face injury"
+      ]
+    }
+  },
+  {
+    "id": "neck_swelling_pain",
+    "label": "Neck swelling / pain",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "neck swelling",
+        "neck pain",
+        "swollen neck",
+        "stiff neck"
+      ]
+    }
+  },
+  {
+    "id": "neck_trauma",
+    "label": "Neck trauma",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "neck trauma",
+        "neck injury"
+      ]
+    }
+  },
+  {
+    "id": "sore_throat",
+    "label": "Sore throat",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "sore throat",
+        "throat pain"
+      ]
+    }
+  },
+  {
+    "id": "epistaxis",
+    "label": "Epistaxis",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "epistaxis",
+        "nosebleed",
+        "nose bleed",
+        "bleeding from the nose"
+      ]
+    }
+  },
+  {
+    "id": "foreign_body_nose",
+    "label": "Foreign body, nose",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "foreign body in the nose",
+        "foreign body in nose",
+        "foreign body nose"
+      ]
+    }
+  },
+  {
+    "id": "nasal_congestion_hay_fever",
+    "label": "Nasal congestion / hay fever",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "nasal congestion",
+        "hay fever",
+        "stuffy nose",
+        "blocked nose",
+        "runny nose"
+      ]
+    }
+  },
+  {
+    "id": "nasal_trauma",
+    "label": "Nasal trauma",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "nasal trauma",
+        "nose injury",
+        "broken nose"
+      ]
+    }
+  },
+  {
+    "id": "urti_complaints",
+    "label": "URTI complaints",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "urti",
+        "upper respiratory tract infection",
+        "upper respiratory infection"
+      ]
+    }
+  },
+  {
+    "id": "chemical_exposure",
+    "label": "Chemical exposure",
+    "acuity": 2,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "chemical exposure",
+        "chemical burn",
+        "chemical splash"
+      ]
+    }
+  },
+  {
+    "id": "electrical_injury",
+    "label": "Electrical injury",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "electrical injury",
+        "electric shock",
+        "electrocution",
+        "electrocuted"
+      ]
+    }
+  },
+  {
+    "id": "frostbite_cold_injury",
+    "label": "Frostbite / cold injury",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "frostbite",
+        "cold injury"
+      ]
+    }
+  },
+  {
+    "id": "hypothermia",
+    "label": "Hypothermia",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "hypothermia"
+      ]
+    }
+  },
+  {
+    "id": "noxious_inhalation",
+    "label": "Noxious inhalation",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "noxious inhalation",
+        "smoke inhalation",
+        "toxic fumes",
+        "inhaled fumes",
+        "carbon monoxide"
+      ]
+    }
+  },
+  {
+    "id": "near_drowning",
+    "label": "Near drowning",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "near drowning",
+        "near-drowning",
+        "drowning",
+        "nearly drowned"
+      ]
+    }
+  },
+  {
+    "id": "heat_related_illness",
+    "label": "Heat Related Illness",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "heat related illness",
+        "heat illness",
+        "heat stroke",
+        "heatstroke",
+        "heat exhaustion"
+      ]
+    }
+  },
+  {
+    "id": "abdominal_mass_distention",
+    "label": "Abdominal mass / distention",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "abdominal mass",
+        "abdominal distention",
+        "abdominal distension",
+        "distended abdomen",
+        "bloated abdomen"
+      ]
+    }
+  },
+  {
+    "id": "abdominal_pain",
+    "label": "Abdominal pain",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "abdominal pain",
+        "stomach pain",
+        "belly pain",
+        "stomach ache",
+        "tummy pain",
+        "abdominal cramps"
+      ]
+    }
+  },
+  {
+    "id": "anal_rectal_trauma",
+    "label": "Anal / rectal trauma",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "anal trauma",
+        "rectal trauma",
+        "anal injury",
+        "rectal injury"
+      ]
+    }
+  },
+  {
+    "id": "anorexia",
+    "label": "Anorexia",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "anorexia",
+        "loss of appetite",
+        "poor appetite",
+        "not eating"
+      ]
+    }
+  },
+  {
+    "id": "blood_in_stool_melena",
+    "label": "Blood in stool / melena",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "blood in stool",
+        "blood in the stool",
+        "bloody stool",
+        "melena",
+        "black stool",
+        "black tarry stool",
+        "rectal bleeding",
+        "hematochezia"
+      ]
+    }
+  },
+  {
+    "id": "constipation",
+    "label": "Constipation",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "constipation",
+        "constipated"
+      ]
+    }
+  },
+  {
+    "id": "diarrhea",
+    "label": "Diarrhea",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "diarrhea",
+        "diarrhoea",
+        "loose stools",
+        "watery stools"
+      ]
+    }
+  },
+  {
+    "id": "feeding_difficulties_in_the_newborn",
+    "label": "Feeding difficulties in the newborn",
+    "acuity": 3,
+    "population": "pediatric",
+    "phrases": {
+      "en": [
+        "feeding difficulty",
+        "feeding difficulties",
+        "poor feeding",
+        "not feeding well",
+        "refusing feeds"
+      ]
+    }
+  },
+  {
+    "id": "foreign_body_in_rectum",
+    "label": "Foreign body in rectum",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "foreign body in the rectum",
+        "foreign body in rectum",
+        "rectal foreign body"
+      ]
+    }
+  },
+  {
+    "id": "groin_pain_mass",
+    "label": "Groin pain / mass",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "groin pain",
+        "groin mass",
+        "groin lump",
+        "groin swelling"
+      ]
+    }
+  },
+  {
+    "id": "hiccoughs",
+    "label": "Hiccoughs",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "hiccoughs",
+        "hiccups",
+        "hiccough",
+        "hiccup"
+      ]
+    }
+  },
+  {
+    "id": "jaundice",
+    "label": "Jaundice",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "jaundice",
+        "jaundiced",
+        "yellow skin",
+        "yellow eyes"
+      ]
+    }
+  },
+  {
+    "id": "neonatal_jaundice",
+    "label": "Neonatal jaundice",
+    "acuity": 3,
+    "population": "pediatric",
+    "phrases": {
+      "en": [
+        "neonatal jaundice",
+        "newborn jaundice",
+        "jaundice in the newborn"
+      ]
+    }
+  },
+  {
+    "id": "oral_esophageal_foreign_body",
+    "label": "Oral / esophageal foreign body",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "oral foreign body",
+        "esophageal foreign body",
+        "oesophageal foreign body",
+        "swallowed foreign body",
+        "swallowed a coin",
+        "swallowed a button battery",
+        "fish bone stuck",
+        "food stuck in throat"
+      ]
+    }
+  },
+  {
+    "id": "rectal_perineal_pain",
+    "label": "Rectal / perineal pain",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "rectal pain",
+        "perineal pain",
+        "anal pain"
+      ]
+    }
+  },
+  {
+    "id": "vomiting_and_or_nausea",
+    "label": "Vomiting and / or nausea",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "vomiting",
+        "nausea",
+        "vomited",
+        "nauseous",
+        "nauseated"
+      ]
+    }
+  },
+  {
+    "id": "vomiting_blood",
+    "label": "Vomiting blood",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "vomiting blood",
+        "vomiting of blood",
+        "hematemesis",
+        "haematemesis",
+        "vomited blood",
+        "coffee ground vomit",
+        "coffee ground vomiting"
+      ]
+    }
+  },
+  {
+    "id": "flank_pain",
+    "label": "Flank pain",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "flank pain",
+        "loin pain"
+      ]
+    }
+  },
+  {
+    "id": "genital_discharge_lesion",
+    "label": "Genital discharge / lesion",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "genital discharge",
+        "genital lesion",
+        "genital ulcer",
+        "penile discharge",
+        "urethral discharge"
+      ]
+    }
+  },
+  {
+    "id": "genital_trauma",
+    "label": "Genital trauma",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "genital trauma",
+        "genital injury"
+      ]
+    }
+  },
+  {
+    "id": "hematuria",
+    "label": "Hematuria",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "hematuria",
+        "haematuria",
+        "blood in urine",
+        "blood in the urine",
+        "bloody urine"
+      ]
+    }
+  },
+  {
+    "id": "oliguria",
+    "label": "Oliguria",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "oliguria",
+        "decreased urine output",
+        "reduced urine output",
+        "passing little urine"
+      ]
+    }
+  },
+  {
+    "id": "penile_swelling",
+    "label": "Penile swelling",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "penile swelling",
+        "swollen penis"
+      ]
+    }
+  },
+  {
+    "id": "polyuria",
+    "label": "Polyuria",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "polyuria",
+        "passing a lot of urine",
+        "frequent urination",
+        "excessive urination"
+      ]
+    }
+  },
+  {
+    "id": "scrotal_pain_and_or_swelling",
+    "label": "Scrotal pain and / or swelling",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "scrotal pain",
+        "scrotal swelling",
+        "testicular pain",
+        "testicular swelling",
+        "swollen testicle"
+      ]
+    }
+  },
+  {
+    "id": "urinary_retention",
+    "label": "Urinary retention",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "urinary retention",
+        "unable to pass urine",
+        "cannot pass urine",
+        "unable to urinate"
+      ]
+    }
+  },
+  {
+    "id": "uti_complaints",
+    "label": "UTI complaints",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "uti",
+        "urinary tract infection",
+        "burning urination",
+        "dysuria",
+        "burning on urination",
+        "painful urination"
+      ]
+    }
+  },
+  {
+    "id": "anxiety_situational_crisis",
+    "label": "Anxiety / situational crisis",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "anxiety",
+        "panic attack",
+        "situational crisis",
+        "anxious"
+      ]
+    }
+  },
+  {
+    "id": "bizarre_behavior",
+    "label": "Bizarre / behavior",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "bizarre behavior",
+        "bizarre behaviour"
+      ]
+    }
+  },
+  {
+    "id": "depression_suicidal_deliberate_self_harm",
+    "label": "Depression / suicidal / deliberate self-harm",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "depression",
+        "suicidal",
+        "suicide",
+        "suicidal ideation",
+        "deliberate self harm",
+        "self harm",
+        "self-harm",
+        "wants to die",
+        "depressed"
+      ]
+    }
+  },
+  {
+    "id": "hallucinations_delusions",
+    "label": "Hallucinations / delusions",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "hallucinations",
+        "hallucinating",
+        "delusions",
+        "delusional",
+        "hearing voices",
+        "seeing things"
+      ]
+    }
+  },
+  {
+    "id": "insomnia",
+    "label": "Insomnia",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "insomnia",
+        "cannot sleep",
+        "unable to sleep",
+        "trouble sleeping"
+      ]
+    }
+  },
+  {
+    "id": "pediatric_disruptive_behavior",
+    "label": "Pediatric disruptive behavior",
+    "acuity": 5,
+    "population": "pediatric",
+    "phrases": {
+      "en": [
+        "disruptive behavior",
+        "disruptive behaviour",
+        "aggressive child",
+        "behavioral problems",
+        "behavioural problems"
+      ]
+    }
+  },
+  {
+    "id": "violent_homicidal_behavior",
+    "label": "Violent / homicidal behavior",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "violent behavior",
+        "violent behaviour",
+        "homicidal",
+        "homicidal ideation",
+        "wants to kill"
+      ]
+    }
+  },
+  {
+    "id": "altered_level_of_consciousness",
+    "label": "Altered level of consciousness",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "altered level of consciousness",
+        "altered consciousness",
+        "altered mental status",
+        "decreased level of consciousness",
+        "loss of consciousness",
+        "lost consciousness",
+        "unresponsive",
+        "unconscious",
+        "drowsy and difficult to wake"
+      ],
+      "ar": [
+        "فقدان الوعي",
+        "فقد الوعي",
+        "لا يستجيب"
+      ]
+    }
+  },
+  {
+    "id": "confusion",
+    "label": "Confusion",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "confusion",
+        "confused",
+        "disoriented",
+        "disorientation"
+      ]
+    }
+  },
+  {
+    "id": "extremity_weakness_symptoms_of_cva",
+    "label": "Extremity weakness / symptoms of CVA",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "extremity weakness",
+        "arm weakness",
+        "leg weakness",
+        "one sided weakness",
+        "unilateral weakness",
+        "facial droop",
+        "face drooping",
+        "slurred speech",
+        "stroke",
+        "cva",
+        "hemiparesis",
+        "hemiplegia",
+        "weakness on one side"
+      ],
+      "ar": [
+        "تدلي الوجه",
+        "ضعف في جهة واحدة",
+        "ضعف في جانب واحد",
+        "ثقل اللسان"
+      ]
+    }
+  },
+  {
+    "id": "floppy_child",
+    "label": "Floppy child",
+    "acuity": 3,
+    "population": "pediatric",
+    "phrases": {
+      "en": [
+        "floppy child",
+        "floppy infant",
+        "floppy baby",
+        "limp child",
+        "limp infant"
+      ]
+    }
+  },
+  {
+    "id": "gait_disturbance_ataxia",
+    "label": "Gait disturbance / ataxia",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "gait disturbance",
+        "ataxia",
+        "unsteady gait",
+        "difficulty walking",
+        "unsteady on feet"
+      ]
+    }
+  },
+  {
+    "id": "headache",
+    "label": "Headache",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "headache",
+        "headaches",
+        "head ache",
+        "migraine"
+      ]
     }
   },
   {
     "id": "seizure",
     "label": "Seizure",
+    "acuity": 3,
+    "population": "all",
     "phrases": {
-      "en": ["seizure", "seizures"],
-      "ar": ["نوبة صرع", "تشنج"]
+      "en": [
+        "seizure",
+        "seizures",
+        "convulsion",
+        "convulsions",
+        "convulsing"
+      ],
+      "ar": [
+        "نوبة صرع",
+        "تشنج"
+      ]
+    }
+  },
+  {
+    "id": "sensory_loss_paresthesia",
+    "label": "Sensory loss / paresthesia",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "sensory loss",
+        "paresthesia",
+        "paraesthesia",
+        "numbness",
+        "numb",
+        "tingling",
+        "pins and needles"
+      ]
+    }
+  },
+  {
+    "id": "tremor",
+    "label": "Tremor",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "tremor",
+        "tremors",
+        "shaking hands",
+        "trembling"
+      ]
+    }
+  },
+  {
+    "id": "vertigo",
+    "label": "Vertigo",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "vertigo",
+        "dizziness",
+        "dizzy",
+        "room spinning",
+        "spinning sensation"
+      ]
+    }
+  },
+  {
+    "id": "foreign_body_vagina",
+    "label": "Foreign body, vagina",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "foreign body in the vagina",
+        "foreign body in vagina",
+        "foreign body, vagina",
+        "vaginal foreign body",
+        "retained tampon"
+      ]
+    }
+  },
+  {
+    "id": "labial_swelling",
+    "label": "Labial swelling",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "labial swelling",
+        "swollen labia"
+      ]
+    }
+  },
+  {
+    "id": "menstrual_problems",
+    "label": "Menstrual problems",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "menstrual problems",
+        "menstrual problem",
+        "heavy periods",
+        "heavy menstrual bleeding",
+        "irregular periods",
+        "missed period",
+        "painful periods",
+        "dysmenorrhea",
+        "menorrhagia"
+      ]
+    }
+  },
+  {
+    "id": "laceration_puncture",
+    "label": "Laceration / Puncture",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "laceration",
+        "puncture wound",
+        "deep cut"
+      ]
+    }
+  },
+  {
+    "id": "pregnancy_issue_under_20_weeks",
+    "label": "Pregnancy issue < 20 weeks",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "pregnancy issue",
+        "early pregnancy problem",
+        "early pregnancy bleeding",
+        "miscarriage",
+        "ectopic pregnancy",
+        "hyperemesis"
+      ]
+    }
+  },
+  {
+    "id": "pregnancy_issue_over_20_weeks",
+    "label": "Pregnancy issue >20 weeks",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "late pregnancy problem",
+        "reduced fetal movements",
+        "decreased fetal movement",
+        "preterm labor",
+        "preterm labour",
+        "preeclampsia",
+        "pre eclampsia",
+        "contractions",
+        "ruptured membranes",
+        "water broke"
+      ]
+    }
+  },
+  {
+    "id": "post_partum_issue",
+    "label": "Post Partum Issue",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "postpartum",
+        "post partum",
+        "postnatal",
+        "after delivery",
+        "postpartum hemorrhage",
+        "postpartum haemorrhage"
+      ]
+    }
+  },
+  {
+    "id": "vaginal_bleeding",
+    "label": "Vaginal bleeding",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "vaginal bleeding",
+        "bleeding per vagina",
+        "bleeding from the vagina"
+      ]
+    }
+  },
+  {
+    "id": "vaginal_discharge",
+    "label": "Vaginal discharge",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "vaginal discharge"
+      ]
+    }
+  },
+  {
+    "id": "vaginal_pain_itch",
+    "label": "Vaginal pain / itch",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "vaginal pain",
+        "vaginal itch",
+        "vaginal itching",
+        "vulvar itching",
+        "vulval itching"
+      ]
+    }
+  },
+  {
+    "id": "chemical_exposure_eye",
+    "label": "Chemical exposure, eye",
+    "acuity": 2,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "chemical exposure to the eye",
+        "chemical in the eye",
+        "chemical in eye",
+        "chemical splash in the eye",
+        "chemical eye injury",
+        "chemical eye burn"
+      ]
+    }
+  },
+  {
+    "id": "diplopia",
+    "label": "Diplopia",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "diplopia",
+        "double vision"
+      ]
+    }
+  },
+  {
+    "id": "eye_pain",
+    "label": "Eye pain",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "eye pain",
+        "painful eye",
+        "pain in the eye"
+      ]
+    }
+  },
+  {
+    "id": "eye_trauma",
+    "label": "Eye trauma",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "eye trauma",
+        "eye injury",
+        "injury to the eye",
+        "blow to the eye"
+      ]
+    }
+  },
+  {
+    "id": "foreign_body_eye",
+    "label": "Foreign body, eye",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "foreign body in the eye",
+        "foreign body in eye",
+        "foreign body eye"
+      ]
+    }
+  },
+  {
+    "id": "red_eye_discharge",
+    "label": "Red eye / discharge",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "red eye",
+        "eye discharge",
+        "discharge from the eye",
+        "conjunctivitis",
+        "pink eye"
+      ]
+    }
+  },
+  {
+    "id": "periorbital_swelling",
+    "label": "Periorbital swelling",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "periorbital swelling",
+        "swelling around the eye",
+        "swollen eyelid",
+        "eyelid swelling"
+      ]
+    }
+  },
+  {
+    "id": "photophobia",
+    "label": "Photophobia",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "photophobia",
+        "light sensitivity",
+        "sensitivity to light",
+        "sensitive to light"
+      ]
+    }
+  },
+  {
+    "id": "re_check_eye",
+    "label": "Re-check eye",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "recheck eye",
+        "re check eye",
+        "eye recheck",
+        "eye re check"
+      ]
+    }
+  },
+  {
+    "id": "visual_disturbance",
+    "label": "Visual disturbance",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "visual disturbance",
+        "visual disturbances",
+        "blurred vision",
+        "blurry vision",
+        "vision loss",
+        "loss of vision",
+        "sudden blindness",
+        "visual changes",
+        "flashing lights",
+        "floaters"
+      ]
+    }
+  },
+  {
+    "id": "amputation",
+    "label": "Amputation",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "amputation",
+        "amputated",
+        "severed finger",
+        "severed limb"
+      ]
+    }
+  },
+  {
+    "id": "back_pain",
+    "label": "Back pain",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "back pain",
+        "low back pain",
+        "lower back pain",
+        "backache"
+      ]
+    }
+  },
+  {
+    "id": "cast_check",
+    "label": "Cast check",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "cast check",
+        "plaster check",
+        "cast review"
+      ]
+    }
+  },
+  {
+    "id": "joint_s_swelling",
+    "label": "Joint(s) swelling",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "joint swelling",
+        "joints swelling",
+        "joint(s) swelling",
+        "joint s swelling",
+        "swollen joint",
+        "swollen joints",
+        "joint effusion"
+      ]
+    }
+  },
+  {
+    "id": "lower_extremity_injury",
+    "label": "Lower extremity injury",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "lower extremity injury",
+        "leg injury",
+        "foot injury",
+        "ankle injury",
+        "knee injury",
+        "ankle sprain",
+        "twisted ankle",
+        "hip injury"
+      ]
+    }
+  },
+  {
+    "id": "lower_extremity_pain",
+    "label": "Lower extremity pain",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "lower extremity pain",
+        "leg pain",
+        "foot pain",
+        "ankle pain",
+        "knee pain",
+        "hip pain",
+        "calf pain"
+      ]
+    }
+  },
+  {
+    "id": "pediatric_gait_disorder_painful_walk",
+    "label": "Pediatric gait disorder / painful walk",
+    "acuity": 5,
+    "population": "pediatric",
+    "phrases": {
+      "en": [
+        "limping child",
+        "child limping",
+        "refusing to walk",
+        "refuses to walk",
+        "painful walk",
+        "limping"
+      ]
+    }
+  },
+  {
+    "id": "upper_extremity_injury",
+    "label": "Upper extremity injury",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "upper extremity injury",
+        "arm injury",
+        "hand injury",
+        "wrist injury",
+        "shoulder injury",
+        "elbow injury",
+        "finger injury"
+      ]
+    }
+  },
+  {
+    "id": "upper_extremity_pain",
+    "label": "Upper extremity pain",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "upper extremity pain",
+        "arm pain",
+        "hand pain",
+        "wrist pain",
+        "shoulder pain",
+        "elbow pain",
+        "finger pain"
+      ]
+    }
+  },
+  {
+    "id": "allergic_reaction",
+    "label": "Allergic reaction",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "allergic reaction",
+        "allergy",
+        "anaphylaxis",
+        "anaphylactic",
+        "angioedema",
+        "hives",
+        "urticaria",
+        "swollen lips",
+        "swollen tongue"
+      ],
+      "ar": [
+        "تأق",
+        "حساسية مفرطة",
+        "صدمة تحسسية"
+      ]
+    }
+  },
+  {
+    "id": "apneic_spells_in_infants",
+    "label": "Apneic spells in infants",
+    "acuity": 3,
+    "population": "pediatric",
+    "phrases": {
+      "en": [
+        "apneic spells",
+        "apnea",
+        "apnoea",
+        "apneic episodes",
+        "pauses in breathing"
+      ]
+    }
+  },
+  {
+    "id": "cough_congestion",
+    "label": "Cough / congestion",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "cough",
+        "coughing",
+        "chest congestion"
+      ]
+    }
+  },
+  {
+    "id": "hemoptysis",
+    "label": "Hemoptysis",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "hemoptysis",
+        "haemoptysis",
+        "coughing blood",
+        "coughing up blood",
+        "blood in sputum",
+        "bloody sputum"
+      ]
+    }
+  },
+  {
+    "id": "hyperventilation",
+    "label": "Hyperventilation",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "hyperventilation",
+        "hyperventilating",
+        "rapid breathing"
+      ]
+    }
+  },
+  {
+    "id": "respiratory_arrest",
+    "label": "Respiratory arrest",
+    "acuity": 1,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "respiratory arrest",
+        "not breathing",
+        "stopped breathing",
+        "apneic"
+      ]
+    }
+  },
+  {
+    "id": "respiratory_foreign_body",
+    "label": "Respiratory foreign body",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "respiratory foreign body",
+        "choking",
+        "choked",
+        "inhaled foreign body",
+        "aspirated foreign body",
+        "foreign body in the airway",
+        "foreign body in airway"
+      ]
+    }
+  },
+  {
+    "id": "shortness_of_breath",
+    "label": "Shortness of breath",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "shortness of breath",
+        "difficulty breathing",
+        "trouble breathing",
+        "breathlessness",
+        "short of breath",
+        "dyspnea",
+        "dyspnoea",
+        "respiratory distress",
+        "breathing difficulty"
+      ],
+      "ar": [
+        "ضيق التنفس",
+        "صعوبة التنفس",
+        "صعوبة في التنفس"
+      ]
+    }
+  },
+  {
+    "id": "stridor",
+    "label": "Stridor",
+    "acuity": 3,
+    "population": "pediatric",
+    "phrases": {
+      "en": [
+        "stridor",
+        "noisy breathing",
+        "croup"
+      ]
+    }
+  },
+  {
+    "id": "wheezing_no_other_complaints",
+    "label": "Wheezing – no other complaints",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "wheezing",
+        "wheeze",
+        "wheezy"
+      ]
+    }
+  },
+  {
+    "id": "abrasion",
+    "label": "Abrasion",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "abrasion",
+        "abrasions",
+        "graze",
+        "scrape"
+      ]
+    }
+  },
+  {
+    "id": "bite",
+    "label": "Bite",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "bite",
+        "bites",
+        "bitten",
+        "dog bite",
+        "animal bite",
+        "snake bite",
+        "snakebite",
+        "insect bite"
+      ]
+    }
+  },
+  {
+    "id": "blood_and_body_fluid_exposure",
+    "label": "Blood and body fluid exposure",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "blood and body fluid exposure",
+        "body fluid exposure",
+        "needlestick",
+        "needle stick",
+        "needle stick injury",
+        "sharps injury",
+        "blood exposure"
+      ]
+    }
+  },
+  {
+    "id": "burn",
+    "label": "Burn",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "burn",
+        "burns",
+        "burned",
+        "scald",
+        "scalded",
+        "scalds"
+      ]
+    }
+  },
+  {
+    "id": "cyanosis",
+    "label": "Cyanosis",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "cyanosis",
+        "cyanotic",
+        "blue lips",
+        "bluish lips",
+        "turning blue",
+        "blue skin"
+      ]
+    }
+  },
+  {
+    "id": "foreign_body_skin",
+    "label": "Foreign body, skin",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "foreign body in the skin",
+        "foreign body in skin",
+        "foreign body, skin",
+        "foreign body skin",
+        "splinter",
+        "embedded foreign body"
+      ]
+    }
+  },
+  {
+    "id": "localized_swelling_redness",
+    "label": "Localized swelling / redness",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "localized swelling",
+        "localised swelling",
+        "localized redness",
+        "localised redness",
+        "local swelling",
+        "redness and swelling",
+        "cellulitis",
+        "abscess"
+      ]
+    }
+  },
+  {
+    "id": "lumps_bumps_calluses",
+    "label": "Lumps, bumps, calluses",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "lump",
+        "callus",
+        "calluses"
+      ]
+    }
+  },
+  {
+    "id": "other_skin_conditions",
+    "label": "Other skin conditions",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "skin condition",
+        "skin conditions",
+        "skin problem",
+        "skin lesion",
+        "eczema",
+        "psoriasis",
+        "dermatitis"
+      ]
+    }
+  },
+  {
+    "id": "pruritus",
+    "label": "Pruritus",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "pruritus",
+        "itching",
+        "itchy",
+        "itch"
+      ]
+    }
+  },
+  {
+    "id": "rash",
+    "label": "Rash",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "rash",
+        "rashes",
+        "skin rash"
+      ]
+    }
+  },
+  {
+    "id": "redness_tenderness_breast",
+    "label": "Redness / tenderness, breast",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "breast redness",
+        "breast tenderness",
+        "breast pain",
+        "mastitis",
+        "red breast",
+        "tender breast"
+      ]
+    }
+  },
+  {
+    "id": "removal_staples_stitches",
+    "label": "Removal staples / stitches",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "removal of staples",
+        "staple removal",
+        "stitch removal",
+        "removal of stitches",
+        "removal of sutures",
+        "suture removal",
+        "remove staples",
+        "remove stitches",
+        "remove sutures"
+      ]
+    }
+  },
+  {
+    "id": "rule_out_infestation",
+    "label": "Rule out infestation",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "infestation",
+        "scabies",
+        "lice",
+        "head lice",
+        "bed bugs"
+      ]
+    }
+  },
+  {
+    "id": "spontaneous_bruising",
+    "label": "Spontaneous bruising",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "spontaneous bruising",
+        "easy bruising",
+        "bruising easily",
+        "unexplained bruising",
+        "petechiae",
+        "purpura"
+      ]
+    }
+  },
+  {
+    "id": "sting",
+    "label": "Sting",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "sting",
+        "stings",
+        "stung",
+        "bee sting",
+        "wasp sting",
+        "scorpion sting"
+      ]
+    }
+  },
+  {
+    "id": "wound_check",
+    "label": "Wound check",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "wound check",
+        "wound review",
+        "check wound",
+        "wound infection"
+      ]
+    }
+  },
+  {
+    "id": "overdose_ingestion",
+    "label": "Overdose ingestion",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "overdose",
+        "overdosed",
+        "drug overdose",
+        "toxic ingestion",
+        "poisoning",
+        "took too many tablets",
+        "took too many pills",
+        "accidental ingestion"
+      ]
+    }
+  },
+  {
+    "id": "substance_misuse_intoxication",
+    "label": "Substance misuse/Intoxication",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "substance misuse",
+        "substance abuse",
+        "intoxication",
+        "intoxicated",
+        "drunk",
+        "alcohol intoxication",
+        "drug misuse",
+        "drug abuse"
+      ]
+    }
+  },
+  {
+    "id": "substance_withdrawal",
+    "label": "Substance withdrawal",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "substance withdrawal",
+        "alcohol withdrawal",
+        "drug withdrawal",
+        "opioid withdrawal",
+        "withdrawal symptoms",
+        "delirium tremens"
+      ]
+    }
+  },
+  {
+    "id": "isolated_abdominal_trauma_blunt",
+    "label": "Isolated abdominal trauma – blunt",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "blunt abdominal trauma",
+        "abdominal blunt trauma",
+        "isolated abdominal trauma blunt",
+        "isolated abdominal trauma – blunt",
+        "blow to the abdomen",
+        "blunt trauma to the abdomen"
+      ]
+    }
+  },
+  {
+    "id": "isolated_abdominal_trauma_penetrating",
+    "label": "Isolated abdominal trauma – penetrating",
+    "acuity": 2,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "penetrating abdominal trauma",
+        "isolated abdominal trauma penetrating",
+        "isolated abdominal trauma – penetrating",
+        "stab wound to the abdomen",
+        "stab wound abdomen",
+        "gunshot wound to the abdomen",
+        "gunshot wound abdomen",
+        "abdominal stab wound"
+      ]
+    }
+  },
+  {
+    "id": "isolated_chest_trauma_blunt",
+    "label": "Isolated chest trauma – blunt",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "blunt chest trauma",
+        "chest blunt trauma",
+        "isolated chest trauma blunt",
+        "isolated chest trauma – blunt",
+        "blow to the chest",
+        "blunt trauma to the chest"
+      ]
+    }
+  },
+  {
+    "id": "isolated_chest_penetrating",
+    "label": "Isolated chest – penetrating",
+    "acuity": 2,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "penetrating chest trauma",
+        "penetrating chest injury",
+        "isolated chest penetrating",
+        "isolated chest – penetrating",
+        "stab wound to the chest",
+        "stab wound chest",
+        "gunshot wound to the chest",
+        "gunshot wound chest",
+        "chest stab wound"
+      ]
+    }
+  },
+  {
+    "id": "head_injury",
+    "label": "Head injury",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "head injury",
+        "head trauma",
+        "hit his head",
+        "hit her head",
+        "bumped head",
+        "concussion",
+        "blow to the head"
+      ]
+    }
+  },
+  {
+    "id": "multi_system_trauma_blunt",
+    "label": "Multi-system trauma – blunt",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "multi system trauma",
+        "multisystem trauma",
+        "polytrauma",
+        "multiple trauma",
+        "road traffic accident",
+        "road traffic collision",
+        "motor vehicle accident",
+        "motor vehicle collision",
+        "fall from height"
+      ]
+    }
+  },
+  {
+    "id": "multi_system_trauma_penetrating",
+    "label": "Multi-system trauma – penetrating",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "multi system penetrating trauma",
+        "multiple stab wounds",
+        "multiple gunshot wounds",
+        "multiple penetrating injuries"
+      ]
+    }
+  },
+  {
+    "id": "sexual_assault",
+    "label": "Sexual assault",
+    "acuity": 2,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "sexual assault",
+        "sexually assaulted",
+        "rape",
+        "raped",
+        "sexual abuse"
+      ]
+    }
+  },
+  {
+    "id": "traumatic_back_spine_injury",
+    "label": "Traumatic back / spine injury",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "spine injury",
+        "spinal injury",
+        "back injury",
+        "spinal trauma",
+        "spinal cord injury",
+        "fractured spine",
+        "fractured vertebra"
+      ]
+    }
+  },
+  {
+    "id": "abnormal_lab_values_imaging_result",
+    "label": "Abnormal lab values / Imaging Result",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "abnormal lab",
+        "abnormal labs",
+        "abnormal lab values",
+        "abnormal lab results",
+        "abnormal blood test",
+        "abnormal imaging",
+        "abnormal x ray",
+        "abnormal ct",
+        "abnormal scan"
+      ]
+    }
+  },
+  {
+    "id": "concern_for_the_patient_s_welfare",
+    "label": "Concern for the patient's welfare",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "concern for patient welfare",
+        "concern for the patient welfare",
+        "concern for the patient's welfare",
+        "concern for the patient’s welfare",
+        "welfare concern",
+        "welfare check",
+        "child abuse",
+        "elder abuse",
+        "domestic violence",
+        "unsafe at home",
+        "safeguarding"
+      ]
+    }
+  },
+  {
+    "id": "congenital_problems_in_children",
+    "label": "Congenital problems in children",
+    "acuity": 4,
+    "population": "pediatric",
+    "phrases": {
+      "en": [
+        "congenital problem",
+        "congenital problems",
+        "congenital anomaly",
+        "congenital abnormality",
+        "congenital defect",
+        "birth defect"
+      ]
+    }
+  },
+  {
+    "id": "direct_referral_for_consultation",
+    "label": "Direct referral for consultation",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "direct referral",
+        "referred for consultation",
+        "referral for consultation",
+        "referred by"
+      ]
+    }
+  },
+  {
+    "id": "dressing_change",
+    "label": "Dressing change",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "dressing change",
+        "change dressing",
+        "change of dressing",
+        "dressing review"
+      ]
+    }
+  },
+  {
+    "id": "exposure_to_communicable_disease",
+    "label": "Exposure to communicable disease",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "exposure to communicable disease",
+        "communicable disease exposure",
+        "contact with infected",
+        "exposed to measles",
+        "exposed to chickenpox",
+        "exposed to tuberculosis",
+        "exposed to covid",
+        "exposed to influenza",
+        "sick contact",
+        "contact with a sick"
+      ]
+    }
+  },
+  {
+    "id": "fever",
+    "label": "Fever",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "fever",
+        "febrile",
+        "high temperature",
+        "pyrexia",
+        "feverish",
+        "temperature of 38",
+        "temperature of 39",
+        "temperature of 40"
+      ]
+    }
+  },
+  {
+    "id": "general_weakness",
+    "label": "General weakness",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "general weakness",
+        "generalized weakness",
+        "generalised weakness",
+        "weakness",
+        "feeling weak",
+        "fatigue",
+        "lethargy",
+        "lethargic",
+        "malaise"
+      ]
+    }
+  },
+  {
+    "id": "hyperglycemia",
+    "label": "Hyperglycemia",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "hyperglycemia",
+        "hyperglycaemia",
+        "high blood sugar",
+        "high blood glucose",
+        "diabetic ketoacidosis",
+        "dka"
+      ]
+    }
+  },
+  {
+    "id": "hypoglycemia",
+    "label": "Hypoglycemia",
+    "acuity": 3,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "hypoglycemia",
+        "hypoglycaemia",
+        "low blood sugar",
+        "low blood glucose"
+      ]
+    }
+  },
+  {
+    "id": "imaging_tests_blood_test",
+    "label": "Imaging tests / Blood Test",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "imaging test",
+        "imaging tests",
+        "blood test",
+        "blood tests",
+        "request for blood test",
+        "request for imaging",
+        "x ray request",
+        "wants a blood test"
+      ]
+    }
+  },
+  {
+    "id": "inconsolable_crying_in_infants",
+    "label": "Inconsolable crying in infants",
+    "acuity": 4,
+    "population": "pediatric",
+    "phrases": {
+      "en": [
+        "inconsolable crying",
+        "inconsolable",
+        "crying inconsolably",
+        "cannot be consoled",
+        "excessive crying in infant",
+        "infant crying constantly"
+      ]
+    }
+  },
+  {
+    "id": "medical_device_problem",
+    "label": "Medical device problem",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "medical device problem",
+        "device problem",
+        "device malfunction",
+        "catheter problem",
+        "catheter blocked",
+        "blocked catheter",
+        "feeding tube problem",
+        "tracheostomy problem",
+        "pacemaker problem",
+        "insulin pump problem",
+        "stent problem",
+        "port problem",
+        "dislodged tube",
+        "dislodged catheter"
+      ]
+    }
+  },
+  {
+    "id": "minor_complaints_nos",
+    "label": "Minor complaints NOS",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "minor complaint",
+        "minor complaints",
+        "minor problem"
+      ]
+    }
+  },
+  {
+    "id": "newly_born",
+    "label": "Newly born",
+    "acuity": 2,
+    "population": "pediatric",
+    "phrases": {
+      "en": [
+        "newly born",
+        "newborn",
+        "neonate",
+        "born today",
+        "born at home",
+        "baby just delivered",
+        "just delivered"
+      ]
+    }
+  },
+  {
+    "id": "pallor_anemia",
+    "label": "Pallor / Anemia",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "pallor",
+        "pale",
+        "anemia",
+        "anaemia",
+        "anemic",
+        "anaemic",
+        "looks pale"
+      ]
+    }
+  },
+  {
+    "id": "postoperative_complications",
+    "label": "Postoperative complications",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "postoperative complication",
+        "postoperative complications",
+        "post operative complication",
+        "post operative complications",
+        "surgical complication",
+        "wound dehiscence",
+        "post op complication",
+        "post op bleeding",
+        "post operative bleeding",
+        "post operative infection",
+        "postoperative infection"
+      ]
+    }
+  },
+  {
+    "id": "prescription_medication_request",
+    "label": "Prescription / Medication request",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "prescription request",
+        "medication request",
+        "medication refill",
+        "prescription refill",
+        "needs a refill",
+        "refill of medication",
+        "repeat prescription",
+        "ran out of medication",
+        "ran out of medicine"
+      ]
+    }
+  },
+  {
+    "id": "ring_removal",
+    "label": "Ring removal",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "ring removal",
+        "remove ring",
+        "ring stuck",
+        "ring stuck on finger",
+        "remove a ring"
+      ]
+    }
+  },
+  {
+    "id": "return_visit_for_therapy",
+    "label": "Return Visit for Therapy",
+    "acuity": 4,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "return visit for therapy",
+        "return visit",
+        "return for therapy",
+        "revisit",
+        "follow up therapy",
+        "scheduled return visit"
+      ]
+    }
+  },
+  {
+    "id": "social_problem",
+    "label": "Social problem",
+    "acuity": 5,
+    "population": "all",
+    "phrases": {
+      "en": [
+        "social problem",
+        "social problems",
+        "homeless",
+        "homelessness",
+        "social issue",
+        "social issues",
+        "cannot afford",
+        "no place to stay",
+        "social concern"
+      ]
     }
   }
 ]

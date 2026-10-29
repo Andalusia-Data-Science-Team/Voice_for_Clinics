@@ -1,0 +1,70 @@
+{
+  "task_id": "B3",
+  "subtask_id": "B3.2",
+  "title": "ICD-10 clinical registry & Australian Modification (AM) edition rules",
+  "target_files": [
+    "src/model/icd10_registry.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 465.89971985667944,
+  "timestamp": "2026-10-28T10:25:07.119081+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "ICD-10 AM edition registry loaded",
+      "input_setup": "Initialize ICD10Registry singleton and check loaded code count",
+      "expected_result": "Registry loaded successfully with > 5,000 active codes",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 464.4240001216531,
+      "evidence": "ICD-10 Australian Modification registry loaded: 16953 codes available",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Diagnosis prompt registry linkage",
+      "input_setup": "Generate diagnosis prompt with candidate codes",
+      "expected_result": "Prompt references ICD-10 guidelines and injects candidate code catalogue",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.6206510588526726,
+      "evidence": "Diagnosis prompt provides candidate codes from the verified registry",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "ICD-10 code exact lookup",
+      "input_setup": "Lookup J18.9 in registry",
+      "expected_result": "Returns exact verified medical description ('Pneumonia, unspecified')",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.02009095624089241,
+      "evidence": "Code lookup verified: J18.9 -> 'Pneumonia, unspecified'",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Invalid code rejection",
+      "input_setup": "Lookup non-existent code 'ZZ99.99' in registry",
+      "expected_result": "Returns None; flagged as uncatalogued code",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.004923902451992035,
+      "evidence": "Non-existent code ZZ99.99 correctly returned None (not found)",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Clinical symptom candidate search",
+      "input_setup": "Query registry.search_diagnosis_candidates('chest pain')",
+      "expected_result": "Returns relevant ICD-10 candidates (e.g. R07 pain in throat/chest)",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.8300538174808025,
+      "evidence": "Search for 'chest pain' returned 10 relevant candidates: [('R07.1', 'Chest pain on breathing'), ('R07.3', 'Other chest pain')]",
+      "error": null
+    }
+  ]
+}

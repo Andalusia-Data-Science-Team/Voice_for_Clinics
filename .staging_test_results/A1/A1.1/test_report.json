@@ -1,0 +1,71 @@
+{
+  "task_id": "A1",
+  "subtask_id": "A1.1",
+  "title": "Shared async client + 45 s timeout",
+  "target_files": [
+    "src/llm/runtime.py",
+    "src/core/config.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 1306.0734840109944,
+  "timestamp": "2026-10-28T09:18:09.852369+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Singleton client verification",
+      "input_setup": "Import get_llm_runtime() across callers and invoke without request",
+      "expected_result": "Exact same instance ID on all invocations",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 49.712116830050945,
+      "evidence": "Singleton verified: runtime_id=140334402583184, client_id=140334359573792",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "45 s timeout enforcement",
+      "input_setup": "Mock LLM with delay exceeding configured timeout budget",
+      "expected_result": "TimeoutError raised cleanly at configured deadline; no silent retry",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 1219.212920870632,
+      "evidence": "Config default=45.0s; Timeout raised cleanly after 1.00s",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Zero hidden retries on 500",
+      "input_setup": "Mock backend 500 response with max_attempts=1",
+      "expected_result": "Exactly 1 request sent; exception propagated immediately",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 11.77607523277402,
+      "evidence": "Exactly 1 request executed; exception propagated: HTTP 500",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Client lifecycle on shutdown",
+      "input_setup": "Execute runtime lifecycle shutdown sequence",
+      "expected_result": "aclose() called, client closed cleanly without resource leaks",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 12.393603101372719,
+      "evidence": "aclose() executed successfully, no resource leaks",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Concurrent reuse under load",
+      "input_setup": "50 concurrent async tasks calling get_llm_runtime() simultaneously",
+      "expected_result": "Zero race condition, exact duplicate singleton ID across all 50 workers",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 12.978767976164818,
+      "evidence": "50 concurrent async workers returned identical runtime id=140334351851632",
+      "error": null
+    }
+  ]
+}

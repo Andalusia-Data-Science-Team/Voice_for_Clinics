@@ -48,6 +48,15 @@ _FOUNDRY_PROFILES: Dict[str, Dict[str, bool]] = {
         "temperature": False,
         "reasoning_effort": True,
     },
+    "model-router": {
+        "max_completion_tokens": True,
+        "max_tokens": True,
+        "streaming": False,
+        "json_object": True,
+        "json_schema_strict": False,
+        "temperature": True,
+        "reasoning_effort": False,
+    },
     "DeepSeek-V3.2": {
         "max_completion_tokens": False,
         "max_tokens": True,

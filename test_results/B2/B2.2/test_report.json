@@ -1,0 +1,71 @@
+{
+  "task_id": "B2",
+  "subtask_id": "B2.2",
+  "title": "Strict department extraction schemas (ER, OPD, Dental)",
+  "target_files": [
+    "src/schemas/output_schemas.py",
+    "src/model/department_fields.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.08139805868268013,
+  "timestamp": "2026-10-28T10:25:06.644992+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "ER-specific schema fields presence",
+      "input_setup": "Inspect ERExtractionOutput model fields",
+      "expected_result": "Primary survey (ABCDE) and patient_disposition fields present",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.010601244866847992,
+      "evidence": "ER schema contains all primary survey and disposition fields (airway, breathing, circulation, disability, exposure)",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Dental procedure and consent fields",
+      "input_setup": "Inspect DentalExtractionOutput model fields",
+      "expected_result": "consent_obtained, tooth_number, and procedure fields present",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.004681292921304703,
+      "evidence": "Dental schema enforces consent_obtained, tooth_number, procedure_executed, and materials_inventory",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "OPD schema fields isolation",
+      "input_setup": "Inspect OPDExtractionOutput model fields",
+      "expected_result": "Contains comorbidities and follow-up timing; excludes ER ABCDE survey fields",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.005329027771949768,
+      "evidence": "OPD schema contains comorbidities and follow_up_timing without ER primary survey fields",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Extra fields stripping",
+      "input_setup": "Pass unexpected 'fake_injected_field' to DentalExtractionOutput",
+      "expected_result": "Extra field is ignored/stripped from output model",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.0528702512383461,
+      "evidence": "Extra unrecognized field cleanly excluded from serialized model data",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Cross-department schema isolation",
+      "input_setup": "Query get_department_fields() for er, opd, and dental",
+      "expected_result": "Each department defines distinct, non-overlapping specialty schemas",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.007916241884231567,
+      "evidence": "Department fields isolated across ER (22), OPD (17), Dental (22)",
+      "error": null
+    }
+  ]
+}

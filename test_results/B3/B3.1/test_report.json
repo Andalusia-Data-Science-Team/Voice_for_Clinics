@@ -1,0 +1,70 @@
+{
+  "task_id": "B3",
+  "subtask_id": "B3.1",
+  "title": "Reasoning output schema: ICD-10, diagnosis, rationale, and citations",
+  "target_files": [
+    "src/schemas/output_schemas.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.1202709972858429,
+  "timestamp": "2026-10-28T10:25:06.651334+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Reasoning schema completeness",
+      "input_setup": "Inspect DiagnosisOutput model fields",
+      "expected_result": "Contains final_diagnosis, icd10_codes, history_considered, and history_notes",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.010991934686899185,
+      "evidence": "Reasoning schema contains final_diagnosis, icd10_codes, history_considered, and history_notes",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "ICD-10 code formatting structure",
+      "input_setup": "Instantiate DiagnosisOutput with formatted ICD-10 code",
+      "expected_result": "ICD-10 codes array correctly accepts code-description strings",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.03959285095334053,
+      "evidence": "ICD-10 structure verified: code and title formatted properly in ['J18.9 - Pneumonia, unspecified organism']",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Clinical rationale and history documentation",
+      "input_setup": "Instantiate DiagnosisOutput with history citation notes",
+      "expected_result": "history_considered and history_notes validate correctly",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.018290244042873383,
+      "evidence": "History consideration and clinical notes substantiated in model",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Multi-condition diagnostic validation",
+      "input_setup": "Validate 5 distinct diagnostic payloads against DiagnosisOutput",
+      "expected_result": "All 5 pass Pydantic validation without error",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.04330463707447052,
+      "evidence": "5/5 diverse clinical diagnostic outputs pass Pydantic validation cleanly",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Minimal reasoning input resilience",
+      "input_setup": "Instantiate DiagnosisOutput with only final_diagnosis",
+      "expected_result": "Validates without error; icd10_codes defaults to empty list",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.008091330528259277,
+      "evidence": "Empty/omitted reasoning fields resolve safely to defaults (empty list/string)",
+      "error": null
+    }
+  ]
+}

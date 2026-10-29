@@ -39,7 +39,7 @@ class ConsistencyRuleType(str, Enum):
     DIAGNOSIS_UNGROUNDED = "DIAGNOSIS_UNGROUNDED"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class CautionBanner:
     """Represents a clinical caution banner to display in the doctor's UI."""
     rule: str

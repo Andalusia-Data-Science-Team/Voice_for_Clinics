@@ -11,7 +11,10 @@ Validates:
 
 from __future__ import annotations
 
+import asyncio
+import json
 import os
+import time
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
@@ -258,3 +261,209 @@ def test_runtime_openrouter_provider():
         provider = build_llm_provider()
         assert isinstance(provider, OpenRouterLLMProvider)
         assert provider.provider_name == "openrouter"
+
+
+# ===========================================================================
+# 5. Phase 1 Emergency Fixes (Timeout, Retries, Structured Response Format)
+# ===========================================================================
+
+def test_phase1_config_timeouts_and_retries():
+    from core.config import Config
+    assert hasattr(Config, "PIPELINE_TIMEOUT_S")
+    assert Config.PIPELINE_TIMEOUT_S >= 90.0
+    assert hasattr(Config, "LLM_DIAGNOSIS_MAX_ATTEMPTS")
+    assert Config.LLM_DIAGNOSIS_MAX_ATTEMPTS == 2
+    assert Config.LLM_TIMEOUT_S == 45.0
+
+
+def test_build_foundry_kwargs_luna_json_schema_supported():
+    from pydantic import BaseModel
+    class SampleNote(BaseModel):
+        json_data: dict
+
+    schema = SampleNote.model_json_schema() if hasattr(SampleNote, "model_json_schema") else SampleNote.schema()
+    rf = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "SampleNote",
+            "strict": True,
+            "schema": schema,
+        },
+    }
+    kwargs = build_foundry_kwargs(
+        "gpt-5.6-luna",
+        messages=[{"role": "user", "content": "hi"}],
+        max_tokens=500,
+        response_format=rf,
+    )
+    assert "response_format" in kwargs
+    assert kwargs["response_format"]["type"] == "json_schema"
+    assert kwargs["response_format"]["json_schema"]["strict"] is True
+
+
+# ===========================================================================
+# 6. Phase 2 True Parallelism (Context ICD Candidates & Concurrent Tasks)
+# ===========================================================================
+
+def test_phase2_pipeline_context_icd_candidates():
+    from pipeline.steps import PipelineContext
+    from schemas.input_schemas import Language, Mode
+    from core.model_registry import get_model
+
+    ctx = PipelineContext(
+        session_id="test-session",
+        text="test note",
+        language=Language.english,
+        mode=Mode.doctor,
+        department_value="opd",
+        specialty_value="General",
+        runtime=MagicMock(),
+        extraction_spec=get_model("extraction", None),
+        reasoning_spec=get_model("reasoning", None),
+    )
+    assert hasattr(ctx, "icd_candidates")
+    assert ctx.icd_candidates is None
+    ctx.icd_candidates = [("J00", "Acute nasopharyngitis")]
+    assert len(ctx.icd_candidates) == 1
+
+
+# ===========================================================================
+# 7. Phase 3 Resilience & Observability (Router Profile, CB Tuning)
+# ===========================================================================
+
+def test_phase3_model_router_profile():
+    profile = get_foundry_profile("model-router")
+    assert profile["max_completion_tokens"] is True
+    assert profile["max_tokens"] is True
+    assert profile["streaming"] is False
+    assert profile["json_object"] is True
+    assert profile["json_schema_strict"] is False
+    assert profile["temperature"] is True
+    assert profile["reasoning_effort"] is False
+
+
+def test_phase3_circuit_breaker_tuning():
+    from core.config import Config
+    from llm.runtime import LLMRuntime
+
+    assert Config.CB_FAILURE_THRESHOLD == 10
+    assert Config.CB_WINDOW_S == 60.0
+    assert Config.CB_RECOVERY_TIMEOUT_S == 10.0
+
+    runtime = LLMRuntime()
+    assert runtime.circuit_breaker.failure_threshold == 10
+    assert runtime.circuit_breaker.window_s == 60.0
+    assert runtime.circuit_breaker.recovery_timeout_s == 10.0
+
+
+# ===========================================================================
+# 8. Phase 4 Enable Router & 3-Way Concurrent Orchestration
+# ===========================================================================
+
+def test_phase4_router_config_and_defaults():
+    from core.config import Config
+    with patch.dict(os.environ, {
+        "ROUTER_ENABLED": "true",
+        "FOUNDRY_MODEL_ROUTER": "model-router",
+        "ROUTER_FAILURE_TIER": "simple",
+    }):
+        assert Config.router_enabled() is True
+        assert Config.foundry_model_router() == "model-router"
+        assert Config.router_failure_tier() == "simple"
+
+
+def test_phase4_router_tier_resolution():
+    from pipeline.routing import (
+        tier_for_complexity,
+        deployment_for_tier,
+        fallback_deployment_for_tier,
+        decision_without_router,
+        RoutingDecision,
+    )
+    from core.config import Config
+
+    assert tier_for_complexity("simple") == "simple"
+    assert tier_for_complexity("complex") == "complex"
+    assert deployment_for_tier("simple") == Config.foundry_model_reasoning_simple()
+    assert deployment_for_tier("complex") == Config.foundry_model_reasoning_complex()
+    assert fallback_deployment_for_tier("simple") == Config.foundry_model_reasoning_simple_fallback()
+    assert fallback_deployment_for_tier("complex") == Config.foundry_model_reasoning_complex_fallback()
+
+    no_router = decision_without_router()
+    assert no_router.tier == "simple"
+    assert no_router.router_ok is False
+
+
+@pytest.mark.asyncio
+async def test_phase4_concurrent_orchestrator_router_flow():
+    from pipeline.orchestrator import PipelineOrchestrator
+    from pipeline.steps import PipelineContext
+    from schemas.input_schemas import Language, Mode
+    from core.model_registry import get_model
+    from unittest.mock import AsyncMock
+
+    mock_runtime = MagicMock()
+
+    ctx = PipelineContext(
+        session_id="test-router-phase4",
+        text="Patient presents with mild runny nose for 2 days. No fever, lungs clear.",
+        language=Language.english,
+        mode=Mode.doctor,
+        department_value="opd",
+        specialty_value="General",
+        runtime=mock_runtime,
+        extraction_spec=get_model("extraction", None),
+        reasoning_spec=get_model("reasoning", None),
+    )
+
+    events = []
+    start_times = {}
+
+    async def tracking_extract(c):
+        start_times["extract"] = time.perf_counter()
+        await asyncio.sleep(0.05)
+        from pipeline.merger import ExtractionStepResult
+        return ExtractionStepResult(features={"chief_complaint": "cold"}, extraction_sec=0.05)
+
+    async def tracking_diagnose(c, reasoning_spec=None, fallback_deployment=None):
+        start_times["diagnose"] = time.perf_counter()
+        await asyncio.sleep(0.05)
+        from pipeline.merger import DiagnosisStepResult
+        return DiagnosisStepResult(diagnosis={"icd10": "J00"}, diagnosis_sec=0.05)
+
+    with patch("pipeline.orchestrator.get_registry") as mock_reg, \
+         patch("pipeline.orchestrator.step_extract", side_effect=tracking_extract), \
+         patch("pipeline.orchestrator.step_diagnose", side_effect=tracking_diagnose), \
+         patch("pipeline.orchestrator.ClinicalValidationPipeline.validate") as mock_val:
+
+        mock_reg.return_value.search_diagnosis_candidates.return_value = [("J00", "Acute nasopharyngitis")]
+        mock_val_report = MagicMock()
+        mock_val_report.is_valid = True
+        mock_val_report.to_dict.return_value = {"is_valid": True}
+        mock_val.return_value = mock_val_report
+
+        orchestrator = PipelineOrchestrator()
+        async for ev in orchestrator.run(ctx):
+            events.append(ev)
+
+    event_names = [e["event"] for e in events]
+    assert "routing_signal" in event_names
+    assert "step_progress" in event_names
+    assert "extraction" in event_names
+    assert "diagnosis" in event_names
+
+    # Check progress steps emitted
+    progress_events = [json.loads(e["data"]) for e in events if e["event"] == "step_progress"]
+    progress_steps = [p["step"] for p in progress_events]
+    assert "router" in progress_steps
+    assert "icd_search" in progress_steps
+    assert "extraction" in progress_steps
+    assert "diagnosis" in progress_steps
+
+    # Verify router latency was sub-millisecond (no 7-second router delay)
+    router_done_ev = next(p for p in progress_events if p["step"] == "router" and p["status"] == "done")
+    assert router_done_ev["sec"] < 0.05, f"Router took {router_done_ev['sec']}s, expected < 0.05s"
+
+    # Verify extract and diagnose started truly in parallel at T=0 (< 5ms difference)
+    delta_start = abs(start_times["extract"] - start_times["diagnose"])
+    assert delta_start < 0.02, f"Tasks did not start in parallel: delta={delta_start:.4f}s"

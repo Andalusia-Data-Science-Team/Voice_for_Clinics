@@ -39,6 +39,8 @@ def _load_lexicon(path: Path = LEXICON_PATH) -> list[dict[str, Any]]:
             or not isinstance(entry.get("id"), str)
             or not isinstance(entry.get("label"), str)
             or not isinstance(entry.get("phrases"), dict)
+            or entry.get("acuity") not in {1, 2, 3, 4, 5}
+            or entry.get("population") not in {"all", "adult", "pediatric"}
         ):
             raise ValueError(f"Invalid red-flag lexicon entry in {path}: {entry!r}")
         for language, phrases in entry["phrases"].items():
@@ -62,6 +64,8 @@ _NORMALIZED_LEXICON = [
     (
         entry["id"],
         entry["label"],
+        entry["acuity"],
+        entry["population"],
         language,
         phrase,
         _normalize(phrase),
@@ -114,6 +118,25 @@ def _has_recent_cue(
     return False
 
 
+def _sentence_candidates(words: list[str]) -> list[tuple]:
+    """Return phrase hits in one sentence, longest first, without overlaps."""
+    hits = []
+    for entry in _NORMALIZED_LEXICON:
+        phrase_words = entry[6].split()
+        width = len(phrase_words)
+        for start in range(len(words) - width + 1):
+            if words[start:start + width] == phrase_words:
+                hits.append((start, start + width, entry))
+    # Prefer the longest phrase, then the most urgent acuity, so that
+    # "non-cardiac chest pain" does not also fire as "chest pain".
+    hits.sort(key=lambda hit: (hit[0] - hit[1], hit[2][2]))
+    taken: list[tuple[int, int, tuple]] = []
+    for start, end, entry in hits:
+        if all(end <= t_start or start >= t_end for t_start, t_end, _ in taken):
+            taken.append((start, end, entry))
+    return taken
+
+
 def detect_red_flags(text: str) -> dict[str, Any]:
     """Return phrase matches with conservative, local negation classification."""
     matches = []
@@ -122,48 +145,47 @@ def detect_red_flags(text: str) -> dict[str, Any]:
         words = _normalize(sentence).split()
         if not words:
             continue
-        for (
+        for start, end, (
             flag_id,
             label,
+            acuity,
+            population,
             language,
             original_phrase,
             normalized_phrase,
-        ) in _NORMALIZED_LEXICON:
-            phrase_words = normalized_phrase.split()
-            width = len(phrase_words)
-            for start in range(len(words) - width + 1):
-                if words[start:start + width] != phrase_words:
-                    continue
-                preceding = words[:start]
-                following = words[start + width:]
-                negated = _has_recent_cue(
-                    preceding,
-                    _NEGATION_CUES[language],
-                )
-                negated = negated or _has_recent_cue(
-                    following[:3],
-                    ("denied", "absent", "not present", "منفي", "غير موجود"),
-                )
-                uncertain = _has_recent_cue(preceding, _UNCERTAINTY_CUES[language])
-                if uncertain:
-                    status = "uncertain"
-                elif negated:
-                    status = "negated"
-                else:
-                    status = "affirmed"
-                key = (flag_id, normalized_phrase, status)
-                if key in seen:
-                    continue
-                seen.add(key)
-                matches.append({
-                    "id": flag_id,
-                    "label": label,
-                    "matched_phrase": original_phrase,
-                    "language": language,
-                    "status": status,
-                })
+        ) in _sentence_candidates(words):
+            preceding = words[:start]
+            following = words[end:]
+            negated = _has_recent_cue(preceding, _NEGATION_CUES[language])
+            negated = negated or _has_recent_cue(
+                following[:3],
+                ("denied", "absent", "not present", "منفي", "غير موجود"),
+            )
+            uncertain = _has_recent_cue(preceding, _UNCERTAINTY_CUES[language])
+            if uncertain:
+                status = "uncertain"
+            elif negated:
+                status = "negated"
+            else:
+                status = "affirmed"
+            key = (flag_id, normalized_phrase, status)
+            if key in seen:
+                continue
+            seen.add(key)
+            matches.append({
+                "id": flag_id,
+                "label": label,
+                "acuity": acuity,
+                "population": population,
+                "matched_phrase": original_phrase,
+                "language": language,
+                "status": status,
+            })
 
-    requires_review = any(item["status"] != "negated" for item in matches)
+    matches.sort(key=lambda item: item["acuity"])
+    active = [item for item in matches if item["status"] != "negated"]
+    requires_review = bool(active)
+    highest_acuity = min((item["acuity"] for item in active), default=None)
     if requires_review:
         action = "clinician_review"
         notice = (
@@ -186,6 +208,7 @@ def detect_red_flags(text: str) -> dict[str, Any]:
 
     return {
         "requires_clinician_review": requires_review,
+        "highest_acuity": highest_acuity,
         "action": action,
         "matched_signals": matches,
         "notice": notice,

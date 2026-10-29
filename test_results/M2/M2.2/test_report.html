@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Report: M2 - M2.2</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f8fafc; color: #1e293b; margin: 0; padding: 24px; }
+        .container { max-width: 1080px; margin: 0 auto; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); padding: 32px; border: 1px solid #e2e8f0; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; }
+        .badge-status { background: #10b981; color: #ffffff; padding: 6px 16px; border-radius: 20px; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 24px 0; padding: 16px; background: #f1f5f9; border-radius: 6px; }
+        .meta-card { display: flex; flex-direction: column; }
+        .meta-label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600; }
+        .meta-value { font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { background: #f8fafc; padding: 12px; text-align: left; font-size: 12px; text-transform: uppercase; color: #64748b; border-bottom: 2px solid #cbd5e1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1 style="margin:0 0 8px 0; font-size: 24px;">Subtask Verification: M2.2</h1>
+                <div style="font-size: 15px; color: #475569;">Configuration switch OpenRouter -> Foundry (zero-code environment switching)</div>
+            </div>
+            <div class="badge-status">ALL 5 PASSED — VERIFIED</div>
+        </div>
+
+        <div class="meta-grid">
+            <div class="meta-card">
+                <span class="meta-label">Task Identifier</span>
+                <span class="meta-value">M2 / M2.2</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-label">Pass Rate</span>
+                <span class="meta-value">5 / 5 (100% required)</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-label">Execution Time</span>
+                <span class="meta-value">31.2 ms</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-label">Executed At</span>
+                <span class="meta-value">2026-10-28T09:18:12.952869+00:00</span>
+            </div>
+        </div>
+
+        <div style="margin: 16px 0; font-size: 13px;">
+            <strong>Target Files:</strong> <code style='background:#e5e7eb;padding:2px 6px;border-radius:3px;font-size:12px;'>src/providers/factory.py</code>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="text-align:center;width:40px;">#</th>
+                    <th style="text-align:center;width:60px;">Sev</th>
+                    <th>Test Case</th>
+                    <th>Input / Setup</th>
+                    <th>Expected Result</th>
+                    <th style="text-align:center;width:80px;">Status</th>
+                    <th style="text-align:right;width:80px;">Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#1</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>Crit</span></td>
+            <td style="padding:12px;"><strong>Default provider resolves to Foundry</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Call build_llm_provider() without LLM_PROVIDER environment variable set</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Returns FoundryLLMProvider as the default enterprise provider</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">2.2ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>Default provider without env override is FoundryLLMProvider</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#2</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#ea580c;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>High</span></td>
+            <td style="padding:12px;"><strong>Environment switch to OpenRouter</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Set LLM_PROVIDER=openrouter in environment and invoke build_llm_provider()</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Returns OpenRouterLLMProvider instance without code modifications</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">12.9ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>Switched cleanly to OpenRouterLLMProvider via LLM_PROVIDER=openrouter</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#3</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#ea580c;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>High</span></td>
+            <td style="padding:12px;"><strong>Invalid provider rejection with valid choices</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Set LLM_PROVIDER=nonexistent_vendor and invoke build_llm_provider()</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Raises ValueError detailing valid supported providers</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">1.2ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>Invalid provider rejected with descriptive error: Unknown LLM_PROVIDER: 'nonexistent_vendor'. Supported options: ['foundry', 'openrouter']</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#4</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#ea580c;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>High</span></td>
+            <td style="padding:12px;"><strong>STT provider switch to Voxtral</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Set STT_PROVIDER=voxtral and invoke build_stt_provider()</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Returns VoxtralSTTProvider cleanly</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">1.2ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>STT provider switched seamlessly to VoxtralSTTProvider via environment</div>
+                
+            </td>
+        </tr>
+        
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px;font-weight:600;text-align:center;">#5</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;'>Crit</span></td>
+            <td style="padding:12px;"><strong>Dynamic runtime switch without stale cache</strong></td>
+            <td style="padding:12px;color:#374151;font-size:13px;">Instantiate provider, reset singleton cache, update env, and re-query factory</td>
+            <td style="padding:12px;color:#374151;font-size:13px;">New provider instantiated immediately; old cached instance discarded</td>
+            <td style="padding:12px;text-align:center;"><span style='background:#10b981;color:#fff;padding:3px 8px;border-radius:4px;font-weight:600;'>PASS</span></td>
+            <td style="padding:12px;text-align:right;font-family:monospace;">13.6ms</td>
+        </tr>
+        <tr>
+            <td colspan="7" style="padding:0 12px 12px 12px;background:#fafafa;">
+                <div style='margin-top:4px;font-size:12px;color:#4b5563;font-family:monospace;'>Runtime reset and re-invocation correctly returns new provider without stale cache</div>
+                
+            </td>
+        </tr>
+        
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

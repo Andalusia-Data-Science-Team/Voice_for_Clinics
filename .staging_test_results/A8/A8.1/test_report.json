@@ -1,0 +1,70 @@
+{
+  "task_id": "A8",
+  "subtask_id": "A8.1",
+  "title": "Gold Set Build: Sample 100 clinical sessions, de-identify, package with integrity",
+  "target_files": [
+    "data/production_gold_set/gold_set_candidates.jsonl"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 49.48152741417289,
+  "timestamp": "2026-10-28T12:38:09.293699+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Dataset packages at least 100 curated clinical sessions",
+      "input_setup": "Count cases in data/production_gold_set/gold_set_candidates.jsonl",
+      "expected_result": "Count >= 100 cases (found 171)",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 12.57004402577877,
+      "evidence": "Verified 171 gold set cases available (exceeds requirement of 100)",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Balanced linguistic sampling across Arabic and English",
+      "input_setup": "Analyze audio_language attribute distribution in gold dataset",
+      "expected_result": "Both Arabic (>= 50) and English (>= 50) well-represented",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 8.18955386057496,
+      "evidence": "Both languages robustly sampled: Arabic=82, English=89",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "De-identification: zero direct patient identifiers in gold set",
+      "input_setup": "Regex scan 100 gold cases for phone numbers, national IDs, and SSN formats",
+      "expected_result": "Zero direct identifier regex matches found",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 17.651761882007122,
+      "evidence": "De-identification verified: zero real patient identifier patterns detected",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Clinical department representation in gold package",
+      "input_setup": "Analyze department attribute distribution in gold candidates",
+      "expected_result": "OPD and ER have >= 20 cases each; Dental included",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 8.49196594208479,
+      "evidence": "Clinical department breakdown: OPD=131, ER=37, Dental=3",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Dataset packaging integrity verified with SHA-256",
+      "input_setup": "Compute SHA-256 checksum of gold_set_candidates.jsonl",
+      "expected_result": "Valid 64-character SHA-256 checksum generated",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 2.5782017037272453,
+      "evidence": "Package integrity verified (SHA-256: 40256f09a3faeafc...)",
+      "error": null
+    }
+  ]
+}

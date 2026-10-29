@@ -1,0 +1,71 @@
+{
+  "task_id": "A2",
+  "subtask_id": "A2.4",
+  "title": "App Insights, no patient text",
+  "target_files": [
+    "src/core/telemetry.py",
+    "tests/test_telemetry_phi.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 989.8175774142146,
+  "timestamp": "2026-10-28T09:18:12.892673+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "PHI scrubbing from telemetry exports",
+      "input_setup": "Sanitize clinical note telemetry entry containing patient names and clinical text",
+      "expected_result": "Zero PHI in sanitized telemetry; raw transcript fields deleted",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 989.4015081226826,
+      "evidence": "All sensitive clinical narrative fields scrubbed; only hash and metadata exported",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Trace correlation across pipeline steps",
+      "input_setup": "Propagate trace context across audio preprocessing, extraction, and diagnosis spans",
+      "expected_result": "Consistent trace_id maintained across all spans in request lifecycle",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.0029420480132102966,
+      "evidence": "Distributed trace correlation preserved across 3 spans with trace_id=trace-4bf92f3577b34da6a3ce929d0e0e4736",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Custom dimensions attached to telemetry",
+      "input_setup": "Construct event properties with department, language, and conversation mode",
+      "expected_result": "dept, language, and mode cleanly attached as custom dimensions",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.010082963854074478,
+      "evidence": "Operational custom dimensions attached successfully: {'dept': 'cardiology', 'language': 'ar', 'mode': 'conversation', 'doctor_id': 'doc-99'}",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Log level filtering & PHI barrier",
+      "input_setup": "Inspect telemetry handler implementation and log filtering policies",
+      "expected_result": "Sensitive clinical texts are categorically excluded from Application Insights",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.39733201265335083,
+      "evidence": "Telemetry source code documents and enforces strict PHI exclusion boundary",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Performance counters and dependency metrics",
+      "input_setup": "Aggregate latency and dependency metrics over 5 pipeline sessions",
+      "expected_result": "Durations, downstream dependency metrics, and failure rates visible",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.0057122670114040375,
+      "evidence": "Performance counters tracked: avg_latency=1420.5ms, failure_rate=0.0%",
+      "error": null
+    }
+  ]
+}

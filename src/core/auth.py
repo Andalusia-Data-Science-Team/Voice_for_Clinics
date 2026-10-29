@@ -45,7 +45,7 @@ _APIM_ENABLED: bool = os.getenv("APIM_ENABLED", "false").lower() == "true"
 # Identity model
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class AuthenticatedUser:
     """
     Immutable, hashable user identity extracted from APIM-injected headers.

@@ -20,7 +20,9 @@ from model.diagnosis import constrain_diagnosis_to_registry
 from model.patient_history import check_history_usage
 
 
-def test_diagnosis_pipeline_maps_to_australian_codes():
+def test_diagnosis_pipeline_maps_to_australian_codes(monkeypatch):
+    from model.icd10_registry import get_registry
+
     mock_llm_output = {
         "json_data": {
             "icd10_codes": [
@@ -34,22 +36,32 @@ def test_diagnosis_pipeline_maps_to_australian_codes():
         "summary": "Multi-system diagnosis review.",
     }
 
+    monkeypatch.setattr(
+        get_registry(),
+        "search_diagnosis_candidates",
+        lambda _text: [
+            ("A00.0", "Cholera due to Vibrio cholerae 01, biovar cholerae"),
+            ("K04.0", "Pulpitis"),
+        ],
+    )
     with patch("model.llm_service.LLMService.recommend_diagnosis", return_value=mock_llm_output):
         with patch("core.config.Config.ai_foundry_key", return_value="test_key"):
             data, summary = DiagnosisRecommender.recommend(
                 end_text="Patient presents with cholera and pulpitis.",
                 department="opd",
             )
-            # Only exact codes in this case's catalogue shortlist survive.
-            assert len(data["icd10_codes"]) == 2
-            assert any(c.startswith("A00.0") for c in data["icd10_codes"])
-            assert any(c.startswith("K04.0") for c in data["icd10_codes"])
-            assert data["icd10_unmatched"] == [
-                "FAKE999.00 - Unsupported model suggestion"
-            ]
+    # Only exact codes in this case's catalogue shortlist survive.
+    assert len(data["icd10_codes"]) == 2
+    assert any(c.startswith("A00.0") for c in data["icd10_codes"])
+    assert any(c.startswith("K04.0") for c in data["icd10_codes"])
+    assert data["icd10_unmatched"] == [
+        "FAKE999.00 - Unsupported model suggestion"
+    ]
 
 
-def test_diagnosis_pipeline_surfaces_unmatched():
+def test_diagnosis_pipeline_surfaces_unmatched(monkeypatch):
+    from model.icd10_registry import get_registry
+
     mock_llm_output = {
         "json_data": {
             "icd10_codes": [
@@ -63,21 +75,26 @@ def test_diagnosis_pipeline_surfaces_unmatched():
         "summary": "Evaluated with outliers.",
     }
 
+    monkeypatch.setattr(
+        get_registry(),
+        "search_diagnosis_candidates",
+        lambda _text: [("J18.9", "Pneumonia, unspecified")],
+    )
     with patch("model.llm_service.LLMService.recommend_diagnosis", return_value=mock_llm_output):
         with patch("core.config.Config.ai_foundry_key", return_value="test_key"):
             data, summary = DiagnosisRecommender.recommend(
                 end_text="Patient presents with pneumonia and chest symptoms.",
                 department="opd",
             )
-            # Only J18.9 is valid
-            assert len(data["icd10_codes"]) == 1
-            assert data["icd10_codes"][0].startswith("J18.9")
+    # Only J18.9 is valid
+    assert len(data["icd10_codes"]) == 1
+    assert data["icd10_codes"][0].startswith("J18.9")
 
-            # Both invalid codes must be isolated in icd10_unmatched
-            unmatched = data.get("icd10_unmatched", [])
-            assert len(unmatched) == 2
-            assert "FAKE999.00 - Hallucinated condition name" in unmatched
-            assert "XYZ.123 - Non-existent medical category" in unmatched
+    # Both invalid codes must be isolated in icd10_unmatched
+    unmatched = data.get("icd10_unmatched", [])
+    assert len(unmatched) == 2
+    assert "FAKE999.00 - Hallucinated condition name" in unmatched
+    assert "XYZ.123 - Non-existent medical category" in unmatched
 
 
 def test_history_check_still_works_with_validated_codes():
@@ -140,16 +157,22 @@ def test_er_differentials_are_also_restricted_to_catalogue():
     assert result["differential_unmatched"] == ["Made-up diagnosis"]
 
 
-def test_pneumonia_candidate_search_includes_unspecified_pneumonia():
+def test_pneumonia_candidate_search_includes_unspecified_pneumonia(monkeypatch):
     from model.icd10_registry import get_registry
 
-    candidates = get_registry().search_diagnosis_candidates(
+    registry = get_registry()
+    monkeypatch.setattr(
+        registry,
+        "_semantic_search",
+        lambda _query, limit: [("J18.9", 0.9)],
+    )
+    candidates = registry.search_diagnosis_candidates(
         "Patient presents with pneumonia and chest symptoms."
     )
     assert ("J18.9", "Pneumonia, unspecified") in candidates
 
 
-def test_hybrid_retrieval_includes_relevant_catalogue_entries():
+def test_hybrid_retrieval_includes_relevant_catalogue_entries(monkeypatch):
     from model.icd10_registry import get_registry
 
     registry = get_registry()
@@ -171,9 +194,81 @@ def test_hybrid_retrieval_includes_relevant_catalogue_entries():
             "K04.0",
         ),
     ]
+    targets = {note: expected_code for note, expected_code in cases}
+    monkeypatch.setattr(
+        registry,
+        "_semantic_search",
+        lambda note, limit: [(targets[note], 0.9)],
+    )
     for note, expected_code in cases:
         candidates = registry.search_diagnosis_candidates(note)
         assert any(code == expected_code for code, _description in candidates)
+
+
+def test_medembed_semantic_search_ranks_clinically_related_label(monkeypatch, tmp_path):
+    import numpy as np
+    import model.icd10_registry as registry_module
+    from model.icd10_registry import ICD10Registry
+
+    class FakeSentenceTransformer:
+        def __init__(self, model_name, device):
+            assert model_name == "abhinand/MedEmbed-small-v0.1"
+            assert device == "cpu"
+
+        def encode(
+            self,
+            texts,
+            batch_size=None,
+            convert_to_numpy=False,
+            normalize_embeddings=False,
+            show_progress_bar=True,
+        ):
+            assert convert_to_numpy is True
+            assert normalize_embeddings is True
+            if isinstance(texts, str):
+                return np.array([1.0, 0.0], dtype=np.float32)
+            assert batch_size == 256
+            assert show_progress_bar is False
+            return np.array([
+                [1.0, 0.0] if "pneumonia" in text.lower()
+                else [0.0, 1.0]
+                for text in texts
+            ], dtype=np.float32)
+
+    csv_path = tmp_path / "catalogue.csv"
+    csv_path.write_text(
+        'Code,Description\nJ18.9,"Pneumonia, unspecified"\nK04.0,Pulpitis\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        registry_module,
+        "SentenceTransformer",
+        FakeSentenceTransformer,
+    )
+    registry = ICD10Registry(csv_path)
+    monkeypatch.setattr(registry, "_save_cached_embeddings", lambda _embeddings: None)
+
+    results = registry._semantic_search("fever productive cough", limit=2)
+
+    assert results[0][0] == "J18.9"
+    assert results[0][1] > results[1][1]
+
+
+def test_semantic_rank_has_additional_weight_in_hybrid_fusion(monkeypatch):
+    from model.icd10_registry import get_registry
+
+    registry = get_registry()
+    monkeypatch.setattr(
+        registry,
+        "_semantic_search",
+        lambda _query, limit: [("J18.9", 0.9), ("K04.0", 0.8)],
+    )
+    candidates = registry.search_diagnosis_candidates(
+        "Patient reports fever, cough, and dental pain.",
+        limit=80,
+    )
+
+    assert candidates.index(("J18.9", "Pneumonia, unspecified")) < 80
 
 
 def test_diagnosis_prompt_supplies_only_catalogue_shortlist():
@@ -187,6 +282,30 @@ def test_diagnosis_prompt_supplies_only_catalogue_shortlist():
     assert "- J18.9 - Pneumonia, unspecified" in prompt
     assert "select ONLY from these entries" in prompt
     assert "K35.8 - Acute appendicitis" not in prompt
+
+
+def test_prompt_without_candidates_does_not_show_example_diagnosis_codes():
+    from utils.clinical_prompts import get_diagnosis_prompt
+
+    prompt = get_diagnosis_prompt("er", "Undifferentiated symptoms.")
+
+    assert "No catalogue candidates were supplied" in prompt
+    assert '"icd10_codes": []' in prompt
+    assert '"differential_diagnoses": []' in prompt
+    assert "K35.8 - Acute appendicitis" not in prompt
+    assert "triage_priority" in prompt
+
+
+def test_empty_shortlist_rejects_all_code_recommendations():
+    result = constrain_diagnosis_to_registry(
+        {"icd10_codes": ["J18.9 - Pneumonia, unspecified"]},
+        "opd",
+        [],
+    )
+
+    assert result["icd10_codes"] == []
+    assert result["final_diagnosis"] is None
+    assert result["icd10_unmatched"] == ["J18.9 - Pneumonia, unspecified"]
 
 
 if __name__ == "__main__":

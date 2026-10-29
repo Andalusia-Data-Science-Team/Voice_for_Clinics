@@ -1,0 +1,70 @@
+{
+  "task_id": "B2",
+  "subtask_id": "B2.3",
+  "title": "Schema validity tests across 60 clinical samples (20 per department)",
+  "target_files": [
+    "src/schemas/output_schemas.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.6805025041103363,
+  "timestamp": "2026-10-28T10:25:06.649448+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Clinical test dataset quota",
+      "input_setup": "Configure 60 clinical test fixtures across 3 departments",
+      "expected_result": ">= 60 validation scenarios (20 per department) tested",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.002321787178516388,
+      "evidence": "60 synthetic clinical encounter test cases prepared (20 ER, 20 OPD, 20 Dental)",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "100% ER notes validity",
+      "input_setup": "Validate 20 diverse Emergency Department notes against ERExtractionOutput",
+      "expected_result": "20/20 (100%) pass schema validation without error",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.28760405257344246,
+      "evidence": "20/20 (100%) Emergency Department notes pass schema validation",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "100% OPD notes validity",
+      "input_setup": "Validate 20 diverse Outpatient Department notes against OPDExtractionOutput",
+      "expected_result": "20/20 (100%) pass schema validation without error",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.20615104585886002,
+      "evidence": "20/20 (100%) Outpatient Department notes pass schema validation",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "100% Dental notes validity",
+      "input_setup": "Validate 20 diverse Dental clinic notes against DentalExtractionOutput",
+      "expected_result": "20/20 (100%) pass schema validation without error",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.17618993297219276,
+      "evidence": "20/20 (100%) Dental notes pass schema validation",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Minimal content and empty fields resilience",
+      "input_setup": "Submit minimal note containing only chief_complaint",
+      "expected_result": "Validates without error; optional fields default to empty string or null",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.008235685527324677,
+      "evidence": "Minimal clinical note with omitted optional fields validates cleanly with safe defaults",
+      "error": null
+    }
+  ]
+}

@@ -105,6 +105,10 @@ class CircuitBreaker:
 
     async def record_failure(self, exc: Optional[BaseException] = None) -> None:
         """Record failed execution and trip circuit if threshold is reached."""
+        # A cancellation (client disconnect / task teardown) is not a backend
+        # failure and must never count toward tripping the circuit breaker.
+        if isinstance(exc, asyncio.CancelledError):
+            return
         async with self._lock:
             now = time.time()
             self._consecutive_failures += 1

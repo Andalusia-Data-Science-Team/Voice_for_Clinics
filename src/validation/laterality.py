@@ -44,7 +44,7 @@ LATERALITY_KEYWORDS: dict[Laterality, set[str]] = {
 _WORD_BOUNDARY_REGEX = re.compile(r"[\s,;:.()\[\]{}–—/\\]+")
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class LateralityDetection:
     """Represents detected laterality in a segment of text."""
     laterality: Laterality

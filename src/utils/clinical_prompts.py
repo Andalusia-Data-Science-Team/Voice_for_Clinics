@@ -217,9 +217,10 @@ ignore it and say so in "history_notes".
 _HISTORY_DOC = """  - "history_considered": "Yes" if the patient history block genuinely changed or
     supported your recommendation, otherwise "No". If no patient history block was
     provided, this must always be "No" — never claim you considered history you weren't given.
-  - "history_notes": If history_considered is "Yes", a short note citing the SPECIFIC prior
-    diagnosis code(s) and date(s) that influenced your recommendation. If more than one prior
-    diagnosis is relevant, name all of them. Otherwise ""."""
+  - "history_notes": If history_considered is "Yes", cite the SPECIFIC prior diagnosis code(s)
+    and exact visit date(s) in YYYY-MM-DD format that influenced your recommendation. Name all
+    relevant diagnoses and dates. Include the same relevant date(s) in "reasoning" to explain
+    their impact on the recommended diagnosis. Never invent or infer a date. Otherwise ""."""
 
 _ER_EXTRA_DOC = """  - "differential_diagnoses": A list of 3-6 clinically reasonable alternatives
     formatted "<Australian ICD-10-AM code> - <exact catalogue description>", most important first.
@@ -284,7 +285,17 @@ def get_diagnosis_prompt(
             "No catalogue candidates were supplied. Return an empty "
             '"icd10_codes" list and do not invent a code or diagnosis.'
         )
-        example_data = _DIAGNOSIS_EXAMPLES[d]
+        example_data = {
+            "icd10_codes": [],
+            "reasoning": "No supplied catalogue option was available to select.",
+            "history_considered": "No",
+            "history_notes": "",
+        }
+        if d == "er":
+            example_data.update({
+                "differential_diagnoses": [],
+                "triage_priority": _DIAGNOSIS_EXAMPLES["er"]["triage_priority"],
+            })
     else:
         candidates_doc = (
             "For icd10_codes"
@@ -339,13 +350,17 @@ Return a JSON object with two fields:
     an empty list.
   - "reasoning": ALWAYS populate this — 2-4 sentences explaining WHY the leading code was chosen over
     the alternatives, citing the concrete symptoms, findings, or results from TODAY'S text that support
-    it. If history_considered is "Yes", weave in the prior diagnosis/date that reinforced the choice.{er_doc}
+    it. If history_considered is "Yes", weave in the prior diagnosis and exact visit date that
+    reinforced the choice.{er_doc}
 {_HISTORY_DOC}
 - "summary": One short sentence summarizing the recommendation.
 
 Base the recommendation only on what the text supports; do not invent findings.
 The server enforces the supplied catalogue candidate list. Any unlisted code
-or diagnosis will be excluded from the recommendations.
+or diagnosis will be excluded from the recommendations. Do not mention an
+ICD-10 code or present a diagnosis as a recommendation in reasoning or summary
+unless it is an exact supplied catalogue option. When no supplied option fits,
+say that no catalogue option fits instead of proposing another diagnosis.
 {_history_block(patient_history_text)}
 {label}: {text}
 

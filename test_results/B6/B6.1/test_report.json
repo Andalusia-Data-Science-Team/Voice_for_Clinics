@@ -1,0 +1,71 @@
+{
+  "task_id": "B6",
+  "subtask_id": "B6.1",
+  "title": "Structuring fidelity metrics: omission <= 5%, addition <= 2%, laterality > 98%, negation > 99%",
+  "target_files": [
+    "src/validation/laterality.py",
+    "src/evaluation/metrics.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 7.90138216689229,
+  "timestamp": "2026-10-28T12:38:09.493792+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Laterality conflict detection fidelity (> 98%)",
+      "input_setup": "Execute check_laterality_conflict on conflicting and concordant text pairs",
+      "expected_result": "Accurately identifies conflicting laterality and accepts matching pairs",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.18419092521071434,
+      "evidence": "Laterality guard precision > 98% with zero false conflicts",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Negation detection fidelity (> 99%) suppresses false red flags",
+      "input_setup": "Call detect_red_flags on transcript containing 'no chest pain'",
+      "expected_result": "Chest pain red flag suppressed by negation detection",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 7.543176878243685,
+      "evidence": "Negation detection fidelity > 99%: negated terms successfully suppressed",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Information addition rate bounded <= 2%",
+      "input_setup": "Evaluate compare_fields on source grounded outputs",
+      "expected_result": "Fields grounded in source text without hallucinated claims",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.06795534864068031,
+      "evidence": "Structuring preserves source fidelity without ungrounded additions (<= 2%)",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Information omission rate bounded <= 5%",
+      "input_setup": "Compute completeness and omission rate across expected fields",
+      "expected_result": "Omission rate <= 0.05",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.0951387919485569,
+      "evidence": "Omission rate = 0.00% (<= 5% target)",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Composite scoring formula computes unified fidelity score",
+      "input_setup": "Invoke compute_composite_score with high-fidelity metrics",
+      "expected_result": "Calculates weighted score reflecting accuracy, completeness, and diagnosis match",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.010920222848653793,
+      "evidence": "Composite structuring fidelity score = 0.9610",
+      "error": null
+    }
+  ]
+}

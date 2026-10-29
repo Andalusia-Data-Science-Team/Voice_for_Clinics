@@ -1,0 +1,70 @@
+{
+  "task_id": "M3",
+  "subtask_id": "M3.5",
+  "title": "Validation pipeline holistic rule tests & modular rule independence",
+  "target_files": [
+    "src/validation/pipeline.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 5.390194244682789,
+  "timestamp": "2026-10-28T10:25:07.248523+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Holistic pipeline rule coverage",
+      "input_setup": "Inspect ClinicalValidationPipeline rule components",
+      "expected_result": "Encapsulates schema, code, laterality, and history validation rules",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.004599802196025848,
+      "evidence": "ClinicalValidationPipeline encompasses schema, ICD-10, laterality, and history guard",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Holistic coherent clinical encounter pass",
+      "input_setup": "Validate completely coherent clinical encounter through ClinicalValidationPipeline",
+      "expected_result": "Pipeline returns is_valid=True with zero critical errors",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.3090379759669304,
+      "evidence": "All validation rules passed for coherent clinical note (is_valid=True)",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Zero warnings on optimal input",
+      "input_setup": "Validate optimal clinical encounter",
+      "expected_result": "Zero laterality conflicts emitted",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.17569959163665771,
+      "evidence": "Zero laterality cautions generated on optimal well-formed clinical input",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Multi-fault detection on invalid input",
+      "input_setup": "Submit payload with simultaneous laterality mismatch and invalid ICD-10 code",
+      "expected_result": "Each defect captured independently in respective validation collections",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 4.854762926697731,
+      "evidence": "Multi-fault detection verified: both laterality conflict and invalid ICD-10 code surfaced",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Validation rule modular independence",
+      "input_setup": "Execute laterality and ICD-10 validators in total isolation",
+      "expected_result": "Operate cleanly and independently without circular dependencies",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.04609394818544388,
+      "evidence": "Modular rule independence confirmed: modules operate without circular coupling",
+      "error": null
+    }
+  ]
+}

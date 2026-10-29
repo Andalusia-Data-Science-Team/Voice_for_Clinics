@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import time
@@ -13,7 +14,7 @@ from core.model_registry import (
     get_model,
     spec_for_deployment,
 )
-from llm.provider import build_foundry_kwargs
+from llm.provider import build_foundry_kwargs, get_foundry_profile
 from utils import prompt as prompt_utils
 from utils import clinical_prompts
 from utils.utils import safe_parse_json
@@ -231,8 +232,9 @@ class LLMService:
         if catalogue_candidates is None:
             from model.icd10_registry import get_registry
 
-            catalogue_candidates = get_registry().search_diagnosis_candidates(
-                translated_text
+            catalogue_candidates = await asyncio.to_thread(
+                get_registry().search_diagnosis_candidates,
+                translated_text,
             )
         prompt = clinical_prompts.get_diagnosis_prompt(
             department,
@@ -241,7 +243,16 @@ class LLMService:
             patient_history_text,
             catalogue_candidates,
         )
-        return await LLMService._call_structured_async(prompt, ExtractedFeatures, runtime, model, DIAGNOSIS_MAX_TOKENS, reasoning_effort=REASONING_EFFORT, meta=meta)
+        return await LLMService._call_structured_async(
+            prompt,
+            ExtractedFeatures,
+            runtime,
+            model,
+            DIAGNOSIS_MAX_TOKENS,
+            reasoning_effort=REASONING_EFFORT,
+            meta=meta,
+            max_attempts=Config.LLM_DIAGNOSIS_MAX_ATTEMPTS,
+        )
 
     @staticmethod
     async def recommend_diagnosis_with_fallback_async(
@@ -272,7 +283,10 @@ class LLMService:
         if catalogue_candidates is None:
             from model.icd10_registry import get_registry
 
-            catalogue_candidates = get_registry().search_diagnosis_candidates(translated_text)
+            catalogue_candidates = await asyncio.to_thread(
+                get_registry().search_diagnosis_candidates,
+                translated_text,
+            )
         prompt = clinical_prompts.get_diagnosis_prompt(
             department,
             translated_text,
@@ -283,8 +297,14 @@ class LLMService:
 
         async def _call(spec: ModelSpec):
             return await LLMService._call_structured_async(
-                prompt, ExtractedFeatures, runtime, spec, DIAGNOSIS_MAX_TOKENS,
-                reasoning_effort=REASONING_EFFORT, meta=meta,
+                prompt,
+                ExtractedFeatures,
+                runtime,
+                spec,
+                DIAGNOSIS_MAX_TOKENS,
+                reasoning_effort=REASONING_EFFORT,
+                meta=meta,
+                max_attempts=Config.LLM_DIAGNOSIS_MAX_ATTEMPTS,
             )
 
         return await run_with_single_fallback(
@@ -340,25 +360,50 @@ class LLMService:
         raise RuntimeError("Synchronous LLM calls were removed; use the async runtime")
 
     @staticmethod
-    async def _call_structured_async(prompt: str, pydantic_model: Type[BaseModel], runtime: LLMRuntime, model: ModelSpec, max_tokens: int, reasoning_effort: Optional[str] = None, meta: Optional[dict] = None):
+    async def _call_structured_async(
+        prompt: str,
+        pydantic_model: Type[BaseModel],
+        runtime: LLMRuntime,
+        model: ModelSpec,
+        max_tokens: int,
+        reasoning_effort: Optional[str] = None,
+        meta: Optional[dict] = None,
+        max_attempts: Optional[int] = None,
+    ):
         use_reasoning = bool(reasoning_effort and model.supports_reasoning)
         t0 = time.perf_counter()
         deployment = model.foundry_deployment
+
+        # Check model profile: if json_schema_strict is supported, build a json_schema response_format
+        profile = get_foundry_profile(deployment)
+        if profile.get("json_schema_strict", False):
+            schema = pydantic_model.model_json_schema() if hasattr(pydantic_model, "model_json_schema") else pydantic_model.schema()
+            response_format = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": pydantic_model.__name__,
+                    "strict": True,
+                    "schema": schema,
+                },
+            }
+        else:
+            response_format = {"type": "json_object"}
+
         kwargs = build_foundry_kwargs(
             deployment,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=max_tokens,
             stream=False,
-            response_format={"type": "json_object"},
+            response_format=response_format,
             reasoning_effort=reasoning_effort if use_reasoning else None,
         )
         try:
-            response = await runtime.complete(model=deployment, create_kwargs=kwargs)
+            response = await runtime.complete(model=deployment, create_kwargs=kwargs, max_attempts=max_attempts)
         except Exception as exc:
             if getattr(exc, "status_code", None) != 400:
                 raise
             kwargs.pop("response_format", None)
-            response = await runtime.complete(model=deployment, create_kwargs=kwargs)
+            response = await runtime.complete(model=deployment, create_kwargs=kwargs, max_attempts=max_attempts)
 
         _record_meta(meta, response, model, time.perf_counter() - t0, use_reasoning)
         choice = response.choices[0] if response.choices else None

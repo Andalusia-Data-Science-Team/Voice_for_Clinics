@@ -14,17 +14,23 @@
 name: medvoice
 services:
   # ── MongoDB — LOCAL/DEV ONLY ───────────────────────────────────────────────
-  # Deliberately NOT published to the host: the app reaches it over the compose
-  # network at mongodb://medvoice-mongo:27017. Data lives in the named volume.
+  # Published on 27017 so host runs can reach it at mongodb://localhost:27017.
+  # Inside compose network, reachable at mongodb://medvoice-mongo:27017.
   medvoice-mongo:
     image: mongo:7
     container_name: medvoice-mongo
+    ports:
+      # Host port 27017 is already allocated by another container (mongo-insurance),
+      # so expose on 27018 for host access while internal container port stays 27017.
+      - "27018:27017"
     volumes:
       - mongo_data:/data/db
     environment:
-      MONGO_INITDB_DATABASE: medvoice
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER:-medvoice_user}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD:-MedVoiceSecure2026}
+      MONGO_INITDB_DATABASE: ${MONGODB_DATABASE:-medvoice}
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: ["CMD", "mongosh", "-u", "${MONGODB_USER:-medvoice_user}", "-p", "${MONGODB_PASSWORD:-MedVoiceSecure2026}", "--authenticationDatabase", "admin", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -47,10 +53,9 @@ services:
     env_file:
       - ${MEDVOICE_ENV_FILE:-src/.env}
     environment:
-      # Override only the Mongo URI: inside the container "localhost" is the
-      # container itself, so point it at the compose service instead.
-      MONGODB_URI: mongodb://medvoice-mongo:27017
-      MONGODB_DATABASE: medvoice
+      # Override the Mongo URI with credentials inside the container network:
+      MONGODB_URI: mongodb://${MONGODB_USER:-medvoice_user}:${MONGODB_PASSWORD:-MedVoiceSecure2026}@medvoice-mongo:27017/${MONGODB_DATABASE:-medvoice}?authSource=${MONGODB_AUTH_SOURCE:-admin}
+      MONGODB_DATABASE: ${MONGODB_DATABASE:-medvoice}
     volumes:
       - ./src/uploads:/app/uploads        # uploaded audio (PHI) — host folder
       - ./src/logs:/app/logs              # usage.jsonl / feedback.jsonl (PHI)

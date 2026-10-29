@@ -1,0 +1,70 @@
+{
+  "task_id": "M3",
+  "subtask_id": "M3.2",
+  "title": "Validation layer Pydantic schemas & input sanitization",
+  "target_files": [
+    "src/validation/schemas.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 2.9304479248821735,
+  "timestamp": "2026-10-28T10:25:07.233623+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Valid payload schema pass",
+      "input_setup": "Validate well-formed clinical dictionary through SchemaValidator",
+      "expected_result": "Passes validation cleanly; returns sanitized instance",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.0695609487593174,
+      "evidence": "Well-formed clinical output validated with zero errors",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Non-dict payload rejection",
+      "input_setup": "Submit non-dictionary list to validate_extraction",
+      "expected_result": "Rejection payload generated specifying expected dictionary",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.030703842639923096,
+      "evidence": "Invalid payload rejected: Extraction data must be a dictionary, received list",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Type coercion resilience",
+      "input_setup": "Pass numeric integer 48 into string duration field",
+      "expected_result": "Coerced cleanly to string '48' without crashing",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.02127513289451599,
+      "evidence": "Integer duration coerced to string: '48'",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Malicious and extra fields stripping",
+      "input_setup": "Submit dictionary containing unrecognized / injection keys",
+      "expected_result": "Extra keys stripped; only valid schema fields retained",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.01590792089700699,
+      "evidence": "Extraneous / malicious injection keys cleanly stripped from validated model dump",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "High-performance schema validation latency",
+      "input_setup": "Measure average validation latency across 500 validations",
+      "expected_result": "Average latency < 0.5 ms per validation",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 2.79300007969141,
+      "evidence": "High-performance validation: average 5.6 \u00b5s per record (< 0.5 ms)",
+      "error": null
+    }
+  ]
+}

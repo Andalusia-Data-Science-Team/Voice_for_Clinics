@@ -1,0 +1,71 @@
+{
+  "task_id": "M3",
+  "subtask_id": "M3.4",
+  "title": "History cross-checking & department missing-field checklists",
+  "target_files": [
+    "src/validation/history_guard.py",
+    "src/validation/missing_fields.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.918844249099493,
+  "timestamp": "2026-10-28T10:25:07.241251+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "History structure validation",
+      "input_setup": "Process standard patient history dictionary through HistoryCrossCheckGuard",
+      "expected_result": "History records evaluated cleanly; overlap tracked accurately",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.05598226562142372,
+      "evidence": "History alignment report verified: overlap_families=['I10']",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Missing fields checklist determinism",
+      "input_setup": "Evaluate missing fields on ER note 10 consecutive times",
+      "expected_result": "Bitwise identical missing field lists returned across all 10 runs",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.7404899224638939,
+      "evidence": "Deterministic checklist: 10 repeated runs produced identical missing fields list (21 missing)",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Mandatory missing fields detection",
+      "input_setup": "Submit ER note with only chief_complaint",
+      "expected_result": "Missing required clinical sections populated in checklist",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.05410332232713699,
+      "evidence": "ER missing fields checklist identified 21 missing fields (completeness: 4.545454545454546%)",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Complete encounter checklist verification",
+      "input_setup": "Validate fully populated OPD note dictionary",
+      "expected_result": "missing_count is 0, completeness is 100%",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.037550926208496094,
+      "evidence": "Complete OPD encounter validated with 100% completeness score",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "History consideration contradiction detection",
+      "input_setup": "Evaluate claim of history usage with zero overlapping diagnostic families",
+      "expected_result": "Flagged as claims_used_no_overlap with caution banner emitted",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.030717812478542328,
+      "evidence": "History discrepancy flagged: History notice: Clinical recommendation claimed prior patient history was considered, but none of the past diagnosis families match today's ICD-10 codes.",
+      "error": null
+    }
+  ]
+}

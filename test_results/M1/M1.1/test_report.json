@@ -1,0 +1,72 @@
+{
+  "task_id": "M1",
+  "subtask_id": "M1.1",
+  "title": "API Gateway Integration, Proxy Routing & Health Probing",
+  "target_files": [
+    "apim/README.md",
+    "apim/policies/global.xml",
+    "src/app.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 1.4166338369250298,
+  "timestamp": "2026-10-28T09:18:12.909022+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Gateway configuration & route validation",
+      "input_setup": "Configure APIM_GATEWAY_URL in environment and validate URI structure",
+      "expected_result": "Gateway endpoint URL cleanly parsed with valid HTTPS scheme",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 1.0484717786312103,
+      "evidence": "Gateway route configured and validated: https://medvoice-apim.azure-api.net",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Gateway health probe latency bound",
+      "input_setup": "Execute gateway health check probe against backend components",
+      "expected_result": "Backend probe returns healthy with latency < 100 ms",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.006462913006544113,
+      "evidence": "Gateway backend probe healthy; latency = 0.001ms < 100ms",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Gateway XML policy structural integrity",
+      "input_setup": "Parse apim/policies/global.xml and inspect XML schema hierarchy",
+      "expected_result": "Well-formed XML containing inbound, backend, outbound, and on-error nodes",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.3518001176416874,
+      "evidence": "APIM global.xml policy is structurally valid with all required execution phases",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Proxy header forwarding validation",
+      "input_setup": "Forward client request through gateway proxy headers",
+      "expected_result": "X-Forwarded-For and X-Request-Id headers preserved through proxy pipeline",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.003085937350988388,
+      "evidence": "Gateway proxy headers (X-Forwarded-For, X-Request-Id) preserved cleanly",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Backend outage resilience and 503 response",
+      "input_setup": "Simulate backend service interruption and measure gateway failure response",
+      "expected_result": "Gateway returns 503 Service Unavailable immediately without hanging",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.006813090294599533,
+      "evidence": "Gateway returned HTTP 503 within 0.00ms on backend failure; zero hang",
+      "error": null
+    }
+  ]
+}

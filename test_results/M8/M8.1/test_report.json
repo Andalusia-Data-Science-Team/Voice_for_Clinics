@@ -1,0 +1,70 @@
+{
+  "task_id": "M8",
+  "subtask_id": "M8.1",
+  "title": "30 distinct regression scenarios spanning clinical departments, modes, and languages",
+  "target_files": [
+    "data/production_gold_set/production_gold_set_by_specialty_master.xlsx"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 772.3456337116659,
+  "timestamp": "2026-10-28T11:58:28.417911+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Dataset defines >= 30 regression scenarios",
+      "input_setup": "Load production_gold_set_by_specialty_master.xlsx and count rows",
+      "expected_result": "Row count >= 30 (found 131)",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 174.26940286532044,
+      "evidence": "Verified 131 gold scenarios defined (well exceeds required >= 30)",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Department coverage (OPD, ER, Dental)",
+      "input_setup": "Load per-department gold sets and count scenarios",
+      "expected_result": "OPD, ER, and Dental departments present",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 91.64977818727493,
+      "evidence": "Departments represented: OPD=131, ER=37, Dental=3",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Both clinical encounter modes covered (doctor and conversation)",
+      "input_setup": "Check Encounter Mode column in OPD gold set",
+      "expected_result": "Both 'doctor' and 'conversation' modes have >= 10 scenarios",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 57.3378587141633,
+      "evidence": "Clinical modes distributed: doctor=65, conversation=66",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Both languages covered (Arabic and English)",
+      "input_setup": "Check Language column in OPD gold set",
+      "expected_result": "Both 'ar' and 'en' have >= 10 scenarios",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 74.69384465366602,
+      "evidence": "Languages distributed: Arabic=81, English=50",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "EvaluationEngine baseline comparison metrics verification",
+      "input_setup": "Run compare_fields and compare_diagnosis against simulated gold vs test outputs",
+      "expected_result": "Fuzzy match and ICD-10 extraction calculate accuracy without errors",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 374.39474929124117,
+      "evidence": "EvaluationEngine metrics verified: accuracy=1.00, diag_match=True",
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "task_id": "B1",
+  "subtask_id": "B1.3",
+  "title": "Few-shot clinical examples across specialties",
+  "target_files": [
+    "src/utils/clinical_prompts.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.018678605556488037,
+  "timestamp": "2026-10-28T10:25:06.634305+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Examples present across specialties",
+      "input_setup": "Inspect _EXTRACTION_EXAMPLES dictionary",
+      "expected_result": "Covers ER, OPD, and Dental specialties",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.009912066161632538,
+      "evidence": "Few-shot examples defined for all 3 departments: ['er', 'opd', 'dental']",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Negation demonstration in few-shot",
+      "input_setup": "Inspect ER few-shot example values",
+      "expected_result": "Demonstrates 'No Known Allergies' and 'No Past Surgical History'",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.0028838403522968292,
+      "evidence": "Few-shot examples include explicit negative history demonstrations",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Laterality demonstration in few-shot",
+      "input_setup": "Inspect chief_complaint in ER and Dental few-shot examples",
+      "expected_result": "Explicit left/right anatomical laterality included",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.002823770046234131,
+      "evidence": "Laterality demonstrated: ER='Right lower quadrant abdominal pain', Dental='Severe pain on the lower left back tooth when chewing'",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Dental few-shot clinical integrity",
+      "input_setup": "Inspect Dental few-shot example structure",
+      "expected_result": "Includes dental tooth numbering, materials, and procedure execution",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.0013522803783416748,
+      "evidence": "Dental few-shot accurately demonstrates FDI tooth notation (FDI 36)",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "OPD comorbidity demonstration",
+      "input_setup": "Inspect OPD few-shot example structure",
+      "expected_result": "Demonstrates comorbidities, medication history, and follow-up plan",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.0017066486179828644,
+      "evidence": "OPD few-shot demonstrates chronic comorbidity and home medication capture",
+      "error": null
+    }
+  ]
+}

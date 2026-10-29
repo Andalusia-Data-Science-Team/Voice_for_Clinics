@@ -1,0 +1,70 @@
+{
+  "task_id": "A7",
+  "subtask_id": "A7.1",
+  "title": "Probes verify process liveness and downstream dependency readiness",
+  "target_files": [
+    "src/app.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 10.630024131387472,
+  "timestamp": "2026-10-28T11:46:52.971211+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Liveness probe returns HTTP 200 without I/O",
+      "input_setup": "Directly invoke health_live() handler",
+      "expected_result": "HTTP 200 with status='alive'",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 2.3261969909071922,
+      "evidence": "/health/live returns HTTP 200 status: alive",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Readiness probe returns 200 on healthy dependencies",
+      "input_setup": "Invoke health_check with healthy dependency payload",
+      "expected_result": "HTTP 200 status='ok'",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 4.198642913252115,
+      "evidence": "/health returns HTTP 200 when dependencies ok",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Readiness returns 503 when Foundry is unhealthy",
+      "input_setup": "Mock _dependency_health returning unhealthy Foundry",
+      "expected_result": "HTTP 503 response gating deployment",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 1.952941995114088,
+      "evidence": "/health returns 503 when critical dependency (Foundry) is unhealthy",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Readiness returns 200 (degraded) when optional STT fails",
+      "input_setup": "Mock _dependency_health returning degraded STT status",
+      "expected_result": "HTTP 200 status='degraded' to avoid breaking ingress",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 2.1101972088217735,
+      "evidence": "/health returns 200 (degraded) on non-critical STT outage",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Health response caching mechanics",
+      "input_setup": "Inspect app._health_cache and TTL definitions",
+      "expected_result": "Cache dictionary and TTL defined in app module",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.042045023292303085,
+      "evidence": "Health check cache state and TTL defined to prevent API throttling",
+      "error": null
+    }
+  ]
+}

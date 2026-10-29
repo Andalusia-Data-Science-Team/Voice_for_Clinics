@@ -1,0 +1,71 @@
+{
+  "task_id": "M2",
+  "subtask_id": "M2.1",
+  "title": "Provider interfaces (LLM and STT abstract base classes & contracts)",
+  "target_files": [
+    "src/providers/base.py",
+    "src/providers/factory.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.48513198271393776,
+  "timestamp": "2026-10-28T09:18:12.918989+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "ABC instantiation enforcement",
+      "input_setup": "Attempt direct instantiation of abstract class LLMProvider()",
+      "expected_result": "TypeError raised: Can't instantiate abstract class with abstract methods",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.07561594247817993,
+      "evidence": "Instantiating LLMProvider ABC raises TypeError as expected",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Abstract methods contract inspection",
+      "input_setup": "Inspect LLMProvider.__abstractmethods__",
+      "expected_result": "complete, stream, health_check, and close are declared abstract",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.008868053555488586,
+      "evidence": "All required abstract methods enforced: ['close', 'complete', 'health_check', 'stream']",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "HealthResult immutability",
+      "input_setup": "Attempt to mutate 'ok' attribute on ProviderHealthResult instance",
+      "expected_result": "FrozenInstanceError / exception raised on mutation attempt",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.042798928916454315,
+      "evidence": "ProviderHealthResult is an immutable frozen dataclass; mutations rejected",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Foundry provider contract implementation",
+      "input_setup": "Instantiate concrete FoundryLLMProvider",
+      "expected_result": "Instantiates cleanly without TypeError; satisfies all LLMProvider contracts",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.3258748911321163,
+      "evidence": "FoundryLLMProvider successfully implements all abstract methods without TypeError",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "STT provider contracts validation",
+      "input_setup": "Inspect MunsitSTTProvider and VoxtralSTTProvider method interfaces",
+      "expected_result": "Both providers implement transcribe_live_ar, transcribe_live_en, and health_check",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.03197416663169861,
+      "evidence": "Both MunsitSTTProvider and VoxtralSTTProvider implement all STT interface methods",
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "task_id": "M6",
+  "subtask_id": "M6.1",
+  "title": "Patient history injected into reasoning prompt only",
+  "target_files": [
+    "src/model/patient_history.py",
+    "src/utils/clinical_prompts.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.4031653515994549,
+  "timestamp": "2026-10-28T11:46:50.422858+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "History block in reasoning/diagnosis prompt",
+      "input_setup": "Call get_diagnosis_prompt() with non-empty patient_history_text",
+      "expected_result": "Prompt contains 'Patient History' header and history content",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.05922093987464905,
+      "evidence": "patient_history_text present in diagnosis prompt",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "History absent from extraction prompt",
+      "input_setup": "Inspect get_extraction_prompt() signature and output",
+      "expected_result": "patient_history_text not a parameter; 'Patient History' not in output",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.11187512427568436,
+      "evidence": "extraction prompt correctly excludes patient_history_text parameter",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "SQL query interface unchanged from v3.3",
+      "input_setup": "Inspect check_history_usage() signature and sql/patient_history.sql presence",
+      "expected_result": "Functions exist with correct signatures; SQL file present",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.06365682929754257,
+      "evidence": "SQL interface unchanged; check_history_usage params=['visits', 'extracted_features']",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "No-history patient runs without crash",
+      "input_setup": "Pass empty visits list to format_history_for_prompt and check_history_usage",
+      "expected_result": "Returns empty string and history_provided=False; no exception",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.006485264748334885,
+      "evidence": "Empty visit list handled gracefully; no crash; history_provided=False",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Long history (50 visits) formatted and injected without overflow",
+      "input_setup": "Build 50 synthetic visits; call format_history_for_prompt then get_diagnosis_prompt",
+      "expected_result": "Prompt contains all 50 lines; total prompt < 80 KB",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.16192719340324402,
+      "evidence": "50-visit history formatted into 50 lines; prompt 6613 chars",
+      "error": null
+    }
+  ]
+}

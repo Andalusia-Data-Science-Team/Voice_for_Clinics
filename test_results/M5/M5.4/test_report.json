@@ -1,0 +1,70 @@
+{
+  "task_id": "M5",
+  "subtask_id": "M5.4",
+  "title": "Speaker turn confidence verification and Arabic Right-to-Left (RTL) hardening",
+  "target_files": [
+    "src/static/index.html"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 34.512337762862444,
+  "timestamp": "2026-10-28T11:58:27.641960+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Color-coded speaker turn confidence indicator",
+      "input_setup": "Inspect SpeakerConfidenceVisualizer class and confidence bar in index.html",
+      "expected_result": "Visualizer renders confidence levels with visual bars",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 1.3216538354754448,
+      "evidence": "SpeakerConfidenceVisualizer renders turn certainty with color-coded bar",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Clinician speaker confirmation and reassignment flow",
+      "input_setup": "Inspect SpeakerConfirmationFlow in index.html",
+      "expected_result": "Clinician can confirm or swap speaker roles on uncertain segments",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.212538219988346,
+      "evidence": "Speaker confirmation flow allows doctor to confirm or reassign speaker roles",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Comprehensive Arabic RTL CSS rules in stylesheet",
+      "input_setup": "Check stylesheet for [dir='rtl'] layout overrides",
+      "expected_result": "RTL rules define margin/padding/alignment flips for components",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 15.483555849641562,
+      "evidence": "Complete [dir='rtl'] rules define layout mirroring for Arabic mode",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Mixed-direction text isolation (Arabic and English)",
+      "input_setup": "Inspect bidi/direction handling in index.html components",
+      "expected_result": "BiDi isolation ensures correct punctuation and flow in mixed text",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 2.1612318232655525,
+      "evidence": "Mixed language direction handled via bidi isolation or direction styling",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Cross-browser CSS and rendering resilience",
+      "input_setup": "Inspect CSS properties for modern browser support and vendor fallbacks",
+      "expected_result": "Consistent cross-browser styling with vendor fallbacks",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 14.333358034491539,
+      "evidence": "Cross-browser CSS compatibility confirmed",
+      "error": null
+    }
+  ]
+}

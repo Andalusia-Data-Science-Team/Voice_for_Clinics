@@ -34,7 +34,6 @@ from model.icd10_registry import get_registry
 from model.question_generator import QuestionGenerator
 from core.model_registry import get_model, registry_for_ui
 from model.specialty_terms import correct_specialty_terms, SPECIALTIES
-from utils.red_flags import detect_red_flags
 from model.patient_history import (
     get_patient_visits,
     format_history_for_prompt,
@@ -121,6 +120,14 @@ async def lifespan(app: FastAPI):
         app.state.sessions = None
         app.state.feedback_repo = None
         logger.warning("[Lifespan] MongoDB initialization skipped/failed: %s (JSONL fallback active)", exc)
+
+    # Pre-warm the ICD-10 semantic index to avoid cold-start penalty on first diagnosis
+    try:
+        from model.icd10_registry import get_registry
+        await asyncio.to_thread(get_registry().prepare_semantic_index)
+        logger.info("[Lifespan] ICD-10 semantic index warmed successfully")
+    except Exception as exc:
+        logger.warning("[Lifespan] ICD-10 semantic index warm-up skipped/deferred: %s", exc)
 
     try:
         yield

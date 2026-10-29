@@ -29,7 +29,7 @@ from validation.schemas import SchemaValidator
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ValidationReport:
     """Unified validation result contract for downstream consumers and UI rendering."""
     is_valid: bool

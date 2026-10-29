@@ -10,6 +10,8 @@ Tests:
 - validate_diagnosis_output (never-fail coercion)
 """
 
+import json
+
 import pytest
 from fastapi import HTTPException
 
@@ -157,6 +159,7 @@ async def test_validate_feedback_input_invalid_rating():
             rating="not_a_valid_rating",
         )
     assert exc_info.value.status_code == 422
+    json.dumps(exc_info.value.detail)
 
 
 # ==============================================================================

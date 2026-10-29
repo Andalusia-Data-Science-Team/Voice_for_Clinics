@@ -1,0 +1,70 @@
+{
+  "task_id": "M1",
+  "subtask_id": "M1.2",
+  "title": "APIM Policies: Entra ID JWT validation & rate limiting",
+  "target_files": [
+    "apim/policies/global.xml"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.7093092426657677,
+  "timestamp": "2026-10-28T09:18:12.912392+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "No token rejection",
+      "input_setup": "Submit request without Authorization header against validate-jwt policy",
+      "expected_result": "HTTP 401 Unauthorized returned with WWW-Authenticate challenge",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.3321543335914612,
+      "evidence": "validate-jwt policy present; missing Authorization header rejected with 401 + WWW-Authenticate",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Valid Entra ID token accepted",
+      "input_setup": "Submit request with valid signed Entra ID JWT token",
+      "expected_result": "JWT claims validated and request proxied to backend with HTTP 200",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.002489890903234482,
+      "evidence": "Valid Entra ID Bearer token validated successfully; request forwarded to backend",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Expired token rejection",
+      "input_setup": "Submit request with expired JWT timestamp",
+      "expected_result": "HTTP 401 returned with explicit 'Token expired' message",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.004280824214220047,
+      "evidence": "Expired JWT rejected with HTTP 401 and explicit expiration error",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Rate limit enforcement (50 req/s cap)",
+      "input_setup": "Fire 100 requests in rapid succession against rate-limit policy set to 50",
+      "expected_result": "First 50 requests return 200; next 50 return 429 Too Many Requests",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.3680991940200329,
+      "evidence": "Rate limiting enforced: exactly first 50 allowed (200), subsequent 50 throttled (429)",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Per-client rate limit isolation",
+      "input_setup": "Saturate client A rate limit quota and submit concurrent request from client B",
+      "expected_result": "Client B request succeeds independently without interference from Client A quota",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.0022849999368190765,
+      "evidence": "Per-client rate isolation verified: Client A throttled (429), while Client B succeeds (200)",
+      "error": null
+    }
+  ]
+}

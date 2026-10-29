@@ -10,7 +10,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, AsyncGenerator, Callable, Coroutine, Dict, List, Optional
+from typing import Any, AsyncGenerator, Callable, Coroutine, Dict, List, Optional, Tuple
 
 from core.config import Config
 from core.model_registry import get_model
@@ -25,6 +25,7 @@ from pipeline.routing import (
     RoutingDecision,
     classify_complexity,
     decision_without_router,
+    evaluate_routing_rules,
     fallback_deployment_for_tier,
     failure_tier,
     spec_for_tier,
@@ -37,6 +38,7 @@ from pipeline.steps import (
     step_refine_stream,
     step_translate_stream,
 )
+from model.icd10_registry import get_registry
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +58,15 @@ class PipelineOrchestrator:
         ctx: PipelineContext,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Execute all pipeline steps and stream SSE event dictionaries."""
+        # Declared before the try so the finally block never hits
+        # UnboundLocalError when the stream is cancelled before the routing
+        # section runs (e.g. the client disconnects during refinement or
+        # translation under load). Both `routing_decision` and `reasoning_spec`
+        # are referenced by the finally block below.
         extraction_res: Optional[ExtractionStepResult] = None
         diagnosis_res: Optional[DiagnosisStepResult] = None
+        routing_decision: Optional[RoutingDecision] = None
+        reasoning_spec: Optional[Any] = None
         parallel_tasks: List[asyncio.Task] = []
         validation_dict: Optional[Dict[str, Any]] = None
         validation_passed: bool = True
@@ -79,57 +88,76 @@ class PipelineOrchestrator:
 
             # Text handed to extraction & diagnosis
             ctx.patient_story = ctx.translated_text
+            # ── 3. Deterministic Complexity Routing & 3-Way Parallel Execution ──
+            # Evaluate deterministic 5-rule engine in < 1ms at T=0
+            t_router0 = time.perf_counter()
+            routing_decision = evaluate_routing_rules(
+                text=ctx.patient_story,
+                is_conversation=ctx.is_conversation,
+                use_history=ctx.use_history,
+                patient_history_visits=ctx.patient_history_visits,
+                current_icd_candidates=(),
+            )
+            ctx.routing_decision = routing_decision
+            router_sec = round(time.perf_counter() - t_router0, 4)
+
+            # Emit step_progress for router with < 0.005s latency to preserve UI telemetry contract
+            yield {"event": "step_progress", "data": json.dumps({"step": "router", "status": "started"})}
+            yield {"event": "step_progress", "data": json.dumps({
+                "step": "router",
+                "status": "done",
+                "sec": router_sec,
+                "tier": routing_decision.tier,
+                "score": routing_decision.score,
+                "matched_rules": routing_decision.matched_rules,
+            })}
+
+            # Emit routing_signal with red flags and full 5-rule audit breakdown
             routing_signal = step_red_flags(ctx)
+            routing_signal["complexity"] = routing_decision.complexity
+            routing_signal["score"] = routing_decision.score
+            routing_signal["matched_rules"] = routing_decision.matched_rules
+            routing_signal["tier"] = routing_decision.tier
+            routing_signal["rule_details"] = routing_decision.rule_details
             yield {"event": "routing_signal", "data": routing_signal}
 
-            # ── 3. Parallel Extraction & Reasoning (with shared timeout) ──
-            # Extraction always starts immediately. Reasoning starts on the
-            # routed tier: when ROUTER_ENABLED=true the router runs concurrently
-            # with extraction and the tier is chosen when it returns; otherwise
-            # reasoning starts at once on the simple tier.
+            reasoning_spec = spec_for_tier(routing_decision.tier)
+            reasoning_fallback = fallback_deployment_for_tier(routing_decision.tier)
+
             timeout_s = getattr(Config, "LLM_TIMEOUT_S", 45.0)
+            pipeline_deadline_s = getattr(Config, "PIPELINE_TIMEOUT_S", 90.0)
+
+            progress_events_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+
+            # Launch icd_task, extract_task, and diagnose_task simultaneously at T=0
+            yield {"event": "step_progress", "data": json.dumps({"step": "icd_search", "status": "started"})}
+            t_icd0 = time.perf_counter()
+
+            async def _run_icd_search():
+                res = await asyncio.to_thread(get_registry().search_diagnosis_candidates, ctx.patient_story)
+                sec = round(time.perf_counter() - t_icd0, 3)
+                return res, sec
+
+            icd_task = asyncio.create_task(_run_icd_search())
 
             async def _run_extract() -> ExtractionStepResult:
                 return await step_extract(ctx)
 
             async def _run_diagnose(spec: Optional[Any] = None, fallback: Optional[str] = None) -> DiagnosisStepResult:
+                # Ensure pre-computed candidates are populated into context
+                if ctx.icd_candidates is None:
+                    try:
+                        candidates, icd_sec = await icd_task
+                        ctx.icd_candidates = candidates
+                    except Exception as e:
+                        logger.warning("[Pipeline] Concurrently pre-computed ICD search failed: %s", e)
                 return await step_diagnose(ctx, reasoning_spec=spec, fallback_deployment=fallback)
 
+            yield {"event": "step_progress", "data": json.dumps({"step": "extraction", "status": "started"})}
             extract_task = asyncio.create_task(_run_extract())
-            parallel_tasks = [extract_task]
 
-            routing_decision: Optional[RoutingDecision] = None
-            if Config.router_enabled():
-                router_task = asyncio.create_task(
-                    classify_complexity(ctx.runtime, ctx.patient_story, ctx.patient_history_text)
-                )
-                parallel_tasks.append(router_task)
-                try:
-                    routing_decision = await asyncio.wait_for(router_task, timeout=timeout_s)
-                except asyncio.TimeoutError:
-                    logger.error("[Pipeline] Router timed out after %ss; using failure tier", timeout_s)
-                    routing_decision = RoutingDecision(
-                        complexity=failure_tier(),
-                        tier=failure_tier(),
-                        router_deployment=Config.foundry_model_router(),
-                        router_ok=False,
-                    )
-                except Exception as exc:
-                    logger.error("[Pipeline] Router error: %s; using failure tier", exc)
-                    routing_decision = RoutingDecision(
-                        complexity=failure_tier(),
-                        tier=failure_tier(),
-                        router_deployment=Config.foundry_model_router(),
-                        router_ok=False,
-                    )
-            else:
-                routing_decision = decision_without_router()
-
-            ctx.routing_decision = routing_decision
-            reasoning_spec = spec_for_tier(routing_decision.tier)
-            reasoning_fallback = fallback_deployment_for_tier(routing_decision.tier)
+            yield {"event": "step_progress", "data": json.dumps({"step": "diagnosis", "status": "started"})}
             diagnose_task = asyncio.create_task(_run_diagnose(reasoning_spec, reasoning_fallback))
-            parallel_tasks.append(diagnose_task)
 
             # ── Emit each parallel result as soon as it completes ──────────
             # The extraction and reasoning branches run concurrently; whichever
@@ -141,9 +169,10 @@ class PipelineOrchestrator:
                 return default
 
             def _reasoning_label() -> str:
+                fallback_dep = reasoning_spec.foundry_deployment if reasoning_spec else "unknown"
                 if diagnosis_res is not None:
-                    return _served(diagnosis_res.meta, reasoning_spec.foundry_deployment)
-                return reasoning_spec.foundry_deployment
+                    return _served(diagnosis_res.meta, fallback_dep)
+                return fallback_dep
 
             def _extraction_result_from(task: "asyncio.Task") -> ExtractionStepResult:
                 try:
@@ -219,30 +248,45 @@ class PipelineOrchestrator:
                 }
 
             loop = asyncio.get_running_loop()
-            deadline = loop.time() + timeout_s
+            deadline = loop.time() + pipeline_deadline_s
             pending = {extract_task, diagnose_task}
-            extraction_res: Optional[ExtractionStepResult] = None
-            diagnosis_res: Optional[DiagnosisStepResult] = None
+            extraction_res = None
+            diagnosis_res = None
 
             while pending:
+                while not progress_events_queue.empty():
+                    yield progress_events_queue.get_nowait()
                 remaining = deadline - loop.time()
                 if remaining <= 0:
                     break
                 done, pending = await asyncio.wait(
                     pending, timeout=remaining, return_when=asyncio.FIRST_COMPLETED
                 )
+                while not progress_events_queue.empty():
+                    yield progress_events_queue.get_nowait()
                 if not done:
                     break
                 for finished in done:
                     if finished is extract_task:
                         extraction_res = _extraction_result_from(finished)
+                        yield {
+                            "event": "step_progress",
+                            "data": json.dumps({"step": "extraction", "status": "done", "sec": extraction_res.extraction_sec}),
+                        }
                         yield {"event": "extraction", "data": json.dumps(_build_extraction_event())}
                     elif finished is diagnose_task:
                         diagnosis_res = _diagnosis_result_from(finished)
                         yield {
+                            "event": "step_progress",
+                            "data": json.dumps({"step": "diagnosis", "status": "done", "sec": diagnosis_res.diagnosis_sec}),
+                        }
+                        yield {
                             "event": "diagnosis",
                             "data": json.dumps(_build_diagnosis_event(diagnosis_res, _reasoning_label())),
                         }
+
+            while not progress_events_queue.empty():
+                yield progress_events_queue.get_nowait()
 
             # Any branch still running when the shared deadline elapsed is
             # cancelled and reported as a timeout error, so both events are
@@ -250,12 +294,12 @@ class PipelineOrchestrator:
             if extraction_res is None:
                 if not extract_task.done():
                     extract_task.cancel()
-                extraction_res = ExtractionStepResult(error=f"Timeout after {timeout_s}s")
+                extraction_res = ExtractionStepResult(error=f"Timeout after {pipeline_deadline_s}s")
                 yield {"event": "extraction", "data": json.dumps(_build_extraction_event())}
             if diagnosis_res is None:
                 if not diagnose_task.done():
                     diagnose_task.cancel()
-                diagnosis_res = DiagnosisStepResult(error=f"Timeout after {timeout_s}s")
+                diagnosis_res = DiagnosisStepResult(error=f"Timeout after {pipeline_deadline_s}s")
                 yield {
                     "event": "diagnosis",
                     "data": json.dumps(_build_diagnosis_event(diagnosis_res, _reasoning_label())),
@@ -393,7 +437,11 @@ class PipelineOrchestrator:
                 await asyncio.gather(*parallel_tasks, return_exceptions=True)
 
             total_sec = round(time.perf_counter() - ctx.pipeline_start, 3)
-            final_reasoning_model = reasoning_spec.id
+            # `reasoning_spec` is unset if the stream was cancelled before the
+            # routing section ran. Fall back to the doctor-selected default so
+            # cleanup never raises, which would otherwise abort the SSE stream
+            # (clients see ChunkedEncodingError and the whole request fails).
+            final_reasoning_model = (reasoning_spec or ctx.reasoning_spec).id
             if current_tier == "escalated":
                 try:
                     final_reasoning_model = get_model("reasoning", escalation=True).id

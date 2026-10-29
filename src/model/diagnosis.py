@@ -83,7 +83,8 @@ class DiagnosisRecommender:
     ) -> tuple[dict, str]:
         """Returns (json_data, summary). json_data keys:
         icd10_codes (list[str], most likely first), reasoning (str),
-        history_considered / history_notes (str), and for ER only:
+        history_considered / history_notes (str), with history dates cited
+        when relevant, and for ER only:
         differential_diagnoses (list[str]), triage_priority (str)."""
         if not end_text or not isinstance(end_text, str):
             raise ValueError("Input end_text must be a non-empty string")

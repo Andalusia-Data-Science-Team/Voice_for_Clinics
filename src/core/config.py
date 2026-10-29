@@ -171,11 +171,19 @@ class Config:
     LLM_TOTAL_TIMEOUT_S = float(os.getenv("LLM_TOTAL_TIMEOUT_S", "300"))
     LLM_CONNECT_TIMEOUT_S = float(os.getenv("LLM_CONNECT_TIMEOUT_S", "5"))
     LLM_MAX_ATTEMPTS = int(os.getenv("LLM_MAX_ATTEMPTS", "4"))
+    LLM_DIAGNOSIS_MAX_ATTEMPTS = int(os.getenv("LLM_DIAGNOSIS_MAX_ATTEMPTS", "2"))
     LLM_BACKOFF_MAX_S = float(os.getenv("LLM_BACKOFF_MAX_S", "8"))
+    # Pipeline-level deadline: covers extraction + diagnosis + ICD search.
+    # Separate from LLM_TIMEOUT_S (per-HTTP-call) so retries don't steal the budget.
+    PIPELINE_TIMEOUT_S = float(os.getenv("PIPELINE_TIMEOUT_S", "90"))
     LLM_RETRY_AFTER_MAX_S = float(os.getenv("LLM_RETRY_AFTER_MAX_S", "30"))
     LLM_LIMIT_DEFAULT = int(os.getenv("LLM_LIMIT_DEFAULT", "8"))
     LLM_MAX_CONNECTIONS = int(os.getenv("LLM_MAX_CONNECTIONS", "100"))
     LLM_MAX_KEEPALIVE_CONNECTIONS = int(os.getenv("LLM_MAX_KEEPALIVE_CONNECTIONS", "20"))
+    # Circuit Breaker tuning (more tolerant for single-user dev, faster recovery)
+    CB_FAILURE_THRESHOLD = int(os.getenv("CB_FAILURE_THRESHOLD", "10"))
+    CB_WINDOW_S = float(os.getenv("CB_WINDOW_S", "60.0"))
+    CB_RECOVERY_TIMEOUT_S = float(os.getenv("CB_RECOVERY_TIMEOUT_S", "10.0"))
 
     @classmethod
     def llm_model_limit(cls, model: str) -> int:

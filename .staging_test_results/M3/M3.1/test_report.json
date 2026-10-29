@@ -1,0 +1,71 @@
+{
+  "task_id": "M3",
+  "subtask_id": "M3.1",
+  "title": "ICD-10 code lookup from HIS master & validation",
+  "target_files": [
+    "src/validation/icd10.py",
+    "src/data/Austrilian ICD codes.csv"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 4.728654399514198,
+  "timestamp": "2026-10-28T10:25:07.226240+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Valid ICD-10 code verification",
+      "input_setup": "Validate code 'J18.9' against HIS ICD-10 master validator",
+      "expected_result": "is_valid is True with accurate description ('Pneumonia, unspecified') and EXACT_MATCH tier",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.15606079250574112,
+      "evidence": "Code J18.9 validated: canonical=J18.9, tier=EXACT_MATCH, description='Pneumonia, unspecified'",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Invalid ICD-10 code rejection",
+      "input_setup": "Validate non-existent code 'ZZZ.999'",
+      "expected_result": "is_valid is False, tier is UNRESOLVED, rejection_reason set",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 4.406793974339962,
+      "evidence": "Invalid code ZZZ.999 classified as invalid with reason 'CODE_NOT_FOUND_IN_HIS_MASTER'",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Batch ICD-10 validation latency bound",
+      "input_setup": "Validate 10 codes simultaneously in batch",
+      "expected_result": "All validated accurately with cumulative latency < 500 ms",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.14472706243395805,
+      "evidence": "Batch validation of 10 codes executed in 0.14ms < 500ms (all 10 valid)",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "ICD-10 code case-insensitivity",
+      "input_setup": "Compare validation results for 'j18.9' and 'J18.9'",
+      "expected_result": "Both normalize to uppercase 'J18.9' with identical valid status",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.017570331692695618,
+      "evidence": "Case-insensitivity verified: lowercase 'j18.9' normalized to canonical 'J18.9'",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "HIS code master file integrity",
+      "input_setup": "Check total code dictionary size from Australian ICD master",
+      "expected_result": ">= 10,000 valid codes loaded cleanly without syntax errors",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.003502238541841507,
+      "evidence": "HIS master file integrity verified: 16953 codes indexed with zero parse errors",
+      "error": null
+    }
+  ]
+}

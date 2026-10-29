@@ -30,9 +30,10 @@ table are unchanged.
 """
 
 import logging
+import re
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import pyodbc
 
@@ -106,6 +107,39 @@ def _connect(business_unit: BusinessUnit) -> pyodbc.Connection:
 
 def _fmt_date(value) -> str:
     return value.strftime("%Y-%m-%d") if hasattr(value, "strftime") else str(value or "")
+
+
+_ISO_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+
+
+def validate_history_citations(
+    diagnosis: Dict[str, Any],
+    visits: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Verify claimed history dates against supplied visits without inventing dates."""
+    result = dict(diagnosis)
+    if str(result.get("history_considered", "")).strip().lower() != "yes":
+        result["history_citation_missing"] = False
+        result["history_cited_visit_dates"] = []
+        return result
+
+    visit_dates = {
+        match.group(0)
+        for visit in visits
+        if (match := _ISO_DATE_RE.search(_fmt_date(visit.get("visit_date"))))
+    }
+    notes = str(result.get("history_notes") or "")
+    reasoning = str(result.get("reasoning") or "")
+    cited_dates = _ISO_DATE_RE.findall(notes)
+    verified_dates = list(dict.fromkeys(date for date in cited_dates if date in visit_dates))
+    has_invalid_date = any(date not in visit_dates for date in cited_dates)
+    reasoning_missing_date = any(date not in reasoning for date in verified_dates)
+
+    result["history_cited_visit_dates"] = verified_dates
+    result["history_citation_missing"] = (
+        not verified_dates or has_invalid_date or reasoning_missing_date
+    )
+    return result
 
 
 def _split_diagnoses(raw: Optional[str]) -> List[str]:

@@ -1,0 +1,70 @@
+{
+  "task_id": "A4",
+  "subtask_id": "A4.2",
+  "title": "Staging environment stage defined with correct dependencies and env isolation",
+  "target_files": [
+    "azure-pipelines.yml"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 56.71715643256903,
+  "timestamp": "2026-10-28T11:46:50.601345+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "DeployStaging stage exists and depends on BuildPush",
+      "input_setup": "Parse azure-pipelines.yml for DeployStaging stage",
+      "expected_result": "DeployStaging stage present with dependsOn=BuildPush",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 37.68292721360922,
+      "evidence": "DeployStaging stage exists; dependsOn=['BuildPush']",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Staging uses consistent image tag from build stage",
+      "input_setup": "Count imageTag and Build.BuildId references in pipeline YAML",
+      "expected_result": "imageTag referenced \u22652 times; Build.BuildId used for traceability",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.14190515503287315,
+      "evidence": "imageTag with Build.BuildId used consistently across build and deploy stages",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "DeployStaging gated on deployStaging parameter",
+      "input_setup": "Inspect DeployStaging stage condition in pipeline YAML",
+      "expected_result": "deployStaging parameter controls DeployStaging stage execution",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.07790932431817055,
+      "evidence": "DeployStaging gated on deployStaging parameter",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Staging environment name configured in pipeline",
+      "input_setup": "Inspect DeployStaging for environmentName configuration",
+      "expected_result": "environmentName: staging (or equivalent) defined",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.17149094492197037,
+      "evidence": "Staging environmentName configured in pipeline",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "All pipeline stage names are unique",
+      "input_setup": "Extract all stage names from azure-pipelines.yml",
+      "expected_result": "No duplicate stage names; all stages have 'stage' key",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 18.642923794686794,
+      "evidence": "All 5 stage names unique: ['CI', 'BuildPush', 'DeployDev', 'DeployStaging', 'DeployProduction']",
+      "error": null
+    }
+  ]
+}

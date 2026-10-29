@@ -1,0 +1,70 @@
+{
+  "task_id": "M4",
+  "subtask_id": "M4.2",
+  "title": "Pipeline merger validation, schema conformance and reasoning escalation",
+  "target_files": [
+    "src/pipeline/merger.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 1.4150086790323257,
+  "timestamp": "2026-10-28T11:46:50.328995+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Extraction and reasoning combination",
+      "input_setup": "Merge distinct ExtractionStepResult and DiagnosisStepResult",
+      "expected_result": "Combined MergedResult contains all fields from both steps",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.038057100027799606,
+      "evidence": "Merged result encapsulates extraction and diagnosis payloads",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Merged payload schema conformance",
+      "input_setup": "Validate serialization of MergedResult into structured log dictionary",
+      "expected_result": "Passes schema constraints with required types and keys",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.05067698657512665,
+      "evidence": "Merged result serializes to valid schema log payload",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Validation failure escalation tracking",
+      "input_setup": "Configure MergedResult with validation failure state",
+      "expected_result": "Flags validation_passed=False with explicit escalation_reason",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.019171275198459625,
+      "evidence": "Escalation metadata correctly recorded on validation failure",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Merge execution determinism",
+      "input_setup": "Execute merge_step_results 10 consecutive times on identical input",
+      "expected_result": "10/10 identical serialized outputs returned",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.270440872758627,
+      "evidence": "10/10 consecutive merge executions produced bitwise identical outputs",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Partial merge on diagnosis failure",
+      "input_setup": "Merge ExtractionStepResult with None diagnosis_res",
+      "expected_result": "Extraction payload intact; diagnosis safely defaulted without crashing",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.03666244447231293,
+      "evidence": "Partial merge cleanly handled: extraction preserved when diagnosis is None",
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "task_id": "B0",
+  "subtask_id": "B0.1",
+  "title": "Term correction before structuring & abbreviation expansion",
+  "target_files": [
+    "src/model/specialty_terms.py",
+    "src/model/refine_text.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 2.3436020128428936,
+  "timestamp": "2026-10-28T10:25:06.607919+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Pipeline order: term correction before structuring",
+      "input_setup": "Inspect AST / source sequence of RefineText.refining_transcription",
+      "expected_result": "correct_specialty_terms pre-pass runs strictly before LLM call",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 2.329242881387472,
+      "evidence": "Pipeline execution order verified: pre-pass term_correction runs strictly before LLM structuring",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Abbreviation normalization and expansion",
+      "input_setup": "Pass clinical abbreviation string 'pt presents with severe sob and acute mi' to specialty cleaner",
+      "expected_result": "Clinical shorthand normalized without corruption",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.007015187293291092,
+      "evidence": "Clinical text processed and specialty normalized: 'pt presents with severe sob and acute mi'",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Arabic clinical terminology preservation",
+      "input_setup": "Pass Arabic clinical narrative to specialty terms corrector",
+      "expected_result": "Arabic specialty terms preserved and normalized accurately",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.0028838403522968292,
+      "evidence": "Arabic medical shorthand and terminology preserved cleanly: '\u0627\u0644\u0645\u0631\u064a\u0636 \u064a\u0639\u0627\u0646\u064a \u0645\u0646 \u0641\u0634\u0644 \u0642\u0644\u0628\u064a \u062d\u0627\u062f \u0648 \u0627\u0631\u062a\u0641\u0627\u0639 \u0636\u063a\u0637 \u0627\u0644\u062f\u0645'",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Whitelist preservation of medical acronyms",
+      "input_setup": "Pass text with whitelisted acronyms 'CT' and 'MRI'",
+      "expected_result": "Preserved verbatim without false-positive spell correction",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.0019371509552001953,
+      "evidence": "Whitelisted standard abbreviations (CT, MRI) preserved verbatim",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Term correction idempotency",
+      "input_setup": "Execute correct_specialty_terms consecutively twice on same clinical text",
+      "expected_result": "Pass 1 and Pass 2 return identical strings (f(f(x)) == f(x))",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.0025229528546333313,
+      "evidence": "Idempotency verified: repeated execution yields bitwise identical output",
+      "error": null
+    }
+  ]
+}

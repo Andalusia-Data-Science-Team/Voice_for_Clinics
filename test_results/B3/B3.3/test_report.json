@@ -1,0 +1,70 @@
+{
+  "task_id": "B3",
+  "subtask_id": "B3.3",
+  "title": "Patient history scope isolation & citation rules",
+  "target_files": [
+    "src/utils/clinical_prompts.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.5231485702097416,
+  "timestamp": "2026-10-28T10:25:07.127928+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Patient history isolation to reasoning",
+      "input_setup": "Compare extraction prompt and diagnosis prompt with patient history text",
+      "expected_result": "History is present in reasoning prompt; strictly absent in extraction prompt",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.1744660548865795,
+      "evidence": "Data flow verified: patient history isolated strictly to diagnosis/reasoning prompt",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "History citation requirement in prompt",
+      "input_setup": "Inspect diagnosis prompt instructions for history handling",
+      "expected_result": "Mandates explicit history_considered and history_notes citations",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.06904127076268196,
+      "evidence": "Prompt enforces history consideration citation and rationale",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Evidence link verification",
+      "input_setup": "Instantiate DiagnosisOutput with specific blood pressure finding citation",
+      "expected_result": "Evidence documented and retrievable in history_notes",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.052220188081264496,
+      "evidence": "Evidence link between clinical findings and diagnosis validated",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "History contradiction detection",
+      "input_setup": "Cross-check note denying diabetes against history containing Type 2 DM",
+      "expected_result": "Contradiction flagged in history validation check",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.06718700751662254,
+      "evidence": "History discrepancy caught: claims_used_no_overlap",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Citation verbatim accuracy",
+      "input_setup": "Validate extracted citation against source transcript",
+      "expected_result": "Citation matches verbatim substring of source narrative",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.16023404896259308,
+      "evidence": "Citation verified as an exact verbatim substring of the source narrative",
+      "error": null
+    }
+  ]
+}

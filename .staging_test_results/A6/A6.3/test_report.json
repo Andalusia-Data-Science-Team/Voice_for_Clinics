@@ -1,0 +1,72 @@
+{
+  "task_id": "A6",
+  "subtask_id": "A6.3",
+  "title": "Tuning concurrency limits and formal capacity report documentation",
+  "target_files": [
+    "docs/capacity_report_template.md",
+    "docs/FINAL_REPORT.md",
+    "src/core/config.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 13.766821008175611,
+  "timestamp": "2026-10-28T11:58:28.524291+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Config-driven per-model concurrency limits in Config",
+      "input_setup": "Inspect Config.LLM_LIMIT_DEFAULT and Config.llm_limit_for_model",
+      "expected_result": "Configurable per-model semaphores supported via environment variables",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 13.392542954534292,
+      "evidence": "Config-driven per-model concurrency tuning verified (default=8)",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Capacity report template defines required performance sections",
+      "input_setup": "Inspect docs/capacity_report_template.md",
+      "expected_result": "Template defines per-step latency tables, limits, and max safe sessions",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.10639103129506111,
+      "evidence": "Formal capacity report template defines max sessions and binding constraints",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Capacity limits and maximum safe sessions documented in project report",
+      "input_setup": "Check docs/FINAL_REPORT.md for safe concurrent sessions assessment",
+      "expected_result": "Capacity assessment documents safe throughput >= 50 concurrent sessions",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.13157213106751442,
+      "evidence": "Safe concurrent capacity documented as >= 50 sessions post-fix",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Observed 429 throttling rate below 5% threshold",
+      "input_setup": "Inspect verified 429 throttle percentage in FINAL_REPORT.md",
+      "expected_result": "Observed 429 rate is 0%, adhering to SLA (< 5%)",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.0748499296605587,
+      "evidence": "429 rate verified at 0% (far below the 5% maximum threshold)",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Project report carries owner sign-off and revision metadata",
+      "input_setup": "Verify owner and timestamp metadata in docs/FINAL_REPORT.md",
+      "expected_result": "Report signed with technical owner and delivery date",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.06146496161818504,
+      "evidence": "Project report carries technical owner sign-off and revision timestamp",
+      "error": null
+    }
+  ]
+}

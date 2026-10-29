@@ -1,0 +1,71 @@
+{
+  "task_id": "M6",
+  "subtask_id": "M6.3",
+  "title": "Consent and mode routing correctly differentiates doctor vs conversation mode",
+  "target_files": [
+    "src/pipeline/steps.py",
+    "src/schemas/input_schemas.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.415007583796978,
+  "timestamp": "2026-10-28T11:46:50.443014+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Mode enum defines doctor and conversation variants",
+      "input_setup": "Inspect schemas.input_schemas.Mode",
+      "expected_result": "Mode.doctor and Mode.conversation exist with distinct values",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.01636473461985588,
+      "evidence": "Mode enum has doctor='doctor', conversation='conversation'",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "PipelineContext.is_conversation() correctly detects mode",
+      "input_setup": "Create PipelineContext with Mode.doctor and Mode.conversation",
+      "expected_result": "is_conversation() = False for doctor, True for conversation",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.03214040771126747,
+      "evidence": "is_conversation returns False for doctor, True for conversation",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Extraction prompt differs between doctor and conversation modes",
+      "input_setup": "get_extraction_prompt with is_conversation=False vs True",
+      "expected_result": "Prompts are different; conversation prompt references dialogue/conversation",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.3340519033372402,
+      "evidence": "Extraction prompts differ between doctor and conversation modes",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "skip_refinement() True for doctor (dictation) mode",
+      "input_setup": "PipelineContext with Mode.doctor",
+      "expected_result": "skip_refinement() returns True",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.016941223293542862,
+      "evidence": "skip_refinement=True for doctor mode (dictation bypass)",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "is_arabic() correctly differentiates language contexts",
+      "input_setup": "PipelineContext with Language.arabic vs Language.english",
+      "expected_result": "is_arabic()=True for Arabic, False for English",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.015509314835071564,
+      "evidence": "is_arabic correctly differentiates language contexts",
+      "error": null
+    }
+  ]
+}

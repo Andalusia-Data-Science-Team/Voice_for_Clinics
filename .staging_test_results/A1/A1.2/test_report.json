@@ -1,0 +1,71 @@
+{
+  "task_id": "A1",
+  "subtask_id": "A1.2",
+  "title": "Async streaming for refine / translate",
+  "target_files": [
+    "src/model/refine_text.py",
+    "src/model/translation.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 180.68224703893065,
+  "timestamp": "2026-10-28T09:18:10.037077+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Streaming yields without blocking",
+      "input_setup": "Stream 10 chunks from runtime and sample loop latency between yields",
+      "expected_result": "Chunks yielded progressively; event loop lag <= 50 ms",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 126.84143101796508,
+      "evidence": "Received 10 chunks; max loop delta = 10.36ms <= 50ms",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Partial chunk reassembly",
+      "input_setup": "Mock split JSON structure delivered across streaming chunk boundary",
+      "expected_result": "Valid JSON parsed without syntax errors",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.05519343540072441,
+      "evidence": "Reassembled split chunks into valid JSON: {'chief_complaint': 'Chest pain', 'history_present_illness': 'Started 2 hours ago'}",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Cancellation mid-stream",
+      "input_setup": "Consume 3 chunks and break/cancel iteration",
+      "expected_result": "Stream resources closed cleanly; no task-destroyed or unclosed warnings",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 49.46516174823046,
+      "evidence": "Consumer exited after 3 chunks; stream aclose() confirmed called",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Empty input handling",
+      "input_setup": "Pass empty string to RefineText and Translate",
+      "expected_result": "Rejects empty input gracefully with clear validation error",
+      "severity": "Med",
+      "passed": true,
+      "duration_ms": 4.310146905481815,
+      "evidence": "RefineText and Translate reject empty input with informative ValueError",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Arabic diacritics preserved",
+      "input_setup": "Input Arabic clinical phrase with full tashkeel diacritics",
+      "expected_result": "Diacritics intact and unchanged throughout text processing",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.010313931852579117,
+      "evidence": "Preserved all tashkeel diacritics in Arabic clinical text: '\u0627\u0644\u0645\u064e\u0631\u064a\u0636\u064f \u064a\u064f\u0639\u064e\u0627\u0646\u0650\u064a \u0645\u0650\u0646\u0652 \u0636\u0650\u064a\u0642\u064d \u0641\u0650\u064a \u0627\u0644\u062a\u0651\u064e\u0646\u064e\u0641\u0651\u064f\u0633\u0650'",
+      "error": null
+    }
+  ]
+}

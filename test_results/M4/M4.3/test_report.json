@@ -1,0 +1,70 @@
+{
+  "task_id": "M4",
+  "subtask_id": "M4.3",
+  "title": "Real-time Server-Sent Events (SSE) streaming and event contract",
+  "target_files": [
+    "src/pipeline/orchestrator.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 86.23028686270118,
+  "timestamp": "2026-10-28T11:46:50.419240+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "All SSE event types emission",
+      "input_setup": "Execute pipeline and collect all emitted SSE events",
+      "expected_result": "Emits progressive step events including extraction, diagnosis, and validation_result",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 19.167732913047075,
+      "evidence": "Full SSE lifecycle verified: events emitted = ['refinement_skipped', 'step_progress', 'step_progress', 'routing_signal', 'step_progress', 'step_progress', 'step_progress', 'step_progress', 'extraction', 'step_progress', 'diagnosis', 'validation_result']",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "SSE event progression ordering",
+      "input_setup": "Trace sequential emission order of SSE event stream",
+      "expected_result": "Progressive events stream first; 'validation_result' is strictly terminal",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 30.386120080947876,
+      "evidence": "Event ordering verified: final event is strictly 'validation_result' (['refinement_skipped', 'step_progress', 'step_progress', 'routing_signal', 'step_progress', 'step_progress', 'step_progress', 'step_progress', 'diagnosis', 'step_progress', 'extraction', 'validation_result'])",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "SSE payload JSON integrity",
+      "input_setup": "Serialize and parse each emitted SSE message payload",
+      "expected_result": "All event payloads serialize to valid JSON",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 18.77956185489893,
+      "evidence": "100% of emitted SSE payloads conform to valid JSON format",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Client disconnect resource cleanup",
+      "input_setup": "Simulate client disconnect by closing generator mid-stream",
+      "expected_result": "aclose() executes cleanly without leaving orphaned tasks",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 4.55469312146306,
+      "evidence": "Client disconnect handled cleanly: generator aclose() freed pipeline resources",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Monotonic progression timestamps",
+      "input_setup": "Verify temporal ordering of emitted SSE stream events",
+      "expected_result": "Event emission timestamps are strictly non-decreasing",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 13.342178892344236,
+      "evidence": "Monotonic timing verified across 12 emitted SSE events",
+      "error": null
+    }
+  ]
+}

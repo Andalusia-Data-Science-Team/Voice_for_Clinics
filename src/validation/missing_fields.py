@@ -21,7 +21,7 @@ from model.department_fields import get_department_fields
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class MissingFieldItem:
     """Represents a specific missing clinical field."""
     key: str
@@ -36,7 +36,7 @@ class MissingFieldItem:
         }
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class MissingFieldsReport:
     """Standardized report on missing fields in the clinical note."""
     department: str

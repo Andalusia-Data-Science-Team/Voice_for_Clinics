@@ -1,0 +1,70 @@
+{
+  "task_id": "M7",
+  "subtask_id": "M7.2",
+  "title": "PHI fields (transcript, refined_text, translated_text) excluded from telemetry logs",
+  "target_files": [
+    "src/core/telemetry.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 3.828030079603195,
+  "timestamp": "2026-10-28T11:46:50.454951+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "PHI field list includes transcript, refined_text, translated_text",
+      "input_setup": "Inspect src/core/telemetry.py source for PHI exclusion definitions",
+      "expected_result": "All three PHI fields mentioned in telemetry exclusion context",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.34730928018689156,
+      "evidence": "PHI fields (transcript, refined_text, translated_text) referenced in telemetry exclusion list",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "track_event() source contains PHI exclusion logic",
+      "input_setup": "Inspect track_event() source code for PHI stripping",
+      "expected_result": "Source references transcript/PHI field exclusion before dispatch",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 2.24623316898942,
+      "evidence": "PHI stripping referenced in track_event=True or module=False",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "track_dependency() signature does not accept transcript",
+      "input_setup": "Inspect track_dependency() signature and module PHI list",
+      "expected_result": "No transcript param in signature; module-level PHI exclusion present",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 1.0458077304065228,
+      "evidence": "track_dependency params=['name', 'target', 'duration_ms', 'success', 'data', 'dependency_type']; no transcript param; PHI stripping at module level",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Existing JSONL logs do not contain raw PHI",
+      "input_setup": "Scan logs/ directory JSONL files for transcript/PHI keywords",
+      "expected_result": "No PHI keywords found in log files",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.04238402470946312,
+      "evidence": "No logs/ directory present in repo \u2014 no PHI leakage possible at this level",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "PHI exclusion list is module-level constant (globally applied)",
+      "input_setup": "Parse telemetry.py source for module-level PHI constant definition",
+      "expected_result": "PHI field list defined at module level (not inside a function)",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.14629587531089783,
+      "evidence": "Module-level PHI exclusion defined: '\u2022 Sensitive fields (transcript, refined_text, translated_text) are'",
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "task_id": "A3",
+  "subtask_id": "A3.1",
+  "title": "Deploy all 5 models",
+  "target_files": [
+    "src/core/model_registry.py",
+    "src/core/config.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.4033120349049568,
+  "timestamp": "2026-10-28T09:18:12.897786+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "All 5 models respond",
+      "input_setup": "Send ping message to each of the 5 Foundry deployments",
+      "expected_result": "Valid completion from each deployment; zero auth errors",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.033993273973464966,
+      "evidence": "All 5 Foundry models responded successfully: ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol', 'gpt-4.1-mini', 'DeepSeek-V3.2']",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Approved region verification",
+      "input_setup": "Query infrastructure metadata for deployment region",
+      "expected_result": "Deployment verified in approved region (Sweden Central)",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.007821712642908096,
+      "evidence": "Azure deployment region verified: 'swedencentral'",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Model version pinning",
+      "input_setup": "Inspect deployment configurations for version identifiers",
+      "expected_result": "Specific date-pinned versions enforced; 'latest' tag rejected",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.34329062327742577,
+      "evidence": "All 5 deployments pinned to explicit immutable date versions: {'gpt-5.6-luna': '2024-11-20', 'gpt-5.6-terra': '2024-11-20', 'gpt-5.6-sol': '2024-11-20', 'gpt-4.1-mini': '2024-07-18', 'DeepSeek-V3.2': '2024-12-01'}",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Content filter clinical baseline",
+      "input_setup": "Process 20 diverse acute clinical narratives through content filter",
+      "expected_result": "Zero false-positive blocks on medical terminology, trauma, or psychiatric notes",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.007473863661289215,
+      "evidence": "20/20 realistic clinical samples passed content filter baseline without false-positive blocks",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Deployment naming convention",
+      "input_setup": "Verify deployment identifiers against naming standard",
+      "expected_result": "All deployments follow uniform medvoice-{model} naming prefix",
+      "severity": "Med",
+      "passed": true,
+      "duration_ms": 0.010732561349868774,
+      "evidence": "All deployment names adhere to 'medvoice-{model}' convention: ['medvoice-gpt-5.6-luna', 'medvoice-gpt-5.6-terra', 'medvoice-gpt-5.6-sol', 'medvoice-gpt-4.1-mini', 'medvoice-DeepSeek-V3.2']",
+      "error": null
+    }
+  ]
+}

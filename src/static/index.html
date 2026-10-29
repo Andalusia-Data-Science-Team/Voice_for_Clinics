@@ -3325,7 +3325,6 @@ class CautionTelemetry {
         const formData = new FormData();
         formData.append('text', `[Telemetry:${eventType}] ${JSON.stringify(payload)}`);
         formData.append('session_id', body.session_id);
-        formData.append('rating', 0);
         formData.append('department', body.department);
         formData.append('language', 'en');
 
@@ -4693,7 +4692,20 @@ btnSubmit.addEventListener('click', async () => {
       if (d.error) {
         setCard('diagnosis', 'error');
         if (d.reasoning_pending) {
-          setBody('diagnosis', '<div class="err-box">Reasoning pending — the diagnosis recommendation could not be generated right now. The clinical note fields above are complete; try Analyse again.</div>');
+          setCard('diagnosis', 'pending');
+          setBody('diagnosis', `
+            <div class="pending-box" style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 12px; margin-top: 8px;">
+              <div style="display:flex; align-items:center; gap:8px; font-weight:600; color:#d97706; margin-bottom:6px;">
+                <span>⏳ Reasoning Pending</span>
+              </div>
+              <div style="font-size:13px; color:#92400e; line-height:1.4; margin-bottom:10px;">
+                The differential diagnosis timed out, but your clinical note extraction above is complete and ready.
+              </div>
+              <button type="button" class="btn secondary" style="padding: 5px 12px; font-size: 12px; cursor: pointer;" onclick="if(window.btnSubmit) { btnSubmit.click(); }">
+                🔄 Retry Diagnosis
+              </button>
+            </div>
+          `);
         } else {
           setBody('diagnosis', '<div class="err-box">Diagnosis recommendation failed: ' + esc(d.error) + '</div>');
         }

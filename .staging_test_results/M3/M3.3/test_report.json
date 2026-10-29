@@ -1,0 +1,71 @@
+{
+  "task_id": "M3",
+  "subtask_id": "M3.3",
+  "title": "Clinical consistency rules: laterality & diagnostic evidence cross-checking",
+  "target_files": [
+    "src/validation/consistency.py",
+    "src/validation/laterality.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.31068408861756325,
+  "timestamp": "2026-10-28T10:25:07.237690+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Laterality mismatch detection",
+      "input_setup": "Cross-check complaint 'left knee' with ICD-10 'right knee'",
+      "expected_result": "Conflict string returned identifying left vs right mismatch",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.08582603186368942,
+      "evidence": "Laterality mismatch caught: Laterality mismatch detected: Clinical text mentions 'left' (tokens: left), but recommended code specifies 'right'.",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Diagnosis without clinical evidence warning",
+      "input_setup": "Evaluate diagnosis 'Pneumonia' against isolated 'Sprained ankle' findings",
+      "expected_result": "Caution banner emitted indicating lack of supporting clinical evidence",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.06115715950727463,
+      "evidence": "Unsubstantiated diagnosis flagged with caution banner: Caution: Diagnosis 'J18.9 - Pneumonia, unspecified' has no documented supporting evidence (e.g. none of pneumonia) found in symptoms, physical exam, or history.",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Consistent laterality pass",
+      "input_setup": "Cross-check 'right eye' in complaints and 'right eye' in code description",
+      "expected_result": "Zero warnings or conflicts emitted (conflict is None)",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.047915149480104446,
+      "evidence": "Consistent right eye laterality passed with zero warnings",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Bilateral laterality validation",
+      "input_setup": "Evaluate 'bilateral knee pain' against 'bilateral knee' ICD-10 description",
+      "expected_result": "Accepted as valid bilateral presentation; zero false-positive conflicts",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.04430301487445831,
+      "evidence": "Bilateral laterality detected and accepted across findings and code description",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Multiple independent anatomical checks",
+      "input_setup": "Evaluate shoulder mismatch and wrist match in succession",
+      "expected_result": "Each anatomical pair evaluated independently without state crosstalk",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.07148273289203644,
+      "evidence": "Multiple lateralized anatomical evaluations executed cleanly and independently",
+      "error": null
+    }
+  ]
+}

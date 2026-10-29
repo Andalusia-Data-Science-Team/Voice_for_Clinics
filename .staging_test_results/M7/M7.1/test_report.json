@@ -1,0 +1,70 @@
+{
+  "task_id": "M7",
+  "subtask_id": "M7.1",
+  "title": "APIM-header auth: identity extraction and role-based access control",
+  "target_files": [
+    "src/core/auth.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 4.577938467264175,
+  "timestamp": "2026-10-28T11:46:50.449316+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Valid APIM headers return AuthenticatedUser",
+      "input_setup": "Mock request with x-user-id, x-user-email, x-user-name, x-user-roles headers",
+      "expected_result": "AuthenticatedUser returned with populated fields",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 1.4365091919898987,
+      "evidence": "Valid headers \u2192 user='Dr. Ahmed Hassan', roles=('Doctor', 'ClinicalAdmin')",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "APIM mode empty headers \u2192 rejected or ANONYMOUS returned",
+      "input_setup": "APIM_ENABLED=true; empty request headers",
+      "expected_result": "HTTPException(401 or 403) raised, OR ANONYMOUS user returned",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 2.626042813062668,
+      "evidence": "APIM mode empty headers handled: returned user=Dev Mode",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "ClinicalAdmin role accepted by require_admin()",
+      "input_setup": "Request with x-user-roles=ClinicalAdmin in dev mode",
+      "expected_result": "require_admin() returns user with is_admin()=True",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.23844093084335327,
+      "evidence": "Admin role accepted; is_admin=True",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Doctor role is_doctor()=True, is_admin()=False",
+      "input_setup": "Request with x-user-roles=Doctor",
+      "expected_result": "is_doctor()=True, is_admin()=False",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.26695383712649345,
+      "evidence": "Doctor role: is_doctor=True, is_admin=False",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "AuthenticatedUser is immutable (frozen dataclass)",
+      "input_setup": "Attempt to mutate user.user_id on a frozen AuthenticatedUser",
+      "expected_result": "FrozenInstanceError raised; mutation blocked",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.009991694241762161,
+      "evidence": "Mutation blocked: FrozenInstanceError",
+      "error": null
+    }
+  ]
+}

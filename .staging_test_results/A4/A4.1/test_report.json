@@ -1,0 +1,70 @@
+{
+  "task_id": "A4",
+  "subtask_id": "A4.1",
+  "title": "CI/CD pipeline: lint, test, build, and push stages defined and correctly ordered",
+  "target_files": [
+    "azure-pipelines.yml"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 83.09338754042983,
+  "timestamp": "2026-10-28T11:46:50.540416+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "CI stage contains lint and test steps",
+      "input_setup": "Parse azure-pipelines.yml; inspect CI stage jobs",
+      "expected_result": "CI stage present with ruff/lint and pytest/test steps",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 41.65764292702079,
+      "evidence": "CI stage found with lint + test steps; all stages: ['CI', 'BuildPush', 'DeployDev', 'DeployStaging', 'DeployProduction']",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "BuildPush stage depends on CI",
+      "input_setup": "Check azure-pipelines.yml BuildPush.dependsOn",
+      "expected_result": "BuildPush.dependsOn includes 'CI'",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 20.595211070030928,
+      "evidence": "BuildPush.dependsOn = ['CI']",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Docker image tagged with shortSha (git commit)",
+      "input_setup": "Inspect azure-pipelines.yml for shortSha usage in Docker tags",
+      "expected_result": "shortSha variable defined and used in image tags",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.22807111963629723,
+      "evidence": "Docker image tags include $(shortSha) from git commit",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "azure-pipelines.yml is syntactically valid YAML",
+      "input_setup": "yaml.safe_load(azure-pipelines.yml)",
+      "expected_result": "Parses successfully; dict with 'stages' key containing \u22653 stages",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 20.493481773883104,
+      "evidence": "YAML valid; 5 stages defined",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Ruff lint command uses specific error selectors",
+      "input_setup": "Inspect CI stage ruff command in azure-pipelines.yml",
+      "expected_result": "ruff check with --select E9,F63,F7,F82 or equivalent",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.11898064985871315,
+      "evidence": "ruff lint command present with error code selectors (E9, F63, F7, F82)",
+      "error": null
+    }
+  ]
+}

@@ -108,7 +108,15 @@ class DiagnosisOutput(_OutputBase):
     )
     history_notes: str = Field(
         "",
-        description="LLM note on how history influenced the recommendation",
+        description="History impact, including the dates of the relevant prior visits",
+    )
+    history_citation_missing: bool = Field(
+        False,
+        description="Whether a claimed history impact lacks a verifiable visit-date citation",
+    )
+    history_cited_visit_dates: List[str] = Field(
+        default_factory=list,
+        description="Visit dates cited in history_notes and verified against the patient history",
     )
     # ER-only ─────────────────────────────────────────────────────────────────
     differential_diagnoses: Optional[List[str]] = Field(

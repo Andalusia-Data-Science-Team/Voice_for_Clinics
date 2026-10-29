@@ -3,23 +3,36 @@
 Provides:
 - Singleton in-memory registry parsed once at startup
 - O(1) exact code lookup with dot/case normalization (e.g. "A00.0" -> "A000")
-- Hybrid prefix + inverted index + rapidfuzz search (sub-10ms)
+- Hybrid semantic, BM25, phrase, and code search for diagnosis candidates
 - LLM output validation against the official 16,954 Australian codes
 """
 
 from __future__ import annotations
 
 import csv
+import hashlib
 import logging
 import math
+import os
 import re
+import tempfile
+import threading
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Sequence
 
+import numpy as np
+from numpy.typing import NDArray
+
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    SentenceTransformer = None  # type: ignore[assignment,misc]
+
 logger = logging.getLogger(__name__)
 
+_SEMANTIC_MODEL_NAME = "abhinand/MedEmbed-small-v0.1"
 # Regex pattern to identify ICD-10 code structures (e.g., A00, A00.0, K35.80, Z99.9)
 _ICD_CODE_PATTERN = re.compile(r"^[A-Z][0-9]{2}(?:\.[0-9A-Z]{1,4})?$", re.IGNORECASE)
 _EXTRACT_CODE_PREFIX = re.compile(r"^([A-Z][0-9]{2}(?:\.[0-9A-Z]{1,4})?)\b", re.IGNORECASE)
@@ -50,7 +63,7 @@ def tokenize_text(text: str) -> list[str]:
     ]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ICD10Entry:
     """Immutable entry representing an Australian ICD-10-AM code."""
     code: str          # Original display format: e.g. "A00.0"
@@ -58,7 +71,7 @@ class ICD10Entry:
     norm_code: str     # Normalized key: e.g. "A000"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ValidatedCode:
     """Represents the validation result for an ICD-10 recommendation."""
     original: str                       # Raw string from LLM: e.g. "A00.0 - Cholera..."
@@ -75,8 +88,8 @@ class ICD10Registry:
     - Thread-safe read-only after initialization
     - Lookup: O(1)
     - Code prefix search: O(K) where K is matching branch
-    - Inverted index description search: candidates filtered by word posting sets,
-      then ranked with rapidfuzz.
+    - Diagnosis retrieval combines a local semantic index, BM25, and the
+      existing inverted-index phrase/code search.
     """
 
     def __init__(self, csv_path: Optional[Path | str] = None) -> None:
@@ -100,6 +113,10 @@ class ICD10Registry:
         self._description_lengths: list[int] = []
         self._term_frequencies: list[dict[str, int]] = []
         self._average_description_length = 0.0
+        self._semantic_model: SentenceTransformer | None = None
+        self._semantic_embeddings: NDArray[np.float32] | None = None
+        self._semantic_index_lock = threading.Lock()
+        self._semantic_query_lock = threading.Lock()
 
         self._load_and_index()
 
@@ -332,11 +349,11 @@ class ICD10Registry:
         limit: int = 80,
         max_queries: int = 80,
     ) -> list[tuple[str, str]]:
-        """Retrieve catalogue candidates with BM25 plus phrase-search fusion.
+        """Retrieve candidates by fusing semantic, BM25, and phrase/code search.
 
-        BM25 ranks each complete note against the catalogue descriptions, while
-        phrase searches preserve stronger exact-phrase and code matches. The
-        two ranked lists are combined with reciprocal-rank fusion.
+        The local embedding model handles conceptually similar wording. BM25
+        and phrase/code search retain strong lexical and exact-code matches.
+        Reciprocal-rank fusion combines all three rankings.
         """
         if limit <= 0 or not text or not text.strip():
             return []
@@ -438,6 +455,16 @@ class ICD10Registry:
                 1 / (reciprocal_rank_constant + rank)
             )
 
+        semantic_ranking = self._semantic_search(
+            text,
+            limit=min(max(limit, 100), len(self._entries)),
+        )
+        semantic_weight = 2.5
+        for rank, (code, _similarity) in enumerate(semantic_ranking, start=1):
+            fused_scores[code] = fused_scores.get(code, 0.0) + (
+                semantic_weight / (reciprocal_rank_constant + rank)
+            )
+
         ranked_codes = sorted(
             fused_scores,
             key=fused_scores.get,
@@ -448,6 +475,142 @@ class ICD10Registry:
             for code in ranked_codes
             if (entry := self.lookup_code(code)) is not None
         ]
+
+    def _semantic_search(
+        self,
+        query: str,
+        limit: int,
+    ) -> list[tuple[str, float]]:
+        """Return the nearest catalogue descriptions using local embeddings."""
+        if not self._entries or limit <= 0:
+            return []
+
+        self.prepare_semantic_index()
+
+        model = self._semantic_model
+        catalogue_embeddings = self._semantic_embeddings
+        if model is None or catalogue_embeddings is None:
+            raise RuntimeError("Local semantic ICD-10 index failed to initialize")
+
+        with self._semantic_query_lock:
+            query_embedding = np.asarray(
+                model.encode(
+                    query,
+                    convert_to_numpy=True,
+                    normalize_embeddings=True,
+                    show_progress_bar=False,
+                ),
+                dtype=np.float32,
+            )
+        if not np.any(query_embedding):
+            return []
+        similarities = catalogue_embeddings @ query_embedding
+        result_count = min(limit, len(self._entries))
+        nearest_indices = np.argpartition(
+            similarities,
+            len(similarities) - result_count,
+        )[-result_count:]
+        ranked_indices = sorted(
+            nearest_indices,
+            key=similarities.__getitem__,
+            reverse=True,
+        )
+        return [
+            (self._entries[index].code, float(similarities[index]))
+            for index in ranked_indices
+        ]
+
+    def prepare_semantic_index(self) -> None:
+        """Build or load the local catalogue embeddings before serving requests."""
+        if SentenceTransformer is None:
+            logger.debug("[ICD10] sentence-transformers not installed; semantic index disabled")
+            return
+        if self._semantic_model is None or self._semantic_embeddings is None:
+            with self._semantic_index_lock:
+                if self._semantic_model is None or self._semantic_embeddings is None:
+                    model = SentenceTransformer(
+                        _SEMANTIC_MODEL_NAME,
+                        device="cpu",
+                    )
+                    embeddings = self._load_cached_embeddings()
+                    if embeddings is None:
+                        embeddings = np.asarray(
+                            model.encode(
+                                [entry.description for entry in self._entries],
+                                batch_size=256,
+                                convert_to_numpy=True,
+                                normalize_embeddings=True,
+                                show_progress_bar=False,
+                            ),
+                            dtype=np.float32,
+                        )
+                        if (
+                            embeddings.ndim != 2
+                            or embeddings.shape[0] != len(self._entries)
+                        ):
+                            raise RuntimeError(
+                                "Semantic embedding model returned an invalid catalogue matrix"
+                            )
+
+                        self._save_cached_embeddings(embeddings)
+                    self._semantic_model = model
+                    self._semantic_embeddings = embeddings
+                    logger.info(
+                        "Built local semantic index for %d Australian ICD-10-AM entries using %s",
+                        len(self._entries),
+                        _SEMANTIC_MODEL_NAME,
+                    )
+
+    def _semantic_cache_path(self) -> Path:
+        digest = hashlib.sha256()
+        with self._csv_path.open("rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+        cache_key = hashlib.sha256(
+            f"{_SEMANTIC_MODEL_NAME}:{digest.hexdigest()}".encode("utf-8")
+        ).hexdigest()[:20]
+        return Path.home() / ".cache" / "medvoice" / f"icd10-{cache_key}.npy"
+
+    def _load_cached_embeddings(self) -> NDArray[np.float32] | None:
+        cache_path = self._semantic_cache_path()
+        try:
+            embeddings = np.load(cache_path, mmap_mode="r", allow_pickle=False)
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError) as exc:
+            logger.warning("Could not read ICD-10 semantic cache %s: %s", cache_path, exc)
+            return None
+        if embeddings.ndim != 2 or embeddings.shape[0] != len(self._entries):
+            logger.warning("Ignoring incompatible ICD-10 semantic cache %s", cache_path)
+            return None
+        return embeddings
+
+    def _save_cached_embeddings(self, embeddings: NDArray[np.float32]) -> None:
+        cache_path = self._semantic_cache_path()
+        temporary_path: Path | None = None
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                dir=cache_path.parent,
+                prefix=f"{cache_path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as cache_file:
+                temporary_path = Path(cache_file.name)
+                np.save(cache_file, embeddings, allow_pickle=False)
+            os.replace(temporary_path, cache_path)
+        except OSError as exc:
+            logger.warning("Could not write ICD-10 semantic cache %s: %s", cache_path, exc)
+            if temporary_path is not None:
+                try:
+                    temporary_path.unlink(missing_ok=True)
+                except OSError as cleanup_error:
+                    logger.warning(
+                        "Could not remove temporary ICD-10 semantic cache %s: %s",
+                        temporary_path,
+                        cleanup_error,
+                    )
 
     def validate_code(self, raw_item: str) -> ValidatedCode:
         """Validate a single raw code or label string against the registry.
@@ -601,3 +764,7 @@ def get_registry(csv_path: Optional[Path | str] = None) -> ICD10Registry:
     if _REGISTRY_INSTANCE is None:
         _REGISTRY_INSTANCE = ICD10Registry(csv_path=csv_path)
     return _REGISTRY_INSTANCE
+
+
+if __name__ == "__main__":
+    get_registry().prepare_semantic_index()

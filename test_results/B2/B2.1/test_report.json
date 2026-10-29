@@ -1,0 +1,70 @@
+{
+  "task_id": "B2",
+  "subtask_id": "B2.1",
+  "title": "Extraction prompts cleanly stripped of ICD-10, diagnosis and history",
+  "target_files": [
+    "src/utils/clinical_prompts.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 0.8682748302817345,
+  "timestamp": "2026-10-28T10:25:06.643029+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "ER extraction prompt clean",
+      "input_setup": "Inspect get_extraction_prompt('er', ...)",
+      "expected_result": "Diagnosis and ICD-10 codes explicitly excluded from ER prompt",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.2660187892615795,
+      "evidence": "ER prompt clean: explicitly forbids diagnoses and ICD-10 extraction",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "OPD extraction prompt clean",
+      "input_setup": "Inspect get_extraction_prompt('opd', ...)",
+      "expected_result": "No diagnosis section present in OPD extraction instructions",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.19493186846375465,
+      "evidence": "OPD prompt clean: diagnosis generation excluded",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Dental extraction prompt clean",
+      "input_setup": "Inspect get_extraction_prompt('dental', ...)",
+      "expected_result": "No diagnosis section present in Dental extraction instructions",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.10799383744597435,
+      "evidence": "Dental prompt clean: diagnosis generation excluded",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Output extraction schemas clean of diagnosis keys",
+      "input_setup": "Check field keys on ERExtractionOutput, OPDExtractionOutput, DentalExtractionOutput",
+      "expected_result": "Zero diagnosis or ICD-10 keys present in extraction schemas",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.023266766220331192,
+      "evidence": "All 3 department extraction schemas confirmed clean of diagnosis and ICD-10 keys",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Extraction model symptom focus",
+      "input_setup": "Instantiate ER extraction model with acute presentation",
+      "expected_result": "Focuses on complaints, physical survey, and plan; diagnosis absent",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.27606356889009476,
+      "evidence": "Extraction model captures clinical symptoms and plan while strictly omitting diagnosis fields",
+      "error": null
+    }
+  ]
+}

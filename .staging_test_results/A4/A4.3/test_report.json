@@ -1,0 +1,71 @@
+{
+  "task_id": "A4",
+  "subtask_id": "A4.3",
+  "title": "Production deployment gated behind approval and DeployStaging dependency",
+  "target_files": [
+    "azure-pipelines.yml",
+    "src/app.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 1198.7974713556468,
+  "timestamp": "2026-10-28T11:46:51.805247+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "DeployProduction depends on DeployStaging",
+      "input_setup": "Parse azure-pipelines.yml for DeployProduction.dependsOn",
+      "expected_result": "DeployProduction.dependsOn includes 'DeployStaging'",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 18.87461030855775,
+      "evidence": "DeployProduction.dependsOn=['DeployStaging']",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Production stage references approval gate or environment",
+      "input_setup": "Inspect DeployProduction section for approval/environment configuration",
+      "expected_result": "'approval' or 'environment' referenced in DeployProduction section",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.109819695353508,
+      "evidence": "DeployProduction has approval gate / environment reference",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "/health endpoint registered and returns structured response",
+      "input_setup": "Use TestClient against FastAPI app; GET /health",
+      "expected_result": "HTTP 200 or 503; JSON body with 'status' key",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 1163.3930490352213,
+      "evidence": "/health endpoint registered and verified on FastAPI router",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "DeployProduction gated on deployProduction parameter",
+      "input_setup": "Inspect DeployProduction condition in YAML",
+      "expected_result": "deployProduction parameter controls DeployProduction execution",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.15087611973285675,
+      "evidence": "DeployProduction gated on deployProduction parameter with condition",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Pipeline stage dependency chain: CI\u2192Build\u2192Staging\u2192Production",
+      "input_setup": "Parse all stage dependsOn in azure-pipelines.yml",
+      "expected_result": "Full dependency chain CI\u2192BuildPush\u2192DeployStaging\u2192DeployProduction verified",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 16.269116196781397,
+      "evidence": "Deployment chain verified: CI\u2192BuildPush\u2192Staging\u2192Production",
+      "error": null
+    }
+  ]
+}

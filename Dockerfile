@@ -30,6 +30,12 @@ RUN pip install uv
 # Working directory
 WORKDIR /app
 
+# Install CPU-only PyTorch before Sentence Transformers to avoid pulling CUDA
+# libraries into this CPU-only application image.
+RUN uv pip install --system --no-cache \
+    --index-url https://download.pytorch.org/whl/cpu \
+    torch
+
 # Install Python dependencies with UV (much faster than pip)
 COPY src/requirements.txt .
 RUN uv pip install --system --no-cache -r requirements.txt

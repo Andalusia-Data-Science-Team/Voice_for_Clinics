@@ -172,6 +172,20 @@ class ModelLimiter:
                         model, old_cap, new_cap,
                     )
 
+    async def set_limit(self, model: str, limit: int) -> None:
+        """Set or dynamically resize the semaphore capacity for a model."""
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+        semaphore, stats = await self._get(model)
+        async with self._lock:
+            stats.max_capacity = limit
+            stats.current_capacity = limit
+            semaphore.resize(limit)
+
+    def limit_for(self, model: str) -> int:
+        """Return the configured limit for a model."""
+        return Config.llm_model_limit(model)
+
     async def stats(self, model: str) -> LimiterStats:
         """Return a snapshot of metrics for a model slug."""
         _, stats = await self._get(model)

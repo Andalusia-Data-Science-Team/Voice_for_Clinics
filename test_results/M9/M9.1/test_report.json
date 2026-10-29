@@ -1,0 +1,72 @@
+{
+  "task_id": "M9",
+  "subtask_id": "M9.1",
+  "title": "Fix all penetration testing findings (SQL injection, XSS, CORS, Auth)",
+  "target_files": [
+    "src/app.py",
+    "src/sql/patient_history.sql",
+    "src/core/auth.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 480.2919337525964,
+  "timestamp": "2026-10-28T12:38:04.820825+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "SQL Injection prevented via parameterized queries",
+      "input_setup": "Inspect src/sql/patient_history.sql for parameterized binding contract",
+      "expected_result": "PatientCode bound via pyodbc ? placeholder; no dynamic string interpolation",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.09812368080019951,
+      "evidence": "High finding SQL injection prevented via strict pyodbc parameter binding (single ? marker)",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "XSS prevention via safe DOM text rendering",
+      "input_setup": "Inspect dynamic text insertion methods in src/static/index.html",
+      "expected_result": "Dynamic untrusted content bound through textContent or escaping helpers",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 2.7337269857525826,
+      "evidence": "XSS prevention verified: UI components use safe DOM text setters / sanitization",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Malicious SQL payload treated as literal string",
+      "input_setup": "Pass SQL injection payload into history parsing utility",
+      "expected_result": "Payload parsed as inert literal string without syntax execution",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 16.84821303933859,
+      "evidence": "SQL injection string treated as inert text without evaluation",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "CORS origin configuration forbids wildcard in production",
+      "input_setup": "Inspect app.py CORSMiddleware allow_origins definition",
+      "expected_result": "allow_origins specifies explicit domains; no wildcard '*' allowed",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.3262599930167198,
+      "evidence": "CORS allows only explicit domains: \"http://localhost:1110\",\n        \"https://medical-voice-assistant.ahbsdev.com\",",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "RBAC gates administrative routes against privilege escalation",
+      "input_setup": "Invoke require_admin with AuthenticatedUser possessing only Doctor role",
+      "expected_result": "HTTPException 403 raised immediately",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 460.2856100536883,
+      "evidence": "Administrative endpoint strictly blocked non-admin with HTTP 403",
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "task_id": "A2",
+  "subtask_id": "A2.3",
+  "title": "Network Boundary & Endpoint Security (Application Endpoints & Protocol Enforcement)",
+  "target_files": [
+    "src/core/config.py",
+    "src/llm/runtime.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 1.1716759763658047,
+  "timestamp": "2026-10-28T09:18:11.900487+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Secure HTTPS endpoint enforcement",
+      "input_setup": "Validate service endpoints against TLS/HTTPS protocol requirement",
+      "expected_result": "Non-HTTPS plain HTTP endpoints rejected; secure transport enforced",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.009946059435606003,
+      "evidence": "Strict HTTPS/WSS protocol validation enforced for enterprise endpoints",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Host boundary and domain validation",
+      "input_setup": "Parse configured Azure service endpoint URLs",
+      "expected_result": "Domain boundaries adhere strictly to approved service hosts",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.05229562520980835,
+      "evidence": "Host boundary valid: scheme=https, netloc=medvoice.openai.azure.com",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Private-link endpoint compatibility",
+      "input_setup": "Configure privatelink.openai.azure.com endpoint URL in runtime config",
+      "expected_result": "Endpoint accepted, normalized, and bound without errors",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 1.0961461812257767,
+      "evidence": "Private-link endpoint accepted and normalized: https://medvoice-foundry.privatelink.openai.azure.com/openai/v1",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Endpoint resolution timeout bound",
+      "input_setup": "Inspect LLM_CONNECT_TIMEOUT_S connection budget",
+      "expected_result": "Connect timeout is strictly bounded (<= 10 s) to prevent connection hangs",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.005994923412799835,
+      "evidence": "Connect timeout configured safely at 5.0s; prevents socket hangs",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Host header sanitization",
+      "input_setup": "Validate Host headers for CRLF injection or unauthorized host spoofing",
+      "expected_result": "Host headers cleanly formatted; CRLF injection rejected",
+      "severity": "High",
+      "passed": true,
+      "duration_ms": 0.007293187081813812,
+      "evidence": "Host header contains no injection characters and matches allowed service suffix",
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "task_id": "B1",
+  "subtask_id": "B1.4",
+  "title": "Clinical fidelity tests: omission, fabrication & laterality validation",
+  "target_files": [
+    "tests/test_schemas.py"
+  ],
+  "passed": true,
+  "pass_count": 5,
+  "total_cases": 5,
+  "total_duration_ms": 4.228589590638876,
+  "timestamp": "2026-10-28T10:25:06.640215+00:00",
+  "test_cases": [
+    {
+      "case_num": 1,
+      "name": "Fidelity test suite volume verification",
+      "input_setup": "Count test functions in tests/test_schemas.py",
+      "expected_result": ">= 20 fidelity test cases defined in test suite",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 3.9718858897686005,
+      "evidence": "Test suite contains 168 automated schema/fidelity test cases (>= 20)",
+      "error": null
+    },
+    {
+      "case_num": 2,
+      "name": "Schema baseline validation pass",
+      "input_setup": "Instantiate and validate baseline clinical model",
+      "expected_result": "Passes validation cleanly",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.04337122663855553,
+      "evidence": "Baseline schema validation passes with zero errors",
+      "error": null
+    },
+    {
+      "case_num": 3,
+      "name": "Omission detection",
+      "input_setup": "Submit clinical dictionary missing mandatory chief_complaint",
+      "expected_result": "Missing fields checklist details omission of chief_complaint",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.07351022213697433,
+      "evidence": "Checklist correctly flags omission of mandatory chief_complaint",
+      "error": null
+    },
+    {
+      "case_num": 4,
+      "name": "Fabrication detection and stripping",
+      "input_setup": "Submit payload with injected unauthorized field 'hallucinated_clinical_field'",
+      "expected_result": "Extra unauthorized field cleanly stripped from validated output",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.06349431350827217,
+      "evidence": "Unsanctioned fabricated fields stripped from validated output",
+      "error": null
+    },
+    {
+      "case_num": 5,
+      "name": "Laterality swap conflict detection",
+      "input_setup": "Cross-check complaint 'left knee' against code description 'right knee'",
+      "expected_result": "Anatomical laterality mismatch detected and flagged",
+      "severity": "Crit",
+      "passed": true,
+      "duration_ms": 0.07632793858647346,
+      "evidence": "Laterality swap caught: Laterality mismatch detected: Clinical text mentions 'left' (tokens: left), but recommended code specifies 'right'.",
+      "error": null
+    }
+  ]
+}

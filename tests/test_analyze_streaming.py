@@ -5,6 +5,7 @@ import pytest
 from starlette.requests import Request
 
 import app as app_module
+from model.icd10_registry import get_registry
 
 
 async def anext(iterator):
@@ -21,6 +22,11 @@ async def test_each_parallel_result_is_sent_without_waiting_for_the_other(monkey
     slow_step_started = asyncio.Event()
     release_slow_step = asyncio.Event()
     selected_candidates = []
+    monkeypatch.setattr(
+        get_registry(),
+        "search_diagnosis_candidates",
+        lambda _text: [("J18.9", "Pneumonia, unspecified")],
+    )
 
     async def extract_features_async(**kwargs):
         if fast_step == "diagnosis":
@@ -86,12 +92,19 @@ async def test_each_parallel_result_is_sent_without_waiting_for_the_other(monkey
     )
 
     events = response.body_iterator.__aiter__()
-    assert _event_name(await anext(events)) == "refinement_skipped"
-    routing_event = await asyncio.wait_for(anext(events), timeout=1)
+
+    async def next_major_event():
+        while True:
+            ev = await asyncio.wait_for(anext(events), timeout=2)
+            if _event_name(ev) != "step_progress":
+                return ev
+
+    assert _event_name(await next_major_event()) == "refinement_skipped"
+    routing_event = await next_major_event()
     assert _event_name(routing_event) == "routing_signal"
     routing_data = json.loads(routing_event["data"])
     assert routing_data["requires_clinician_review"] is True
-    fast_event = await asyncio.wait_for(anext(events), timeout=1)
+    fast_event = await next_major_event()
     assert _event_name(fast_event) == fast_step
     if fast_step == "extraction":
         fast_data = json.loads(fast_event["data"])
@@ -101,7 +114,7 @@ async def test_each_parallel_result_is_sent_without_waiting_for_the_other(monkey
 
     release_slow_step.set()
     slow_step = "diagnosis" if fast_step == "extraction" else "extraction"
-    slow_event = await asyncio.wait_for(anext(events), timeout=1)
+    slow_event = await next_major_event()
     assert _event_name(slow_event) == slow_step
     if slow_step == "extraction":
         slow_data = json.loads(slow_event["data"])

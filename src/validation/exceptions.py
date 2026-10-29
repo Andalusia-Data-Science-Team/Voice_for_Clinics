@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 
 class ValidationErrorCode(str, Enum):
@@ -26,7 +26,7 @@ class ValidationErrorCode(str, Enum):
     UNEXPECTED_DATA_SHAPE = "UNEXPECTED_DATA_SHAPE"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class FieldValidationError:
     """Represents a specific field validation failure."""
     loc: tuple[str, ...]
@@ -42,7 +42,7 @@ class FieldValidationError:
         }
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class SchemaRejectionPayload:
     """Standardized rejection payload returned when schema validation fails."""
     status: str = "rejected"
